@@ -3,31 +3,46 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-A User's Guide to Stellar CCD Photometry with photutils
+A User's Guide to Stellar CCD Photometry with Python
 =======================================================
 
-This document is a guide to performing stellar photometry from CCD data
+This document is a guide to performing stellar photometry on CCD data
 using `photutils`__, an `astropy`__ affiliated package.
 
 It follows the same steps outlined in Massey & Lindsey's `A User's Guide
 to Stellar CCD Photometry with IRAF (1992)`__.
 
 
-
-
-Contents:
-
 .. toctree::
-   :maxdepth: 2
+    :hidden:
+    :glob:
+    :numbered:
+    :maxdepth: 2
+
+    intro
+    stand_phot
+    crowd_phot
+    transf
+
+.. Contents
+.. --------
+
+.. .. toctree::
+..     :numbered:
+..     :maxdepth: 2
+
+..     intro
+..     stand_phot
+..     crowd_phot
+..     transf
 
 
+.. Indices and tables
+.. ------------------
 
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. * :ref:`genindex`
+.. * :ref:`modindex`
+.. * :ref:`search`
 
 .. __: https://photutils.readthedocs.io
 .. __: http://astropy.org

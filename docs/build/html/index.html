@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>A User’s Guide to Stellar CCD Photometry with photutils &#8212; photom 0.0.1 documentation</title>
+    <title>A User’s Guide to Stellar CCD Photometry with Python &#8212; photom 0.0.1 documentation</title>
     
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -25,6 +25,7 @@
     <script type="text/javascript" src="_static/doctools.js"></script>
     <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="top" title="photom 0.0.1 documentation" href="#" />
+    <link rel="next" title="1. Introduction" href="intro.html" />
    
   <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   
@@ -33,57 +34,37 @@
 
   </head>
   <body role="document">
-  
-
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
-          <div class="body" role="main">
-            
-  <div class="section" id="a-user-s-guide-to-stellar-ccd-photometry-with-photutils">
-<h1>A User&#8217;s Guide to Stellar CCD Photometry with photutils<a class="headerlink" href="#a-user-s-guide-to-stellar-ccd-photometry-with-photutils" title="Permalink to this headline">¶</a></h1>
-<p>This document is a guide to performing stellar photometry from CCD data
-using <a class="reference external" href="https://photutils.readthedocs.io">photutils</a>, an <a class="reference external" href="http://astropy.org">astropy</a> affiliated package.</p>
-<p>It follows the same steps outlined in Massey &amp; Lindsey&#8217;s <a class="reference external" href="ftp://iraf.noao.edu/ftp/docs/daophot2.ps.Z">A User&#8217;s Guide
-to Stellar CCD Photometry with IRAF (1992)</a>.</p>
-<p>Contents:</p>
-<div class="toctree-wrapper compound">
-</div>
-</div>
-<div class="section" id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
-<ul class="simple">
-<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
-<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
-<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
-</ul>
-</div>
-
-
-          </div>
-        </div>
-      </div>
+  <div class="document">
+    
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="#">Table Of Contents</a></h3>
-  <ul>
-<li><a class="reference internal" href="#">A User&#8217;s Guide to Stellar CCD Photometry with photutils</a></li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
-</ul>
-<div class="relations">
-<h3>Related Topics</h3>
+<h1 class="logo"><a href="#">photom</a></h1>
+
+
+
+<p class="blurb">A guide to performing CCD photometry using Python.</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=Gabriel-p&repo=photom&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
 <ul>
-  <li><a href="#">Documentation overview</a><ul>
-  </ul></li>
+<li class="toctree-l1"><a class="reference internal" href="intro.html">1. Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="stand_phot.html">2. Standard stars photometry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="crowd_phot.html">3. Crowded field photometry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="transf.html">4. Transforming to the standard system</a></li>
 </ul>
-</div>
-  <div role="note" aria-label="source link">
-    <h3>This Page</h3>
-    <ul class="this-page-menu">
-      <li><a href="_sources/index.txt"
-            rel="nofollow">Show Source</a></li>
-    </ul>
-   </div>
+
+
 <div id="searchbox" style="display: none" role="search">
   <h3>Quick search</h3>
     <form class="search" action="search.html" method="get">
@@ -96,8 +77,26 @@ to Stellar CCD Photometry with IRAF (1992)</a>.</p>
 <script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
       </div>
-      <div class="clearer"></div>
-    </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="a-user-s-guide-to-stellar-ccd-photometry-with-python">
+<h1>A User&#8217;s Guide to Stellar CCD Photometry with Python<a class="headerlink" href="#a-user-s-guide-to-stellar-ccd-photometry-with-python" title="Permalink to this headline">¶</a></h1>
+<p>This document is a guide to performing stellar photometry on CCD data
+using <a class="reference external" href="https://photutils.readthedocs.io">photutils</a>, an <a class="reference external" href="http://astropy.org">astropy</a> affiliated package.</p>
+<p>It follows the same steps outlined in Massey &amp; Lindsey&#8217;s <a class="reference external" href="ftp://iraf.noao.edu/ftp/docs/daophot2.ps.Z">A User&#8217;s Guide
+to Stellar CCD Photometry with IRAF (1992)</a>.</p>
+<div class="toctree-wrapper compound">
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
     <div class="footer">
       &copy;2016, Gabriel I Perren.
       

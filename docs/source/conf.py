@@ -19,6 +19,7 @@
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
+from datetime import datetime
 
 # -- General configuration ------------------------------------------------
 
@@ -56,7 +57,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'photom'
-copyright = u'2016, Gabriel I Perren'
+year = datetime.now().year
+copyright = u'%d, Gabriel I Perren' % year
 author = u'Gabriel I Perren'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -132,7 +134,20 @@ html_theme = 'alabaster'
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {
+    'description': 'A guide to performing CCD photometry using Python.',
+    'github_user': 'Gabriel-p',
+    'github_repo': 'photom',
+    'fixed_sidebar': True,
+}
+
+html_sidebars = {
+    '**': [
+        'about.html',
+        'navigation.html',
+        'searchbox.html',
+    ]
+}
 
 # Add any paths that contain custom themes here, relative to this directory.
 # html_theme_path = []

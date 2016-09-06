@@ -3,7 +3,8 @@ from astropy.io import fits
 import matplotlib.pyplot as plt
 import numpy as np
 from photutils import datasets
-# import photutils
+from astropy.stats import sigma_clipped_stats
+from photutils import make_source_mask
 # from matplotlib.colors import LogNorm
 
 """
@@ -14,16 +15,35 @@ http://www.astropy.org/astropy-tutorials/FITS-images.html
 # Load test dataset.
 # hdu = datasets.load_star_image()
 # hdu_data = hdu.data
+# Load real data.
 image_file = 'stk_2061.fits'
 hdu_data = fits.getdata(image_file)
 
 f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
-ax1.imshow(hdu_data, origin='lower', cmap='gray', vmin=0, vmax=30)
+ax1.imshow(hdu_data, origin='lower', cmap='gray')
 
 # Coarse background subtraction.
 # image = hdu_data[500:700, 500:700].astype(float)
-img_no_bckg = hdu_data - np.median(hdu_data)
-ax2.imshow(img_no_bckg.data, origin='lower', cmap='gray', vmin=0, vmax=30)
+median, std = np.median(hdu_data), np.std(hdu_data)
+img_no_bckg = hdu_data - median
+print('Median +- std: ', np.median(hdu_data), np.std(hdu_data))
+ax2.imshow(img_no_bckg.data, origin='lower', cmap='gray', vmin=0,
+           vmax=median + std)
+
+# Better background subtraction.
+mean, median, std = sigma_clipped_stats(hdu_data, sigma=3.0, iters=5)
+img_no_bckg = hdu_data - median
+print('Median +- std: ', median, std)
+ax3.imshow(img_no_bckg.data, origin='lower', cmap='gray', vmin=0,
+           vmax=median + std)
+
+# Best background subtraction.
+mask = make_source_mask(hdu_data, snr=2, npixels=5, dilate_size=11)
+mean, median, std = sigma_clipped_stats(hdu_data, sigma=3.0, mask=mask)
+img_no_bckg = hdu_data - median
+print('Median +- std: ', median, std)
+ax4.imshow(img_no_bckg.data, origin='lower', cmap='gray', vmin=0,
+           vmax=median + std)
 
 plt.tight_layout()
 plt.show()
