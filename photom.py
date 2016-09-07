@@ -5,6 +5,9 @@ import numpy as np
 from photutils import datasets
 from astropy.stats import sigma_clipped_stats
 from photutils import make_source_mask
+from astropy.visualization import SqrtStretch
+from astropy.visualization.mpl_normalize import ImageNormalize
+from photutils.background import Background2D
 # from matplotlib.colors import LogNorm
 
 """
@@ -16,7 +19,20 @@ http://www.astropy.org/astropy-tutorials/FITS-images.html
 # hdu = datasets.load_star_image()
 # hdu_data = hdu.data
 # Load real data.
-image_file = 'stk_2061.fits'
+image_file = 'stk_2135.fits'  # 'stk_fcd0048.fits' # 'stk_2061.fits'
+
+# hdulist = fits.open(image_file)
+
+hdulist = fits.open(image_file)
+print(hdulist.info())
+prihdr = hdulist[0].header
+print(prihdr)
+print(prihdr.keys())
+scidata = hdulist[0].data
+import pdb; pdb.set_trace()  # breakpoint 7cc0842b //
+hdulist.close()
+
+# Extract data from FITS file.
 hdu_data = fits.getdata(image_file)
 
 f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
@@ -44,6 +60,16 @@ img_no_bckg = hdu_data - median
 print('Median +- std: ', median, std)
 ax4.imshow(img_no_bckg.data, origin='lower', cmap='gray', vmin=0,
            vmax=median + std)
+
+# # Variable background estimation.
+# bkg = Background2D(hdu_data, (50, 50), filter_size=(3, 3),
+#                    method='median')
+# # Background image.
+# ax3.imshow(bkg.background, origin='lower', cmap='Greys_r')
+# # Background-subtracted image.
+# norm = ImageNormalize(stretch=SqrtStretch())
+# ax4.imshow(hdu_data - bkg.background, norm=norm, origin='lower',
+#            cmap='Greys_r')
 
 plt.tight_layout()
 plt.show()
