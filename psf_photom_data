@@ -1,0 +1,38 @@
+
+
+
+
+# PSF Photometry steps
+
+## Prepare fits images
+
+### Aling
+
+* IRAF
+  http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imalign
+
+### Combine
+
+* astropy
+  http://www.astropy.org/astropy-tutorials/FITS-images.html
+* numpy
+  http://stackoverflow.com/questions/13753251/median-combining-fits-images-in-python
+* IRAF
+  http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imcombine
+
+
+
+## Standard stars photometry
+
+-  Aperture radius
+
+
+
+# Links:
+
+* [PSF Photometry in Crowded Fields with Photutils (photutils)](
+https://github.com/astropy/photutils-datasets/blob/master/notebooks/ArtificialCrowdedFieldPSFPhotometry.ipynb)
+
+* [Photometry overview](http://telvsn.fcaglp.unlp.edu.ar/normativas/charlas/seminario_baume.pdf)
+
+* [CCD Gain Lab: The Theory](http://www.astro.umd.edu/~veilleux/ASTR310/fall06/ccd_theory.pdf)
