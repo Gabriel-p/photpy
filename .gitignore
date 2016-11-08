@@ -92,3 +92,5 @@ ENV/
 *OBS
 *.fit
 *.fits
+*.png
+standards/*

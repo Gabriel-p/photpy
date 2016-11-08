@@ -1,9 +1,12 @@
 
-from astropy.io import fits
+from os.path import join, realpath, dirname
+from os import getcwd
 import matplotlib.pyplot as plt
 import numpy as np
 
+from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
+
 from photutils import DAOStarFinder
 from photutils import CircularAperture
 from astropy.visualization import SqrtStretch
@@ -11,6 +14,7 @@ from astropy.visualization.mpl_normalize import ImageNormalize
 
 # from matplotlib.colors import LogNorm
 
+from photutils.utils import cutout_footprint
 from photutils.detection import IRAFStarFinder
 from photutils.psf import IntegratedGaussianPRF, DAOGroup
 from photutils.background import MMMBackground, MADStdBackgroundRMS
@@ -18,6 +22,7 @@ from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.modeling.fitting import LinearLSQFitter
 from astropy.stats import gaussian_sigma_to_fwhm
 from photutils.psf import DAOPhotPSFPhotometry
+from photutils.psf import IterativelySubtractedPSFPhotometry
 
 """
 http://docs.astropy.org/en/stable/io/fits/#
@@ -28,53 +33,82 @@ http://www.astropy.org/astropy-tutorials/FITS-images.html
 # from photutils import datasets
 # hdu = datasets.load_star_image()
 # hdu_data = hdu.data
+
+dmax = 60000.
+gain_key = 'EGAIN'
+rdnoise_key = 'ENOISE'
+
 # Load real data.
-image_file = 'stk_fcd0048.fits'  # 'stk_2061.fits'
+mypath = realpath(join(getcwd(), dirname(__file__)))
+image_file = mypath + '/standards/filt_V/stk_2148.fits'
 
-# hdulist = fits.open(image_file)
+# Exctract header data
+hdulist = fits.open(image_file)
 # print(hdulist.info())
-# prihdr = hdulist[0].header
-# print(prihdr)
-# print(prihdr.keys())
-# scidata = hdulist[0].data
-# hdulist.close()
+hdr = hdulist[0].header
+gain = hdr[gain_key]
+rdnoise = hdr[rdnoise_key]
+print(gain, rdnoise)
 
-# Extract data from FITS file.
-hdu_data = fits.getdata(image_file)
+# Image data.
+hdu_data = hdulist[0].data
+# hdu_data = fits.getdata(image_file)
+hdulist.close()
 
-#
-# Simple PSF photometry example
-bkgrms = MADStdBackgroundRMS()
-std = bkgrms(hdu_data)
-plt.subplot(1, 2, 1)
-sigma_psf = 2.0
-iraffind = IRAFStarFinder(
-    threshold=3.5 * std, fwhm=sigma_psf * gaussian_sigma_to_fwhm,
-    minsep_fwhm=0.01, roundhi=5.0, roundlo=-5.0,
-    sharplo=0.0, sharphi=2.0)
-daofind = DAOStarFinder(fwhm=3.0, threshold=5. * std)
-
-daogroup = DAOGroup(2.0 * sigma_psf * gaussian_sigma_to_fwhm)
-mmm_bkg = MMMBackground()
-# fitter = LevMarLSQFitter()
-psf_model = IntegratedGaussianPRF(sigma=sigma_psf)
-daophot_photometry = DAOPhotPSFPhotometry(finder=iraffind,  # daofind,
-                                          group_maker=daogroup,
-                                          bkg_estimator=mmm_bkg,  # None,
-                                          psf_model=psf_model,
-                                          fitter=LevMarLSQFitter(),
-                                          niters=1, fitshape=(11, 11))
-print('Performing PSF photometry.')
-result_tab, residual_image = daophot_photometry(image=hdu_data)
-
+median, std = np.median(hdu_data), np.std(hdu_data)
 plt.subplot(1, 2, 1)
 plt.imshow(hdu_data, cmap='viridis', aspect=1, interpolation='nearest',
-           origin='lower', vmin=0., vmax=50)
+           origin='lower', vmin=0., vmax=median + std)
+
+# Crop image
+crop = cutout_footprint(hdu_data, (2100, 1800), (500, 1100))
+hdu_crop = crop[0]
+
+# Model to identify stars in image.
+bkgrms = MADStdBackgroundRMS()
+std = bkgrms(hdu_crop)
+thresh = 15. * std
+sigma_psf = 2.0
+fwhm_sigma = sigma_psf * gaussian_sigma_to_fwhm
+print('STD, threshold, FWHM: {}, {}, {}'.format(std, thresh, fwhm_sigma))
+
+print('\nPerforming PSF photometry.')
+psf_model = IntegratedGaussianPRF(sigma=sigma_psf)
+# # IterativelySubtractedPSFPhotometry
+#
+# # IRAF method star find.
+# stfind = IRAFStarFinder(threshold=thresh, fwhm=fwhm_sigma)
+# DAOPHOT method star find
+# stfind = DAOStarFinder(threshold=thresh, fwhm=fwhm_sigma)
+#
+# daogroup = DAOGroup(2.0 * sigma_psf * gaussian_sigma_to_fwhm)
+# photometry = IterativelySubtractedPSFPhotometry(
+#     finder=stfind, bkg_estimator=MMMBackground(), group_maker=daogroup,
+#     psf_model=psf_model, fitter=LevMarLSQFitter(), niters=1,
+#     fitshape=(11, 11))
+# DAOPhotPSFPhotometry
+photometry = DAOPhotPSFPhotometry(
+    crit_separation=2. * fwhm_sigma, threshold=thresh, fwhm=fwhm_sigma,
+    psf_model=psf_model, fitshape=11)
+
+result_tab = photometry(image=hdu_crop)
+residual_image = photometry.get_residual_image()
+print(result_tab)
+
+plt.subplot(1, 2, 1)
+median, std = np.median(hdu_crop), np.std(hdu_crop)
+print(median, std)
+plt.imshow(hdu_crop, cmap='viridis', aspect=1, interpolation='nearest',
+           origin='lower', vmin=0., vmax=median + std)
 plt.title('Observed data')
 plt.colorbar(orientation='horizontal', fraction=0.046, pad=0.04)
 plt.subplot(1, 2, 2)
+r_median, r_std = np.median(residual_image), np.std(residual_image)
+print(r_median, r_std)
 plt.imshow(residual_image, cmap='viridis', aspect=1, interpolation='nearest',
-           origin='lower', vmin=0., vmax=50)
+           origin='lower', vmin=0., vmax=r_median + r_std)
+plt.plot(result_tab['x_fit'], result_tab['y_fit'], marker="o",
+         markerfacecolor='None', markeredgecolor='r', linestyle='None')
 plt.title('Residual Image')
 plt.colorbar(orientation='horizontal', fraction=0.046, pad=0.04)
 plt.show()

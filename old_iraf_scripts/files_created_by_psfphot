@@ -1,0 +1,80 @@
+
+FILES CREATED BY RUNNING 'psfphot' SCRIPT (WHEN NO SECOND SEARCH FOR STARS IS PERFORMED)
+
+
+Log file:      imname//'.parameters'
+
+Daofind:       imname//'.coo.1'
+Phot:          imname//'.mag.1'
+
+Pstselect:     imname//'.pstselect'
+               imname//'.pstselectold' (deleted, line 19 of this file)
+
+Psf (1º run):  imname//'.pst.1', imname//'.psf.1.fits', imname//'.psg.1'
+copy:          imname//'.psg.1' --> imname//'.grp.1' <-- File used by the first 'nstar' run
+
+Nstar:         imname//'.nst.1', imname//'.nrj.1'
+Substar:       imname//'.sub.1.fits' (deleted, line 43 of this file) <-- Sustraction of PSFs and their neighbour stars
+
+delete:        imname//'.pstselectold'
+
+Substar:       imname//'.sub.2.fits' (deleted, line 47 of this file)  <-- Sustraction of PSF neighbours stars
+
+Psf (2º run):  imname//'.sub.2.fits.pst.1',
+               imname//'.sub.2.fits.psf.1.fits',
+               imname//'.sub.2.fits.psg.1' <-- Second run, without neighbours
+copy + txdump: imname//'.pst.1' --> imname//'.psf1' <-- File which only contains the coordinates of the
+                                                        PSF selected stars (used by the Aperture Correction)
+
+copy:          imname//'.psg.1' --> imname//'.psg1'            <-- Files used by the next 'nstar'
+copy:          imname//'.psf.1.fits' --> imname//'.psf2.fits'      and 'substar' runs (deleted, line 41 of this file)
+
+Nstar:         imname//'.nst.2', imname//'.nrj.2' (deleted, line 41 of this file)
+Substar:       imname//'.sub.3.fits' (deleted, line 45 of this file)  <-- Sustraction of PSFs and their neighbour stars
+
+Substar:       imname//'.sub.4.fits' (deleted, line 49 of this file)  <-- Sustraction of PSF neighbours stars
+
+Psf (3º run):  imname//'.sub.4.fits.pst.1',     <-- Third run, without neighbours
+               imname//'.sub.4.fits.psf.1.fits',  (deleted, lines 65, 61 and 57 of this file)
+               imname//'.sub.4.fits.psg.1'
+
+delete:        imname//'.psg1', imname//'.psf2.fits', imname//'.nst.2', imname//'.nrj.2'
+
+delete:        imname//'.sub.1.fits'
+copy:          imname//'.sub.3.fits' --> imname//'.sub.1.fits' (deleted, line 75 of this file)
+delete:        imname//'.sub.3.fits'
+
+delete:        imname//'.sub.2.fits'
+copy:          imname//'.sub.4.fits' --> imname//'.sub.2.fits' (deleted, line 75 of this file)
+delete:        imname//'.sub.4.fits'
+
+delete:        imname//'.psf.1.fits'
+copy:          imname//'.sub.2.fits.psf.1.fits' --> imname//'.psf.1.fits'
+delete:        imname//'.sub.2.fits.psf.1.fits'
+
+delete:        imname//'.sub.2.fits.psg.1'
+copy:          imname//'.sub.4.fits.psg.1' --> imname//'.sub.2.fits.psg.1'
+delete:        imname//'.sub.4.fits.psg.1'
+
+delete:        imname//'.sub.2.fits.psf.1.fits'
+copy:          imname//'.sub.4.fits.psf.1.fits' --> imname//'.sub.2.fits.psf.1.fits'
+delete:        imname//'.sub.4.fits.psf.1.fits'
+
+delete:        imname//'.sub.2.fits.pst.1'
+copy:          imname//'.sub.4.fits.pst.1' --> imname//'.sub.2.fits.pst.1'
+delete:        imname//'.sub.4.fits.pst.1'
+
+Allstar:       imname//'.als.1', imname//'.arj.1', imname//'.sub.3.fits'  <-- Sustraction of ALL stars
+                                                                              (deleted, line 75 of this file)
+
+Phot:          imname//'.res'
+
+Aperture:      aperture  <-- Control file that stores the aperture values for all the frames
+               imname//'_aperture' <-- Control file that stores the aperture values for every PSF star used.
+               
+delete:        imname//'.sub.1.fits', imname//'.sub.2.fits', imname//'.sub.3.fits' (1 and 3 deleted upon user's request)
+
+END OF THE SCRIPT
+
+
+
