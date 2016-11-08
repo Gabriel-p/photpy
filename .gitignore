@@ -94,3 +94,7 @@ ENV/
 *.fits
 *.png
 standards/*
+pyraf/*
+uparm/*
+login.cl
+loginuser.cl
