@@ -77,19 +77,19 @@ psf_model = IntegratedGaussianPRF(sigma=sigma_psf)
 # # IterativelySubtractedPSFPhotometry
 #
 # # IRAF method star find.
-# stfind = IRAFStarFinder(threshold=thresh, fwhm=fwhm_sigma)
+stfind = IRAFStarFinder(threshold=thresh, fwhm=fwhm_sigma)
 # DAOPHOT method star find
 # stfind = DAOStarFinder(threshold=thresh, fwhm=fwhm_sigma)
 #
-# daogroup = DAOGroup(2.0 * sigma_psf * gaussian_sigma_to_fwhm)
-# photometry = IterativelySubtractedPSFPhotometry(
-#     finder=stfind, bkg_estimator=MMMBackground(), group_maker=daogroup,
-#     psf_model=psf_model, fitter=LevMarLSQFitter(), niters=1,
-#     fitshape=(11, 11))
+daogroup = DAOGroup(2.0 * fwhm_sigma)
+photometry = IterativelySubtractedPSFPhotometry(
+    finder=stfind, bkg_estimator=MMMBackground(), group_maker=daogroup,
+    psf_model=psf_model, fitter=LevMarLSQFitter(), niters=1,
+    fitshape=(11, 11))
 # DAOPhotPSFPhotometry
-photometry = DAOPhotPSFPhotometry(
-    crit_separation=2. * fwhm_sigma, threshold=thresh, fwhm=fwhm_sigma,
-    psf_model=psf_model, fitshape=11)
+# photometry = DAOPhotPSFPhotometry(
+#     crit_separation=2. * fwhm_sigma, threshold=thresh, fwhm=fwhm_sigma,
+#     psf_model=psf_model, fitshape=11)
 
 result_tab = photometry(image=hdu_crop)
 residual_image = photometry.get_residual_image()
