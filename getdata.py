@@ -4,6 +4,7 @@ Estimate the FWHM, sky mean and STDDEV from an image or a group of images.
 """
 
 import os
+import sys
 from os.path import join, realpath, dirname
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,27 +17,9 @@ from photutils import DAOStarFinder
 from photutils import CircularAperture
 
 
-def main():
+def bckg_data(hdulist, hdu_data, gain_key, rdnoise_key):
     """
-    Get FWHM, sky mean, and sky standard deviation from a .fits file.
     """
-    mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    fname = raw_input("Name (path) of file, from this root folder: ")
-    imname = join(mypath, fname)
-
-    gain_key = 'EGAIN'
-    rdnoise_key = 'ENOISE'
-    thresh_level = 5.
-    fwhm_init = 3.
-    dmax = 60000.
-    ellip_max = 0.15
-    max_psf_stars = 100
-    print("Dmax, ellip_max, max_psf_stars: {}, {}".format(
-        dmax, ellip_max, max_psf_stars))
-
-    # Extract header data
-    hdulist = fits.open(imname)
-    hdu_data = hdulist[0].data
     hdr = hdulist[0].header
     gain = hdr[gain_key]
     rdnoise = hdr[rdnoise_key]
@@ -47,7 +30,13 @@ def main():
     print("Mean, median, and STDDEV: {}, {}, {}".format(mean, median, std))
     print("STDDEV estimated from GAIN, RDNOISE, and median: {}".format(
         np.sqrt(median * gain + rdnoise ** 2) / gain))
+    return std
 
+
+def st_fwhm_select(dmax, max_psf_stars, thresh_level, std, fwhm_init,
+                   hdu_data):
+    """
+    """
     print("\nFinding stars.")
     thresh = thresh_level * std
     print('Threshold, initial FWHM: {}, {}'.format(thresh, fwhm_init))
@@ -61,6 +50,12 @@ def main():
     sour_no_satur.sort('mag')
     psf_select = sour_no_satur[:max_psf_stars]
 
+    return psf_select
+
+
+def psfmeasure(dmax, ellip_max, psf_select, imname):
+    """
+    """
     print("\nRun 'psfmeasure' task to estimate the FWHMs.")
     ascii.write(
         psf_select, output='positions',
@@ -99,20 +94,25 @@ def main():
     os.remove('cursor')
     os.remove('psfmeasure')
 
-    # Remove outliers.
+    return fwhm_estim, psfmeasure_estim
+
+
+def rm_outliers(fwhm_estim):
+    """
+    Remove outliers.
+    """
     fwhm_median = np.median(zip(*fwhm_estim)[2])
     fwhm_no_outl = []
     for st in fwhm_estim:
         if st[2] <= 2. * fwhm_median:
             fwhm_no_outl.append(st)
 
-    print("\nMedian FWHM: {}".format(fwhm_median))
-    fwhm_mean, fwhm_std = np.mean(zip(*fwhm_no_outl)[2]),\
-        np.std(zip(*fwhm_no_outl)[2])
-    print("Mean FWHM +/- std (no outliers, {} stars): {:.2f} +- {:.2f}".format(
-        len(fwhm_no_outl), fwhm_mean, fwhm_std))
-    print("psfmeasure FWHM: {}".format(psfmeasure_estim))
+    return fwhm_median, fwhm_no_outl
 
+
+def make_plots(hdu_data, fwhm_no_outl, fwhm_mean, fwhm_std):
+    """
+    """
     fig = plt.figure()
     ax0 = fig.add_subplot(121)
     median, std = np.median(hdu_data), np.std(hdu_data)
@@ -129,8 +129,65 @@ def main():
         zip(*fwhm_no_outl)[2],
         range=[fwhm_mean - 2. * fwhm_std, fwhm_mean + 2. * fwhm_std],
         bins=int(len(fwhm_no_outl) * 0.2))
-    ax1.set_title('FWHM distribution for {} stars.'.format(len(fwhm_no_outl)))
+    ax1.set_title('FWHM distribution for {} stars.'.format(
+        len(fwhm_no_outl)))
     plt.show()
+
+
+def main():
+    """
+    Get FWHM, sky mean, and sky standard deviation from a .fits file.
+    """
+    mypath = realpath(join(os.getcwd(), dirname(__file__)))
+    fname = raw_input("Root dir where .fits files are stored: ")
+    r_path = join(mypath, fname)
+    #
+    gain_key = 'EGAIN'
+    rdnoise_key = 'ENOISE'
+    thresh_level = 5.
+    fwhm_init = 3.
+    dmax = 60000.
+    ellip_max = 0.15
+    max_psf_stars = 100
+    print("Dmax, ellip_max, max_psf_stars: {}, {}".format(
+        dmax, ellip_max, max_psf_stars))
+
+    fits_list = []
+    if os.path.isdir(r_path):
+        for subdir, dirs, files in os.walk(r_path):
+            for file in files:
+                if file.endswith('.fits'):
+                    fits_list.append(os.path.join(subdir, file))
+    else:
+        print("Not a folder. Exit.")
+        sys.exit()
+
+    for imname in fits_list:
+        print("\n.fits file: {}".format(imname))
+
+        # Extract data.
+        hdulist = fits.open(imname)
+        hdu_data = hdulist[0].data
+
+        std = bckg_data(hdulist, hdu_data, gain_key, rdnoise_key)
+
+        psf_select = st_fwhm_select(dmax, max_psf_stars, thresh_level, std,
+                                    fwhm_init, hdu_data)
+
+        fwhm_estim, psfmeasure_estim = psfmeasure(
+            dmax, ellip_max, psf_select, imname)
+
+        fwhm_median, fwhm_no_outl = rm_outliers(fwhm_estim)
+
+        print("\nMedian FWHM: {}".format(fwhm_median))
+        fwhm_mean, fwhm_std = np.mean(zip(*fwhm_no_outl)[2]),\
+            np.std(zip(*fwhm_no_outl)[2])
+        print("Mean FWHM +/- std (no outliers, "
+              "{} stars): {:.2f} +- {:.2f}".format(
+                  len(fwhm_no_outl), fwhm_mean, fwhm_std))
+        print("psfmeasure FWHM: {}".format(psfmeasure_estim))
+
+        make_plots(hdu_data, fwhm_no_outl, fwhm_mean, fwhm_std)
 
 
 if __name__ == "__main__":
