@@ -7,36 +7,34 @@ Docs: http://photom.rtfd.io/
 
 
 # Install
-* [IRAF + DS9](http://www.astronomy.ohio-state.edu/~khan/iraf/
-iraf_step_by_step_installation_64bit)
+* [PyRAF + IRAF](http://astroconda.readthedocs.io/en/latest/installation.html)
 * [imexam (Python)](http://imexam.readthedocs.io/en/latest/index.html)
 * [ginga (Python)](http://ejeschke.github.io/ginga/)
-
-
-# PSF Photometry steps
+* [<s>IRAF + DS9</s>](http://www.astronomy.ohio-state.edu/~khan/iraf/
+iraf_step_by_step_installation_64bit) <-- OLD
 
 ## Prepare fits images
 
 1. Aling
-
-* [imalign](http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imalign)
+    * [imalign](http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imalign)
 
 1. Combine
-
-* [astropy](http://www.astropy.org/astropy-tutorials/FITS-images.html)
-* [numpy](http://stackoverflow.com/questions/13753251/
+    * [astropy](http://www.astropy.org/astropy-tutorials/FITS-images.html)
+    * [numpy](http://stackoverflow.com/questions/13753251/
 median-combining-fits-images-in-python)
-* [imcombine](http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imcombine)
-
+    * [imcombine](http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imcombine)
 
 ## Standard stars photometry
 
-* [imexamine](http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imexamine)
-*  Aperture radius
+1. Aperture radius
+
+## PSF Photometry 
 
 
 
-# Links:
+
+___________________________________
+#### Links:
 
 * [PSF Photometry in Crowded Fields with Photutils (photutils)](https://
 github.com/astropy/photutils-datasets/blob/master/notebooks/

@@ -1,0 +1,6 @@
+textfiles,s,a,'auxiliar',,,'Input apphot/daophot text database(s)'
+fields,s,a,'xcenter, ycenter',,,'Fields to be extracted'
+expr,s,a,'yes',,,'Boolean expression for record selection'
+headers,b,h,no,,,'Print the field headers ?'
+parameters,b,h,yes,,,'Print the parameters if headers is yes ?'
+mode,s,h,'hl',,,'Mode of task'

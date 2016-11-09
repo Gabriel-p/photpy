@@ -42,7 +42,7 @@ rdnoise_key = 'ENOISE'
 mypath = realpath(join(getcwd(), dirname(__file__)))
 image_file = mypath + '/standards/filt_V/stk_2148.fits'
 
-# Exctract header data
+# Extract header data
 hdulist = fits.open(image_file)
 # print(hdulist.info())
 hdr = hdulist[0].header
@@ -55,11 +55,6 @@ hdu_data = hdulist[0].data
 # hdu_data = fits.getdata(image_file)
 hdulist.close()
 
-median, std = np.median(hdu_data), np.std(hdu_data)
-plt.subplot(1, 2, 1)
-plt.imshow(hdu_data, cmap='viridis', aspect=1, interpolation='nearest',
-           origin='lower', vmin=0., vmax=median + std)
-
 # Crop image
 crop = cutout_footprint(hdu_data, (2100, 1800), (500, 1100))
 hdu_crop = crop[0]
@@ -67,29 +62,41 @@ hdu_crop = crop[0]
 # Model to identify stars in image.
 bkgrms = MADStdBackgroundRMS()
 std = bkgrms(hdu_crop)
-thresh = 15. * std
-sigma_psf = 2.0
+thresh = 50. * std
+sigma_psf = 5.
 fwhm_sigma = sigma_psf * gaussian_sigma_to_fwhm
-print('STD, threshold, FWHM: {}, {}, {}'.format(std, thresh, fwhm_sigma))
+fitshape = int(3 * np.ceil(fwhm_sigma) // 2 * 2 + 1)
+print('STD, threshold, FWHM, fitshape: {}, {}, {}, {}'.format(
+    std, thresh, fwhm_sigma, fitshape))
 
 print('\nPerforming PSF photometry.')
 psf_model = IntegratedGaussianPRF(sigma=sigma_psf)
 # # IterativelySubtractedPSFPhotometry
 #
 # # IRAF method star find.
-stfind = IRAFStarFinder(threshold=thresh, fwhm=fwhm_sigma)
+# stfind = IRAFStarFinder(threshold=thresh, fwhm=fwhm_sigma)
 # DAOPHOT method star find
-# stfind = DAOStarFinder(threshold=thresh, fwhm=fwhm_sigma)
-#
-daogroup = DAOGroup(2.0 * fwhm_sigma)
-photometry = IterativelySubtractedPSFPhotometry(
-    finder=stfind, bkg_estimator=MMMBackground(), group_maker=daogroup,
-    psf_model=psf_model, fitter=LevMarLSQFitter(), niters=1,
-    fitshape=(11, 11))
+stfind = DAOStarFinder(threshold=thresh, fwhm=fwhm_sigma)
+
+median, std = np.median(hdu_crop), np.std(hdu_crop)
+print(median, std)
+sources = stfind(hdu_crop)
+print(sources)
+# apertures = CircularAperture(positions, r=4.)
+# apertures.plot(color='red', lw=1.5)
+# plt.imshow(hdu_crop, cmap='viridis', aspect=1, interpolation='nearest',
+#            origin='lower', vmin=0., vmax=median + std)
+# plt.show()
+
+# daogroup = DAOGroup(2.0 * fwhm_sigma)
+# photometry = IterativelySubtractedPSFPhotometry(
+#     finder=stfind, bkg_estimator=MMMBackground(), group_maker=daogroup,
+#     psf_model=psf_model, fitter=LevMarLSQFitter(), niters=1,
+#     fitshape=fitshape)
 # DAOPhotPSFPhotometry
-# photometry = DAOPhotPSFPhotometry(
-#     crit_separation=2. * fwhm_sigma, threshold=thresh, fwhm=fwhm_sigma,
-#     psf_model=psf_model, fitshape=11)
+photometry = DAOPhotPSFPhotometry(
+    crit_separation=3. * fwhm_sigma, threshold=thresh, fwhm=fwhm_sigma,
+    psf_model=psf_model, fitshape=fitshape)
 
 result_tab = photometry(image=hdu_crop)
 residual_image = photometry.get_residual_image()
@@ -97,18 +104,30 @@ print(result_tab)
 
 plt.subplot(1, 2, 1)
 median, std = np.median(hdu_crop), np.std(hdu_crop)
+# mean, median, std = sigma_clipped_stats(hdu_crop, sigma=3.0, iters=5)
 print(median, std)
 plt.imshow(hdu_crop, cmap='viridis', aspect=1, interpolation='nearest',
            origin='lower', vmin=0., vmax=median + std)
+positions = (sources['xcentroid'], sources['ycentroid'])
+apertures = CircularAperture(positions, r=4.)
+apertures.plot(color='red', lw=1.5)
 plt.title('Observed data')
 plt.colorbar(orientation='horizontal', fraction=0.046, pad=0.04)
+
 plt.subplot(1, 2, 2)
 r_median, r_std = np.median(residual_image), np.std(residual_image)
+# r_mean, r_median, r_std = sigma_clipped_stats(
+#     residual_image, sigma=3.0, iters=5)
 print(r_median, r_std)
 plt.imshow(residual_image, cmap='viridis', aspect=1, interpolation='nearest',
            origin='lower', vmin=0., vmax=r_median + r_std)
-plt.plot(result_tab['x_fit'], result_tab['y_fit'], marker="o",
-         markerfacecolor='None', markeredgecolor='r', linestyle='None')
+
+positions = (result_tab['x_fit'], result_tab['y_fit'])
+apertures = CircularAperture(positions, r=4.)
+apertures.plot(color='red', lw=1.5)
+# plt.plot(result_tab['x_fit'], result_tab['y_fit'], marker="o",
+#          markerfacecolor='None', markeredgecolor='r', linestyle='None')
+
 plt.title('Residual Image')
 plt.colorbar(orientation='horizontal', fraction=0.046, pad=0.04)
 plt.show()

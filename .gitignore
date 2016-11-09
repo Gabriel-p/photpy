@@ -94,6 +94,7 @@ ENV/
 *.fits
 *.png
 standards/*
+field/*
 pyraf/*
 uparm/*
 login.cl
