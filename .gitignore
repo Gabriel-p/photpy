@@ -99,3 +99,4 @@ pyraf/*
 uparm/*
 login.cl
 loginuser.cl
+*.dat

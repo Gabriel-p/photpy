@@ -1,6 +1,7 @@
 
+import os
+import sys
 from os.path import join, realpath, dirname
-from os import getcwd
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -19,8 +20,14 @@ from imexam.imexamine import Imexamine
 from imexam.math_helper import gfwhm
 
 # Load data.
-mypath = realpath(join(getcwd(), dirname(__file__)))
-image_file = mypath + '/standards/filt_V/stk_2148.fits'
+mypath = realpath(join(os.getcwd(), dirname(__file__)))
+image_file = mypath + '/standards/filt_U/stk_2153.fits'
+
+# viewer=imexam.connect(viewer='ginga')
+viewer=imexam.connect()
+viewer.load_fits(image_file)
+viewer.imexam()
+viewer.close()
 
 # Extract header data
 hdulist = fits.open(image_file)
@@ -43,7 +50,7 @@ stfind = DAOStarFinder(threshold=thresh, fwhm=fwhm_sigma)
 sources = stfind(hdu_crop)
 print(sources)
 
-positions = (sources['xcentroid'], sources['ycentroid']) # , sources['id'])
+positions = (sources['xcentroid'], sources['ycentroid'])
 # Make a list of locations as a tuple of (x, y, ID)
 starlist = list()
 for point in zip(*positions):
@@ -53,31 +60,23 @@ for point in zip(*positions):
 plots = Imexamine()
 plots.set_data(hdu_crop)
 
-# viewer=imexam.connect(viewer='ginga')
-viewer=imexam.connect('82a7e75f:57222')
-print(viewer.limexam())
-print(viewer.cimexam())
-print(viewer.aimexam())
-# viewer.close()
-import pdb; pdb.set_trace()  # breakpoint 032df50b //
-
-
 # make a function to calculate the fwhm
 # g = lambda x: x * np.sqrt(8.0 * np.log(2.))
 
 # fwhm = gfwhm(stddev)[0]  #to get just the x fwhm
 
+# sys.stdout = open(os.devnull, "w")
+# plots.line_fit_pars["center"][0] = False
+
 results = []
 for star in starlist:
-    # print(star)
     x, y = star
-    # print(sid, x, y)
     gauss_x = plots.line_fit(x, y, genplot=False)
     gauss_y = plots.column_fit(x, y, genplot=False)
     # print(g(gauss.stddev), gfwhm(gauss.stddev)[0])
-    # print('\n')
     results.append([x, y, gauss_x.stddev, gauss_x.mean, gauss_x.amplitude,
                     gfwhm(gauss_x.stddev)[0], gfwhm(gauss_y.stddev)[0]])
+# sys.stdout = sys.__stdout__
 
 for _ in results:
     print(_)
