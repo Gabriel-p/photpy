@@ -9,9 +9,10 @@ A User's Guide to Stellar CCD Photometry with Python
 This document is a guide to performing stellar photometry on CCD data
 using `photutils`__, an `astropy`__ affiliated package.
 
-It follows the same steps outlined in Massey & Lindsey's `A User's Guide
+It follows roughly the same steps outlined in Massey & Lindsey's `A User's Guide
 to Stellar CCD Photometry with IRAF (1992)`__.
 
+It is under development as of November 2016, with much work still needed.
 
 .. toctree::
     :hidden:
@@ -20,6 +21,7 @@ to Stellar CCD Photometry with IRAF (1992)`__.
     :maxdepth: 2
 
     intro
+    get_started
     stand_phot
     crowd_phot
     transf
