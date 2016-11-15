@@ -5,33 +5,12 @@ Python CCD photometry.
 Docs: http://photom.rtfd.io/
 
 
-
-# Install
-* [PyRAF + IRAF](http://astroconda.readthedocs.io/en/latest/installation.html)
+# Requirements
+* [astropy + photutils + PyRAF + IRAF](http://astroconda.readthedocs.io/en/latest/installation.html)
 * [imexam (Python)](http://imexam.readthedocs.io/en/latest/index.html)
 * [ginga (Python)](http://ejeschke.github.io/ginga/)
 * [<s>IRAF + DS9</s>](http://www.astronomy.ohio-state.edu/~khan/iraf/
 iraf_step_by_step_installation_64bit) <-- OLD
-
-## Prepare fits images
-
-1. Aling
-    * [imalign](http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imalign)
-
-1. Combine
-    * [astropy](http://www.astropy.org/astropy-tutorials/FITS-images.html)
-    * [numpy](http://stackoverflow.com/questions/13753251/
-median-combining-fits-images-in-python)
-    * [imcombine](http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?imcombine)
-
-## Standard stars photometry
-
-1. Aperture radius
-
-## PSF Photometry 
-
-
-
 
 ___________________________________
 #### Links:

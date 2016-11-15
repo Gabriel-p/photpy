@@ -54,6 +54,8 @@ print(gain, rdnoise)
 hdu_data = hdulist[0].data
 # hdu_data = fits.getdata(image_file)
 hdulist.close()
+import pdb; pdb.set_trace()  # breakpoint 1e2befa2 //
+
 
 # Crop image
 crop = cutout_footprint(hdu_data, (2100, 1800), (500, 1100))
