@@ -191,7 +191,7 @@ def isolate_stars(hdu_data, fwhm_no_outl, crop_side):
 def make_plots(
     r_path, imname, hdu_data, sky_median, sky_std, max_psf_stars, all_sources,
     n_not_satur, fwhm_min_rjct, ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean,
-        fwhm_std, stars, crop_side):
+        fwhm_std, stars, crop_side, fig_name):
     """
     Make plots.
     """
@@ -328,7 +328,7 @@ def make_plots(
         ax0.axhline(combined_star_argmax[0], ls='--', lw=2, c='w')
         ax0.axvline(combined_star_argmax[1], ls='--', lw=2, c='w')
         apertures = CircularAperture(combined_star_argmax, r=fwhm_mean)
-        apertures.plot(color='r', lw=0.75)
+        apertures.plot(color='b', lw=0.75)
 
         # Top plot
         axx = plt.subplot(gs2[5:6, 5:9])
@@ -350,10 +350,7 @@ def make_plots(
         axy.xaxis.set_major_formatter(nullfmt)
         axy.yaxis.set_major_formatter(nullfmt)
 
-    fig_name = imname.split('/')[-1].replace(".fits", "")
-    plt.savefig(join(r_path + '/' + fig_name + '.png'), dpi=150,
-                bbox_inches='tight')
-    print('3')
+    plt.savefig(fig_name + '.png', dpi=150, bbox_inches='tight')
     # Close to release memory.
     plt.clf()
     plt.close()
@@ -373,8 +370,11 @@ def main():
             for file in files:
                 if file.endswith('.fits'):
                     fits_list.append(os.path.join(subdir, file))
+    elif os.path.isfile(r_path):
+        print("Single .fits file.")
+        fits_list.append(r_path)
     else:
-        print("Not a folder. Exit.")
+        print("{}\nis neither a folder nor a file. Exit.".format(r_path))
         sys.exit()
 
     do_plots = raw_input("Show plot for FWHM selected stars? (y/n): ")
@@ -401,9 +401,15 @@ def main():
           "{}, {}, {}, {}, {}".format(
               dmax, ellip_max, fwhm_min, max_psf_stars, crop_side))
 
-    with open(join(r_path, "fwhm_final.dat"), 'w') as f:
-        f.write("# image      filter   exposure    FWHM (N stars)     "
-                "FWHM (mean)    FWHM (std)\n")
+    if os.path.isdir(r_path):
+        out_data = join(r_path, "fwhm_final.dat")
+    elif os.path.isfile(r_path):
+        out_data = join(r_path.replace(r_path.split('/')[-1], ''),
+                        "fwhm_final.dat")
+    if not os.path.isfile(out_data):
+        with open(out_data, 'w') as f:
+            f.write("# image      filter   exposure    FWHM (N stars)     "
+                    "FWHM (mean)    FWHM (std)\n")
 
     # For each .fits image in the root folder.
     for imname in fits_list:
@@ -444,13 +450,18 @@ def main():
             print("\nWARNING: no stars left after rejecting\nby min FWHM"
                   "and max ellipticity.")
 
+        if os.path.isfile(r_path):
+            fig_name = join(r_path.replace(".fits", ""))
+        else:
+            fig_name = join(r_path, imname.split('/')[-1].replace(".fits", ""))
         if do_plots:
             make_plots(
                 r_path, imname, hdu_data, sky_median, sky_std, max_psf_stars,
                 all_sources, n_not_satur, fwhm_min_rjct, ellip_rjct,
-                fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, crop_side)
+                fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, crop_side,
+                fig_name)
 
-        with open(join(r_path, "fwhm_final.dat"), 'a') as f:
+        with open(out_data, 'a') as f:
             im_name = imname.split('/')[-1]
             filt = hdulist[0].header[filter_key]
             exptime = hdulist[0].header[exp_key]
@@ -458,7 +469,6 @@ def main():
                     im_name, filt, exptime, len(fwhm_no_outl), fwhm_mean,
                     fwhm_std))
 
-        print('6')
         # Force the Garbage Collector to release unreferenced memory.
         gc.collect()
 
