@@ -20,6 +20,79 @@ from photutils import CircularAperture
 from photutils.utils import cutout_footprint
 
 
+def get_params():
+    """
+    """
+    mypath = realpath(join(os.getcwd(), dirname(__file__)))
+    fname = raw_input("Root dir where the .fits files are stored: ")
+    fname = fname[1:] if fname.startswith('/') else fname
+    r_path = join(mypath, fname)
+    fits_list = []
+    if os.path.isdir(r_path):
+        for subdir, dirs, files in os.walk(r_path):
+            for file in files:
+                if file.endswith('.fits'):
+                    fits_list.append(os.path.join(subdir, file))
+    elif os.path.isfile(r_path):
+        print("  Single .fits file.")
+        fits_list.append(r_path)
+    else:
+        print("{}\nis neither a folder nor a file. Exit.".format(r_path))
+        sys.exit()
+
+    do_plots = raw_input("Show plot for FWHM selected stars? (y/n): ")
+    do_plots = False if do_plots in ('n', 'N', 'no', 'NO') else True
+    if do_plots:
+        print("  Will generate plots.")
+
+    max_psf_stars = raw_input("Max number of stars used to obtain FWHM: ")
+    if max_psf_stars is '':
+        max_psf_stars = 100
+        print("  Will use default value: {}".format(max_psf_stars))
+
+    thresh_level = raw_input("Threshold level above STDDEV: ")
+    if thresh_level is '':
+        thresh_level = 5.
+        print("  Will use default value: {}".format(thresh_level))
+
+    fwhm_init = raw_input("Initial FWHM: ")
+    if fwhm_init is '':
+        fwhm_init = 3.
+        print("  Will use default value: {}".format(fwhm_init))
+
+    dmax = raw_input("Maximum flux: ")
+    if dmax is '':
+        dmax = 60000.
+        print("  Will use default value: {}".format(dmax))
+
+    ellip_max = raw_input("Maximum ellipticity: ")
+    if ellip_max is '':
+        ellip_max = 0.15
+        print("  Will use default value: {}".format(ellip_max))
+
+    fwhm_min = raw_input("Minimum FWHM: ")
+    if fwhm_min is '':
+        fwhm_min = 1.5
+        print("  Will use default value: {}".format(fwhm_min))
+
+    crop_side = int(raw_input("Crop side for PSF stars (integer): "))
+    if crop_side is '':
+        crop_side = 20
+        print("  Will use default value: {}".format(crop_side))
+
+    # Some header info, and hard-coded criteria for selection of stars.
+    gain_key = 'EGAIN'
+    rdnoise_key = 'ENOISE'
+    filter_key = 'FILTER'
+    exp_key = 'EXPTIME'
+    print("\nKeywords: {}, {}, {}, {}".format(
+        gain_key, rdnoise_key, filter_key, exp_key))
+
+    return mypath, r_path, fits_list, gain_key, rdnoise_key, dmax,\
+        max_psf_stars, thresh_level, fwhm_init, ellip_max, fwhm_min,\
+        crop_side, do_plots, filter_key, exp_key
+
+
 def bckg_data(hdulist, hdu_data, gain_key, rdnoise_key):
     """
     Estimate sky's mean, median, and standard deviation.
@@ -36,7 +109,8 @@ def bckg_data(hdulist, hdu_data, gain_key, rdnoise_key):
         sky_mean, sky_median, sky_std))
     print("STDDEV estimated from GAIN, RDNOISE, and median: {:.2f}".format(
         np.sqrt(sky_median * gain + rdnoise ** 2) / gain))
-    return sky_median, sky_std
+
+    return sky_mean, sky_median, sky_std
 
 
 def st_fwhm_select(dmax, max_psf_stars, thresh_level, std, fwhm_init,
@@ -189,9 +263,9 @@ def isolate_stars(hdu_data, fwhm_no_outl, crop_side):
 
 
 def make_plots(
-    r_path, imname, hdu_data, sky_median, sky_std, max_psf_stars, all_sources,
-    n_not_satur, fwhm_min_rjct, ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean,
-        fwhm_std, stars, crop_side, fig_name):
+    hdu_data, max_psf_stars, all_sources, n_not_satur, fwhm_min_rjct,
+        ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, crop_side,
+        stars, fig_name):
     """
     Make plots.
     """
@@ -210,7 +284,7 @@ def make_plots(
         apertures.plot(color='red', lw=1.)
     ax.set_title('{} sources detected ({} not saturated)'.format(
         all_sources, n_not_satur), fontsize=10)
-    ax.tick_params(axis='both', which='major', labelsize=9)
+    ax.tick_params(axis='both', which='major', labelsize=8)
     # plt.colorbar(orientation='horizontal', fraction=0.046, pad=0.04)
 
     gs0 = gridspec.GridSpec(10, 12)
@@ -225,36 +299,39 @@ def make_plots(
     ax.set_xticks(x)
     ax.set_xticklabels(['FWHM min rjct', 'Ellip max rjct', 'Outliers rjct'],
                        fontsize=9)
-    ax.tick_params(axis='both', which='major', labelsize=9)
+    ax.tick_params(axis='both', which='major', labelsize=8)
     ax.set_title("As % of max FWHM stars ({})".format(max_psf_stars),
                  fontsize=9)
 
     gs3 = gridspec.GridSpec(10, 12)
-    gs3.update(hspace=0.35, wspace=0.25)
+    gs3.update(hspace=0.35, wspace=0.1)
     if fwhm_no_outl:
         ax = plt.subplot(gs3[2:5, 8:10])
         ax.hist(
-            zip(*fwhm_no_outl)[2],
+            zip(*fwhm_no_outl)[2], histtype='step',
             range=[fwhm_mean - 2. * fwhm_std, fwhm_mean + 2. * fwhm_std],
-            bins=int(len(fwhm_no_outl) * 0.4))
-        ax.axvline(fwhm_mean, ls='-', lw=2, c='r')
+            bins=max(1, int(len(fwhm_no_outl) * 0.3)))
+        ax.axvline(fwhm_mean, ls='-', lw=3.5, c='g')
         ax.axvline(fwhm_mean + fwhm_std, ls='--', lw=1.5, c='r')
         ax.axvline(fwhm_mean - fwhm_std, ls='--', lw=1.5, c='r')
         ax.set_title('FWHM distribution ({} stars)'.format(
             len(fwhm_no_outl)), fontsize=9)
-        ax.tick_params(axis='both', which='major', labelsize=9)
+        ax.tick_params(axis='x', which='major', labelsize=8)
+        ax.tick_params(axis='y', which='major', labelleft='off')
     elif fwhm_min_rjct:
         ax = plt.subplot(gs3[2:5, 8:10])
-        ax.hist(zip(*fwhm_min_rjct)[2])
+        ax.hist(zip(*fwhm_min_rjct)[2], histtype='step')
         ax.set_title('FWHM < min distribution ({} stars)'.format(
             len(fwhm_min_rjct)), fontsize=11)
-        ax.tick_params(axis='both', which='major', labelsize=9)
+        ax.tick_params(axis='x', which='major', labelsize=8)
+        ax.tick_params(axis='y', which='major', labelleft='off')
     elif ellip_rjct:
         ax = plt.subplot(gs3[2:5, 8:10])
-        ax.hist(zip(*ellip_rjct)[2])
+        ax.hist(zip(*ellip_rjct)[2], histtype='step')
         ax.set_title('e < max distribution ({} stars)'.format(
             len(ellip_rjct)), fontsize=11)
-        ax.tick_params(axis='both', which='major', labelsize=9)
+        ax.tick_params(axis='x', which='major', labelsize=8)
+        ax.tick_params(axis='y', which='major', labelleft='off')
 
     ax = plt.subplot(gs3[2:5, 5:8], aspect=1)
     ymax, xmax = np.shape(hdu_data)
@@ -276,7 +353,7 @@ def make_plots(
         ax.scatter(*ellip_pos, s=r, lw=0.7, facecolors='none', edgecolors='b')
     ax.set_title('Spatial distribution of (exponential) FWHM sizes',
                  fontsize=9)
-    ax.tick_params(axis='both', which='major', labelsize=9)
+    ax.tick_params(axis='both', which='major', labelsize=8)
 
     if stars:
         stars = np.array(stars, dtype='float32')
@@ -303,7 +380,7 @@ def make_plots(
                 stars[i], cmap=plt.cm.viridis, interpolation='nearest',
                 origin='lower', vmin=0.)
             ax.set_title("({:.0f}, {:.0f})".format(
-                fwhm_no_outl[i][0], fwhm_no_outl[i][1]), fontsize=9, y=-0.2)
+                fwhm_no_outl[i][0], fwhm_no_outl[i][1]), fontsize=8, y=-0.2)
             ax.set_axis_off()
 
         # Create a meshgrid of coordinates (0,1,...,N) times (0,1,...,N)
@@ -324,10 +401,10 @@ def make_plots(
         ax0 = plt.subplot(gs2[6:10, 5:9])
         ax0.imshow(h, cmap=plt.cm.hot, interpolation='nearest',
                    origin='lower', vmin=0., aspect='auto')
-        # cent = int(crop_side / 2.) - 1
         ax0.axhline(combined_star_argmax[0], ls='--', lw=2, c='w')
         ax0.axvline(combined_star_argmax[1], ls='--', lw=2, c='w')
-        apertures = CircularAperture(combined_star_argmax, r=fwhm_mean)
+        cent = int(crop_side / 2.) - 1
+        apertures = CircularAperture((cent, cent), r=fwhm_mean)
         apertures.plot(color='b', lw=0.75)
 
         # Top plot
@@ -360,46 +437,9 @@ def main():
     """
     Get FWHM, sky mean, and sky standard deviation from a .fits file.
     """
-    mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    fname = raw_input("Root dir where the .fits files are stored: ")
-    fname = fname[1:] if fname.startswith('/') else fname
-    r_path = join(mypath, fname)
-    fits_list = []
-    if os.path.isdir(r_path):
-        for subdir, dirs, files in os.walk(r_path):
-            for file in files:
-                if file.endswith('.fits'):
-                    fits_list.append(os.path.join(subdir, file))
-    elif os.path.isfile(r_path):
-        print("Single .fits file.")
-        fits_list.append(r_path)
-    else:
-        print("{}\nis neither a folder nor a file. Exit.".format(r_path))
-        sys.exit()
-
-    do_plots = raw_input("Show plot for FWHM selected stars? (y/n): ")
-    do_plots = True if do_plots in ('y', 'Y', 'yes', 'YES') else False
-
-    max_psf_stars = raw_input("Max number of stars used to obtain FWHM: ")
-
-    # Some header info, and hard-coded criteria for selection of stars.
-    gain_key = 'EGAIN'
-    rdnoise_key = 'ENOISE'
-    filter_key = 'FILTER'
-    exp_key = 'EXPTIME'
-    print("\nKeywords: {}, {}, {}, {}".format(
-        gain_key, rdnoise_key, filter_key, exp_key))
-    thresh_level = 5.
-    fwhm_init = 3.
-    print("Threshold level above STDDEV, initial FWHM: {}, {}".format(
-        thresh_level, fwhm_init))
-    dmax = 60000.
-    ellip_max = 0.15
-    fwhm_min = 1.5
-    crop_side = 20
-    print("Dmax, ellip_max, fwhm_min, max_psf_stars, crop side: "
-          "{}, {}, {}, {}, {}".format(
-              dmax, ellip_max, fwhm_min, max_psf_stars, crop_side))
+    mypath, r_path, fits_list, gain_key, rdnoise_key, dmax, max_psf_stars,\
+        thresh_level, fwhm_init, ellip_max, fwhm_min, crop_side, do_plots,\
+        filter_key, exp_key = get_params()
 
     if os.path.isdir(r_path):
         out_data = join(r_path, "fwhm_final.dat")
@@ -408,8 +448,8 @@ def main():
                         "fwhm_final.dat")
     if not os.path.isfile(out_data):
         with open(out_data, 'w') as f:
-            f.write("# image      filter   exposure    FWHM (N stars)     "
-                    "FWHM (mean)    FWHM (std)\n")
+            f.write("# image      filter   exposure    Sky mean    Sky STDDEV"
+                    "     FWHM (N stars)     FWHM (mean)    FWHM (std)\n")
 
     # For each .fits image in the root folder.
     for imname in fits_list:
@@ -420,7 +460,7 @@ def main():
         hdu_data = hdulist[0].data
 
         # Background estimation.
-        sky_median, sky_std = bckg_data(
+        sky_mean, sky_median, sky_std = bckg_data(
             hdulist, hdu_data, gain_key, rdnoise_key)
 
         # Stars selection.
@@ -456,18 +496,18 @@ def main():
             fig_name = join(r_path, imname.split('/')[-1].replace(".fits", ""))
         if do_plots:
             make_plots(
-                r_path, imname, hdu_data, sky_median, sky_std, max_psf_stars,
-                all_sources, n_not_satur, fwhm_min_rjct, ellip_rjct,
-                fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, crop_side,
-                fig_name)
+                hdu_data, max_psf_stars, all_sources, n_not_satur,
+                fwhm_min_rjct, ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean,
+                fwhm_std, crop_side, stars, fig_name)
 
         with open(out_data, 'a') as f:
             im_name = imname.split('/')[-1]
             filt = hdulist[0].header[filter_key]
             exptime = hdulist[0].header[exp_key]
-            f.write("{}    {}    {}    {}    {:.2f}    {:.3f}\n".format(
-                    im_name, filt, exptime, len(fwhm_no_outl), fwhm_mean,
-                    fwhm_std))
+            f.write("{}    {}    {}    {:.2f}    {:.2f}    {}    {:.2f}"
+                    "    {:.3f}\n".format(
+                        im_name, filt, exptime, sky_mean, sky_std,
+                        len(fwhm_no_outl), fwhm_mean, fwhm_std))
 
         # Force the Garbage Collector to release unreferenced memory.
         gc.collect()
