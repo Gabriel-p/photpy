@@ -1,0 +1,15 @@
+# Default parameters for the get_data.py script
+#
+ff_proc None
+do_plots True
+max_psf_stars 100
+thresh_level 5.
+fwhm_init 3.
+dmax 60000.
+ellip_max 0.15
+fwhm_min 1.5
+crop_side 20
+gain_key EGAIN
+rdnoise_key ENOISE
+filter_key FILTER
+exp_key EXPTIME

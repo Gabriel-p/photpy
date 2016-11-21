@@ -20,11 +20,49 @@ from photutils import CircularAperture
 from photutils.utils import cutout_footprint
 
 
-def get_params():
+def create_pars_file(pars_f, pars_list=None):
     """
     """
+    # Default values.
+    if pars_list is None:
+        pars_list = ['None', 'True', '100', '5.', '3.', '60000.', '0.15',
+                     '1.5', '20', 'EGAIN', 'ENOISE', 'FILTER', 'EXPTIME']
+    with open(pars_f, 'w') as f:
+        f.write(
+            "# Default parameters for the get_data.py script\n#\n"
+            "ff_proc {}\ndo_plots {}\nmax_psf_stars {}\nthresh_level {}\n"
+            "fwhm_init {}\ndmax {}\nellip_max {}\nfwhm_min {}\ncrop_side {}\n"
+            "gain_key {}\nrdnoise_key {}\nfilter_key {}\nexp_key {}\n".format(
+                *pars_list))
+    return
+
+
+def read_params():
+    """
+    """
+    pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    fname = raw_input("Root dir where the .fits files are stored: ")
+    pars_f = join(mypath, '.get_data.pars')
+    if not os.path.isfile(pars_f):
+        print("Parameters file missing. Create it.")
+        create_pars_file(pars_f)
+
+    with open(pars_f, 'r') as f:
+        for line in f:
+            if not line.startswith('#'):
+                key, value = line.replace('\n', '').split(' ')
+                pars[key] = value
+
+    return mypath, pars_f, pars
+
+
+def get_params(mypath, pars_f, pars):
+    """
+    """
+    pars_list = []
+
+    fname = raw_input("\nDir or file to process ({}): ".format(
+        pars['ff_proc']))
     fname = fname[1:] if fname.startswith('/') else fname
     r_path = join(mypath, fname)
     fits_list = []
@@ -39,58 +77,70 @@ def get_params():
     else:
         print("{}\nis neither a folder nor a file. Exit.".format(r_path))
         sys.exit()
+    pars['ff_proc'] = r_path
+    pars_list.append(pars['ff_proc'])
 
-    do_plots = raw_input("Show plot for FWHM selected stars? (y/n): ")
-    do_plots = False if do_plots in ('n', 'N', 'no', 'NO') else True
-    if do_plots:
-        print("  Will generate plots.")
+    answ = raw_input("Show plot for FWHM selected stars? (y/n) ({}): ".format(
+        pars['do_plots']))
+    pars['do_plots'] = False if answ in ('n', 'N', 'no', 'NO') else True
+    pars_list.append(pars['do_plots'])
 
-    max_psf_stars = raw_input("Max number of stars used to obtain FWHM: ")
-    if max_psf_stars is '':
-        max_psf_stars = 100
-        print("  Will use default value: {}".format(max_psf_stars))
+    answ = raw_input("Max number of stars used to obtain "
+                     "FWHM ({}): ".format(pars['max_psf_stars']))
+    pars['max_psf_stars'] = int(answ) if answ is not '' else\
+        int(pars['max_psf_stars'])
+    pars_list.append(pars['max_psf_stars'])
 
-    thresh_level = raw_input("Threshold level above STDDEV: ")
-    if thresh_level is '':
-        thresh_level = 5.
-        print("  Will use default value: {}".format(thresh_level))
+    answ = raw_input("Threshold level above STDDEV ({}): ".format(
+        pars['thresh_level']))
+    pars['thresh_level'] = float(answ) if answ is not '' else\
+        float(pars['thresh_level'])
+    pars_list.append(pars['thresh_level'])
 
-    fwhm_init = raw_input("Initial FWHM: ")
-    if fwhm_init is '':
-        fwhm_init = 3.
-        print("  Will use default value: {}".format(fwhm_init))
+    answ = raw_input("Initial FWHM ({}): ".format(pars['fwhm_init']))
+    pars['fwhm_init'] = float(answ) if answ is not '' else\
+        float(pars['fwhm_init'])
+    pars_list.append(pars['fwhm_init'])
 
-    dmax = raw_input("Maximum flux: ")
-    if dmax is '':
-        dmax = 60000.
-        print("  Will use default value: {}".format(dmax))
+    answ = raw_input("Maximum flux ({}): ".format(pars['dmax']))
+    pars['dmax'] = float(answ) if answ is not '' else float(pars['dmax'])
+    pars_list.append(pars['dmax'])
 
-    ellip_max = raw_input("Maximum ellipticity: ")
-    if ellip_max is '':
-        ellip_max = 0.15
-        print("  Will use default value: {}".format(ellip_max))
+    answ = raw_input("Maximum ellipticity ({}): ".format(pars['ellip_max']))
+    pars['ellip_max'] = float(answ) if answ is not '' else\
+        float(pars['ellip_max'])
+    pars_list.append(pars['ellip_max'])
 
-    fwhm_min = raw_input("Minimum FWHM: ")
-    if fwhm_min is '':
-        fwhm_min = 1.5
-        print("  Will use default value: {}".format(fwhm_min))
+    answ = raw_input("Minimum FWHM ({}): ".format(pars['fwhm_min']))
+    pars['fwhm_min'] = float(answ) if answ is not '' else\
+        float(pars['fwhm_min'])
+    pars_list.append(pars['fwhm_min'])
 
-    crop_side = int(raw_input("Crop side for PSF stars (integer): "))
-    if crop_side is '':
-        crop_side = 20
-        print("  Will use default value: {}".format(crop_side))
+    answ = raw_input("Crop side for PSF stars ({}): ".format(
+        pars['crop_side']))
+    pars['crop_side'] = int(answ) if answ is not '' else int(pars['crop_side'])
+    pars_list.append(pars['crop_side'])
 
-    # Some header info, and hard-coded criteria for selection of stars.
-    gain_key = 'EGAIN'
-    rdnoise_key = 'ENOISE'
-    filter_key = 'FILTER'
-    exp_key = 'EXPTIME'
-    print("\nKeywords: {}, {}, {}, {}".format(
-        gain_key, rdnoise_key, filter_key, exp_key))
+    answ = raw_input("GAIN keyword ({}): ".format(pars['gain_key']))
+    pars['gain_key'] = str(answ) if answ is not '' else pars['gain_key']
+    pars_list.append(pars['gain_key'])
 
-    return mypath, r_path, fits_list, gain_key, rdnoise_key, dmax,\
-        max_psf_stars, thresh_level, fwhm_init, ellip_max, fwhm_min,\
-        crop_side, do_plots, filter_key, exp_key
+    answ = raw_input("RDNOISE keyword ({}): ".format(pars['rdnoise_key']))
+    pars['rdnoise_key'] = str(answ) if answ is not '' else pars['rdnoise_key']
+    pars_list.append(pars['rdnoise_key'])
+
+    answ = raw_input("FILTER keyword ({}): ".format(pars['filter_key']))
+    pars['filter_key'] = str(answ) if answ is not '' else pars['filter_key']
+    pars_list.append(pars['filter_key'])
+
+    answ = raw_input("EXPOSURE keyword ({}): ".format(pars['exp_key']))
+    pars['exp_key'] = str(answ) if answ is not '' else pars['exp_key']
+    pars_list.append(pars['exp_key'])
+
+    # Write values to file.
+    create_pars_file(pars_f, pars_list)
+
+    return r_path, fits_list, pars
 
 
 def bckg_data(hdulist, hdu_data, gain_key, rdnoise_key):
@@ -113,7 +163,7 @@ def bckg_data(hdulist, hdu_data, gain_key, rdnoise_key):
     return sky_mean, sky_median, sky_std
 
 
-def st_fwhm_select(dmax, max_psf_stars, thresh_level, std, fwhm_init,
+def st_fwhm_select(dmax, max_psf_stars, thresh_level, fwhm_init, std,
                    hdu_data):
     """
     Find stars in image with DAOStarFinder, filter out saturated stars (with
@@ -263,9 +313,9 @@ def isolate_stars(hdu_data, fwhm_no_outl, crop_side):
 
 
 def make_plots(
-    hdu_data, max_psf_stars, all_sources, n_not_satur, fwhm_min_rjct,
-        ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, crop_side,
-        stars, fig_name):
+    hdu_data, max_psf_stars, crop_side, all_sources, n_not_satur,
+        fwhm_min_rjct, ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean,
+        fwhm_std, stars, fig_name):
     """
     Make plots.
     """
@@ -318,6 +368,7 @@ def make_plots(
             len(fwhm_no_outl)), fontsize=9)
         ax.tick_params(axis='x', which='major', labelsize=8)
         ax.tick_params(axis='y', which='major', labelleft='off')
+        ax.set_xlim(fwhm_mean - 3. * fwhm_std, fwhm_mean + 3. * fwhm_std)
     elif fwhm_min_rjct:
         ax = plt.subplot(gs3[2:5, 8:10])
         ax.hist(zip(*fwhm_min_rjct)[2], histtype='step')
@@ -437,9 +488,8 @@ def main():
     """
     Get FWHM, sky mean, and sky standard deviation from a .fits file.
     """
-    mypath, r_path, fits_list, gain_key, rdnoise_key, dmax, max_psf_stars,\
-        thresh_level, fwhm_init, ellip_max, fwhm_min, crop_side, do_plots,\
-        filter_key, exp_key = get_params()
+    mypath, pars_f, pars = read_params()
+    r_path, fits_list, pars = get_params(mypath, pars_f, pars)
 
     if os.path.isdir(r_path):
         out_data = join(r_path, "fwhm_final.dat")
@@ -461,15 +511,17 @@ def main():
 
         # Background estimation.
         sky_mean, sky_median, sky_std = bckg_data(
-            hdulist, hdu_data, gain_key, rdnoise_key)
+            hdulist, hdu_data, pars['gain_key'], pars['rdnoise_key'])
 
         # Stars selection.
         psf_select, all_sources, n_not_satur = st_fwhm_select(
-            dmax, max_psf_stars, thresh_level, sky_std, fwhm_init, hdu_data)
+            pars['dmax'], pars['max_psf_stars'], pars['thresh_level'],
+            pars['fwhm_init'], sky_std, hdu_data)
 
         # FWHM selection.
         fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct = psfmeasure(
-            dmax, ellip_max, fwhm_min, psf_select, imname, hdu_data)
+            pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
+            psf_select, imname, hdu_data)
 
         if fwhm_estim:
             # FWHM median an list with no outliers.
@@ -483,7 +535,7 @@ def main():
                       len(fwhm_no_outl), fwhm_mean, fwhm_std))
             print("psfmeasure FWHM: {}".format(psfmeasure_estim))
 
-            stars = isolate_stars(hdu_data, fwhm_no_outl, crop_side)
+            stars = isolate_stars(hdu_data, fwhm_no_outl, pars['crop_side'])
         else:
             fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars =\
                 [], [], -1., -1., []
@@ -494,16 +546,16 @@ def main():
             fig_name = join(r_path.replace(".fits", ""))
         else:
             fig_name = join(r_path, imname.split('/')[-1].replace(".fits", ""))
-        if do_plots:
+        if pars['do_plots']:
             make_plots(
-                hdu_data, max_psf_stars, all_sources, n_not_satur,
-                fwhm_min_rjct, ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean,
-                fwhm_std, crop_side, stars, fig_name)
+                hdu_data, pars['max_psf_stars'], pars['crop_side'],
+                all_sources, n_not_satur, fwhm_min_rjct, ellip_rjct,
+                fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, fig_name)
 
         with open(out_data, 'a') as f:
             im_name = imname.split('/')[-1]
-            filt = hdulist[0].header[filter_key]
-            exptime = hdulist[0].header[exp_key]
+            filt = hdulist[0].header[pars['filter_key']]
+            exptime = hdulist[0].header[pars['exp_key']]
             f.write("{}    {}    {}    {:.2f}    {:.2f}    {}    {:.2f}"
                     "    {:.3f}\n".format(
                         im_name, filt, exptime, sky_mean, sky_std,
