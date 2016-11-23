@@ -5,19 +5,19 @@ import gc
 from os.path import join, realpath, dirname
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import NullFormatter
 
-from pyraf import iraf
-
 from astropy.io import fits
-from astropy.io import ascii
 from astropy.stats import sigma_clipped_stats
 from astropy.visualization import ZScaleInterval
 
 from photutils import DAOStarFinder
 from photutils import CircularAperture
 from photutils.utils import cutout_footprint
+
+import psfmeasure
 
 
 def create_pars_file(pars_f, pars_list=None):
@@ -61,10 +61,11 @@ def get_params(mypath, pars_f, pars):
     """
     pars_list = []
 
-    fname = raw_input("\nDir or file to process ({}): ".format(
+    answ = raw_input("\nDir or file to process ({}): ".format(
         pars['ff_proc']))
+    fname = str(answ) if answ is not '' else pars['ff_proc']
     fname = fname[1:] if fname.startswith('/') else fname
-    r_path = join(mypath, fname)
+    r_path = join(mypath.replace('/tasks', ''), fname)
     fits_list = []
     if os.path.isdir(r_path):
         for subdir, dirs, files in os.walk(r_path):
@@ -77,7 +78,7 @@ def get_params(mypath, pars_f, pars):
     else:
         print("{}\nis neither a folder nor a file. Exit.".format(r_path))
         sys.exit()
-    pars['ff_proc'] = r_path
+    pars['ff_proc'] = fname
     pars_list.append(pars['ff_proc'])
 
     answ = raw_input("Show plot for FWHM selected stars? (y/n) ({}): ".format(
@@ -188,96 +189,6 @@ def st_fwhm_select(dmax, max_psf_stars, thresh_level, fwhm_init, std,
     return psf_select, len(sources), len(sour_no_satur)
 
 
-def psfmeasure(dmax, ellip_max, fwhm_min, psf_select, imname, hdu_data):
-    """
-    Use the IRAF task 'psfmeasure' to estimate the FWHM and ellipticity of
-    all the stars in the 'psf_select' list.
-    Reject those with a large ellipticity (> ellip_max), and a very low
-    FWHM (<fwhm_min).
-    """
-    print("\nRun 'psfmeasure' task to estimate the FWHMs.")
-    try:
-        os.remove('positions')
-        os.remove('cursor')
-        os.remove('psfmeasure')
-    except OSError:
-        pass
-
-    ascii.write(
-        psf_select, output='positions',
-        include_names=['xcentroid', 'ycentroid'], format='fast_no_header')
-    with open('cursor', 'w') as f:
-        f.write('q\n')
-    iraf.noao()
-    iraf.obsutil(Stdout="/dev/null")
-    iraf.psfmeasure(
-        coords="mark1", wcs="logical", display='no', frame=1, level=0.5,
-        size="FWHM", beta='INDEF', scale=1., radius=15, sbuffer=5, swidth=5,
-        saturation=dmax, ignore_sat='yes', iterations=5, xcenter='INDEF',
-        ycenter='INDEF', logfile="psfmeasure", graphcur="cursor",
-        images=imname, imagecur="positions", Stdout="/dev/null")
-
-    # from imexam.imexamine import Imexamine
-    # from imexam.math_helper import gfwhm
-    # plots = Imexamine()
-    # plots.set_data(hdu_data)
-
-    fwhm_estim, fwhm_min_rjct, ellip_rjct, psfmeasure_estim = [], [], [], 0
-    with open("psfmeasure", 'r') as f:
-        for i, line in enumerate(f):
-            data = line.split()
-            if data:
-                if data[0] != 'Average':
-                    # First line (star) of output file.
-                    if i == 3:
-                        if float(data[4]) > fwhm_min:
-                            if float(data[5]) <= ellip_max:
-                                fwhm_estim.append(
-                                    map(float, [data[1], data[2], data[4],
-                                                data[5]]))
-                            else:
-                                ellip_rjct.append(
-                                    map(float, [data[1], data[2], data[4],
-                                                data[5]]))
-                        else:
-                            fwhm_min_rjct.append(
-                                map(float, [data[1], data[2], data[4],
-                                            data[5]]))
-                    # Rest of the lines.
-                    elif i > 3:
-                        if float(data[3]) > fwhm_min:
-                            if float(data[4]) <= ellip_max:
-                                fwhm_estim.append(
-                                    map(float, [data[0], data[1], data[3],
-                                                data[4]]))
-                            else:
-                                ellip_rjct.append(
-                                    map(float, [data[0], data[1], data[3],
-                                                data[4]]))
-                            # sys.stdout = open(os.devnull, "w")
-                            # gauss_x = plots.line_fit(
-                            #     float(data[0]), float(data[1]), genplot=False)
-                            # gauss_y = plots.column_fit(
-                            #     float(data[0]), float(data[1]), genplot=False)
-                            # sys.stdout = sys.__stdout__
-                            # print(float(data[3]), float(data[4]),
-                            #       gfwhm(gauss_x.stddev)[0],
-                            #       gfwhm(gauss_y.stddev)[0])
-                        else:
-                            fwhm_min_rjct.append(
-                                map(float, [data[0], data[1], data[3],
-                                            data[4]]))
-                else:
-                    # Averaged FWHM by the 'psfmeasure' task.
-                    psfmeasure_estim = float(data[-1])
-
-    os.remove('positions')
-    os.remove('cursor')
-    os.remove('psfmeasure')
-
-    return fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct
-
-
 def rm_outliers(fwhm_estim, out_f=2.):
     """
     Remove outlier starts with large FWHMs.
@@ -358,7 +269,7 @@ def make_plots(
     if fwhm_no_outl:
         ax = plt.subplot(gs3[2:5, 8:10])
         ax.hist(
-            zip(*fwhm_no_outl)[2], histtype='step',
+            zip(*fwhm_no_outl)[2], histtype='step', lw=2.,
             range=[fwhm_mean - 2. * fwhm_std, fwhm_mean + 2. * fwhm_std],
             bins=max(1, int(len(fwhm_no_outl) * 0.3)))
         ax.axvline(fwhm_mean, ls='-', lw=3.5, c='g')
@@ -371,14 +282,14 @@ def make_plots(
         ax.set_xlim(fwhm_mean - 3. * fwhm_std, fwhm_mean + 3. * fwhm_std)
     elif fwhm_min_rjct:
         ax = plt.subplot(gs3[2:5, 8:10])
-        ax.hist(zip(*fwhm_min_rjct)[2], histtype='step')
+        ax.hist(zip(*fwhm_min_rjct)[2], histtype='step', lw=2.)
         ax.set_title('FWHM < min distribution ({} stars)'.format(
             len(fwhm_min_rjct)), fontsize=11)
         ax.tick_params(axis='x', which='major', labelsize=8)
         ax.tick_params(axis='y', which='major', labelleft='off')
     elif ellip_rjct:
         ax = plt.subplot(gs3[2:5, 8:10])
-        ax.hist(zip(*ellip_rjct)[2], histtype='step')
+        ax.hist(zip(*ellip_rjct)[2], histtype='step', lw=2.)
         ax.set_title('e < max distribution ({} stars)'.format(
             len(ellip_rjct)), fontsize=11)
         ax.tick_params(axis='x', which='major', labelsize=8)
@@ -398,10 +309,14 @@ def make_plots(
         ax.scatter(*fwhm_min_pos, s=r, lw=0.7, facecolors='none',
                    edgecolors='g')
     if ellip_rjct:
-        ellip_pos = (zip(*ellip_rjct)[0], zip(*ellip_rjct)[1])
         r = 0.5 * np.exp(zip(*ellip_rjct)[2])
         r[r > 200.] = xmax * 0.25
-        ax.scatter(*ellip_pos, s=r, lw=0.7, facecolors='none', edgecolors='b')
+        for i, st in enumerate(ellip_rjct):
+            e = Ellipse(
+                xy=(st[0], st[1]), width=r[i],
+                height=r[i] * np.sqrt(1 - st[3] ** 2),
+                angle=0., lw=0.7, fc='None', edgecolor='b')
+            ax.add_artist(e)
     ax.set_title('Spatial distribution of (exponential) FWHM sizes',
                  fontsize=9)
     ax.tick_params(axis='both', which='major', labelsize=8)
@@ -519,9 +434,10 @@ def main():
             pars['fwhm_init'], sky_std, hdu_data)
 
         # FWHM selection.
-        fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct = psfmeasure(
-            pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
-            psf_select, imname, hdu_data)
+        fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct =\
+            psfmeasure.main(
+                pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
+                psf_select, imname, hdu_data)
 
         if fwhm_estim:
             # FWHM median an list with no outliers.
