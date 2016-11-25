@@ -82,7 +82,9 @@ def get_params(mypath, pars_f, pars):
     pars_list.append(pars['ff_proc'])
 
     answ = raw_input("Reference image ({}): ".format(pars['ref_im']))
-    if answ is not '':
+    if answ in ['None', 'none']:
+        pars['ref_im'] = 'none'
+    elif answ is not '':
         pars['ref_im'] = str(answ)
         try:
             os.path.isfile(join(r_path, pars['ref_im']))
@@ -161,15 +163,13 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
 
     Source: http://codereview.stackexchange.com/a/134918/35351
     """
-    # Invert.
-    # x0, y0 = -1. * init_shift[0], -1. * init_shift[1]
+    # Shift.
     x0, y0 = init_shift[0], init_shift[1]
     if max_shift < 1.:
         # Use the full length of both sides.
         max_shift = max(max(ref[0]), max(ref[1]))
 
     while max_shift >= 1.:
-        # print(x0, y0)
         dists = []
         li = 10
         # Shift in x
@@ -190,7 +190,6 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
         x0, y0 = dists[min_idx][0], dists[min_idx][1]
         # Decrease max shift by X%
         max_shift = (1. - tol) * max_shift
-        # print(dists[min_idx], max_shift)
         # Break condition: minimum accuracy reached.
         if max_shift < 1.:
             if dists[min_idx][2] > 5.:
@@ -257,7 +256,6 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap):
     cols = ['r', 'b', 'g', 'm', 'c']
     col_cyc = cycle(cols)
     for s_xy in shifts:
-        print("Reg shifted by: {:.1f}, {:.1f}".format(s_xy[0], s_xy[1]))
         ax.add_patch(
             Rectangle((s_xy[0], s_xy[1]), h, w, fill=None, alpha=1,
                       color=next(col_cyc)))
@@ -268,7 +266,9 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap):
         Rectangle((lef, bot), rig - lef, top - bot, fill=1, alpha=.25,
                   color=next(col_cyc)))
     plt.scatter(xcen, ycen, c='r', marker='x', zorder=5)
+    ax.set_title("Overlap region.", fontsize=8)
 
+    # Selected stars.
     ax = fig.add_subplot(gs[1])
     for i, fl in enumerate(f_list):
         positions = (fl[0] - lef + shifts[i][0], fl[1] - bot + shifts[i][1])
@@ -279,6 +279,7 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap):
     ax.set_xlim(0., w)
     ax.set_ylim(0., h)
 
+    # Aligned and cropped frames.
     for i, hdu_data in enumerate(hdu):
         ax = fig.add_subplot(gs[i + 2])
         make_sub_plot(ax, hdu_data, fnames[i], f_list[i], shifts[i], overlap)
@@ -294,7 +295,6 @@ def main():
     """
     mypath, pars_f, pars = read_params()
     r_path, fits_list, pars = get_params(mypath, pars_f, pars)
-    ref_i = [_.split('/')[-1] for _ in fits_list].index(pars['ref_im'])
 
     f_list, l_f, hdu = [], [], []
     # For each .fits image in the root folder.
@@ -348,7 +348,7 @@ def main():
             # Obtain shifts
             d = avrg_dist((pars['x_init_shift'], pars['y_init_shift']),
                           pars['max_shift'], pars['tol'], ref, f)
-            print(d)
+            print("Reg shifted by: {:.1f}, {:.1f}".format(d[0], d[1]))
             shifts.append([d[0], d[1]])
         else:
             # Shift for reference frame.
