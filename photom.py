@@ -11,6 +11,7 @@ from photutils import DAOStarFinder
 from photutils import CircularAperture
 from astropy.visualization import SqrtStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
+from astropy.visualization import ZScaleInterval
 
 # from matplotlib.colors import LogNorm
 
@@ -40,7 +41,7 @@ rdnoise_key = 'ENOISE'
 
 # Load real data.
 mypath = realpath(join(getcwd(), dirname(__file__)))
-image_file = mypath + '/standards/filt_V/stk_2148.fits'
+image_file = mypath + '/standards/filt_U/stk_2153.fits'
 
 # Extract header data
 hdulist = fits.open(image_file)
@@ -54,12 +55,20 @@ print(gain, rdnoise)
 hdu_data = hdulist[0].data
 # hdu_data = fits.getdata(image_file)
 hdulist.close()
-import pdb; pdb.set_trace()  # breakpoint 1e2befa2 //
-
 
 # Crop image
-crop = cutout_footprint(hdu_data, (2100, 1800), (500, 1100))
+crop = cutout_footprint(hdu_data, (2267.929, 1964.044), (3923.144, 3511.8835))
 hdu_crop = crop[0]
+h, w = np.shape(hdu_data)
+
+plt.subplot(1, 1, 1)
+interval = ZScaleInterval()
+zmin, zmax = interval.get_limits(hdu_crop)
+plt.imshow(hdu_crop, cmap='viridis', aspect=1, interpolation='nearest',
+           origin='lower', vmin=zmin, vmax=zmax)
+plt.show()
+import pdb; pdb.set_trace()  # breakpoint 71aace3c //
+
 
 # Model to identify stars in image.
 bkgrms = MADStdBackgroundRMS()

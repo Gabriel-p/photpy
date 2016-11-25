@@ -177,7 +177,6 @@ def st_fwhm_select(dmax, max_psf_stars, thresh_level, fwhm_init, std,
     stfind = DAOStarFinder(threshold=thresh, fwhm=fwhm_init)
     sources = stfind(hdu_data)
     print("Sources found: {}".format(len(sources)))
-    print("Filter out saturated stars.")
     mask = sources['peak'] < dmax
     sour_no_satur = sources[mask]
     print("Non-saturated sources found: {}".format(len(sour_no_satur)))

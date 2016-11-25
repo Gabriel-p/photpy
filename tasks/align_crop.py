@@ -3,15 +3,20 @@ import os
 import sys
 from os.path import join, realpath, dirname
 import numpy as np
+from scipy.spatial import distance
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from matplotlib.patches import Rectangle
+from itertools import cycle
+
+from getdata import st_fwhm_select
+import psfmeasure
+
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from astropy.visualization import ZScaleInterval
 from photutils import CircularAperture
-from scipy.spatial import distance
-from getdata import st_fwhm_select
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import psfmeasure
+from photutils.utils import cutout_footprint
 
 
 def create_pars_file(pars_f, pars_list=None):
@@ -19,16 +24,16 @@ def create_pars_file(pars_f, pars_list=None):
     """
     # Default values.
     if pars_list is None:
-        pars_list = ['None', 'True', '5.', '3.', '60000.', '0.15', '1.5',
-                     '100', '0.', '0.', '-1.', '0.05', 'EGAIN', 'ENOISE',
-                     'FILTER', 'EXPTIME']
+        pars_list = [
+            'None', 'None', 'True', '5.', '3.', '60000.', '0.15', '1.5', '100',
+            '0.', '0.', '-1.', '0.05']
     with open(pars_f, 'w') as f:
         f.write(
             "# Default parameters for the align_crop.py script\n#\n"
-            "ff_proc {}\ndo_plots {}\nthresh_level {}\nfwhm_init {}\ndmax {}\n"
-            "ellip_max {}\nfwhm_min {}\nmax_shift_stars {}\nx_init_shift {}\n"
-            "y_init_shift {}\nmax_shift {}\ntol {}\ngain_key {}\n"
-            "rdnoise_key {}\nfilter_key {}\nexp_key {}\n".format(*pars_list))
+            "ff_proc {}\nref_im {}\ndo_plots {}\nthresh_level {}\n"
+            "fwhm_init {}\ndmax {}\nellip_max {}\nfwhm_min {}\n"
+            "max_shift_stars {}\nx_init_shift {}\ny_init_shift {}\n"
+            "max_shift {}\ntol {}\n".format(*pars_list))
     return
 
 
@@ -75,6 +80,15 @@ def get_params(mypath, pars_f, pars):
         sys.exit()
     pars['ff_proc'] = fname
     pars_list.append(pars['ff_proc'])
+
+    answ = raw_input("Reference image ({}): ".format(pars['ref_im']))
+    if answ is not '':
+        pars['ref_im'] = str(answ)
+        try:
+            os.path.isfile(join(r_path, pars['ref_im']))
+        except:
+            print("Reference image does not exist. Exit.")
+    pars_list.append(pars['ref_im'])
 
     answ = raw_input("Create plots? (y/n) ({}): ".format(
         pars['do_plots']))
@@ -124,7 +138,7 @@ def get_params(mypath, pars_f, pars):
         float(pars['y_init_shift'])
     pars_list.append(pars['y_init_shift'])
 
-    answ = raw_input("Maximum estimated shift ({}): ".format(
+    answ = raw_input("Maximum shift allowed ({}): ".format(
         pars['max_shift']))
     pars['max_shift'] = float(answ) if answ is not '' else\
         float(pars['max_shift'])
@@ -133,22 +147,6 @@ def get_params(mypath, pars_f, pars):
     answ = raw_input("Matching tolerance ({}): ".format(pars['tol']))
     pars['tol'] = float(answ) if answ is not '' else float(pars['tol'])
     pars_list.append(pars['tol'])
-
-    answ = raw_input("GAIN keyword ({}): ".format(pars['gain_key']))
-    pars['gain_key'] = str(answ) if answ is not '' else pars['gain_key']
-    pars_list.append(pars['gain_key'])
-
-    answ = raw_input("RDNOISE keyword ({}): ".format(pars['rdnoise_key']))
-    pars['rdnoise_key'] = str(answ) if answ is not '' else pars['rdnoise_key']
-    pars_list.append(pars['rdnoise_key'])
-
-    answ = raw_input("FILTER keyword ({}): ".format(pars['filter_key']))
-    pars['filter_key'] = str(answ) if answ is not '' else pars['filter_key']
-    pars_list.append(pars['filter_key'])
-
-    answ = raw_input("EXPOSURE keyword ({}): ".format(pars['exp_key']))
-    pars['exp_key'] = str(answ) if answ is not '' else pars['exp_key']
-    pars_list.append(pars['exp_key'])
 
     # Write values to file.
     create_pars_file(pars_f, pars_list)
@@ -164,14 +162,14 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
     Source: http://codereview.stackexchange.com/a/134918/35351
     """
     # Invert.
-    x0, y0 = -1. * init_shift[0], -1. * init_shift[1]
+    # x0, y0 = -1. * init_shift[0], -1. * init_shift[1]
     x0, y0 = init_shift[0], init_shift[1]
-    if max_shift < 0.:
+    if max_shift < 1.:
         # Use the full length of both sides.
-        max_shift = max(max(zip(*ref)[0]), max(zip(*ref)[1]))
+        max_shift = max(max(ref[0]), max(ref[1]))
 
-    while max_shift > 1.:
-        print(x0, y0, max_shift)
+    while max_shift >= 1.:
+        # print(x0, y0)
         dists = []
         li = 10
         # Shift in x
@@ -179,9 +177,10 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
             # Shift in y
             for sy in np.linspace(-1. * max_shift, max_shift, li):
                 # Apply possible x,y translation
-                sf = [zip(*f)[0] + sx + x0, zip(*f)[1] + sy + y0]
+                sf = [f[0] + sx + x0, f[1] + sy + y0]
                 # Average minimal distance.
-                d = np.mean(np.min(distance.cdist(zip(*sf), ref), axis=1))
+                d = np.median(
+                    np.min(distance.cdist(zip(*sf), zip(*ref)), axis=1))
                 # Store x,y shift values, and the average minimal distance.
                 dists.append([sx + x0, sy + y0, d])
 
@@ -200,38 +199,92 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
     return dists[min_idx]
 
 
-def make_plots(hdu, f_list, fig_name):
+def overlap_reg(hdu, shifts):
+    """
+    """
+    # Height and width (h=y, w=x)
+    h, w = np.shape(hdu)
+    # Obtain edges of overlap.
+    lef = max(zip(*shifts)[0])
+    bot = max(zip(*shifts)[1])
+    rig = min(zip(*shifts)[0]) + w
+    top = min(zip(*shifts)[1]) + h
+    # Width and height of overlap.
+    xbox, ybox = rig - lef, top - bot
+    # Center of overlap.
+    xcen, ycen = (rig + lef) / 2., (top + bot) / 2.
+    print("\nOverlapping area\nCenter: {}, {}".format(xcen, ycen))
+    print("Box: {}, {}".format(xbox, ybox))
+
+    return lef, bot, rig, top, xcen, ycen, xbox, ybox
+
+
+def make_sub_plot(ax, hdu, fname, f_list, shifts, overlap):
+    # Overlap info.
+    lef, bot, rig, top, xcen, ycen, xbox, ybox = overlap
+    # Re-center
+    xcs, ycs = xcen - shifts[0], ycen - shifts[1]
+    # Crop image: (xc, yc), (y length, x length)
+    hdu_crop = cutout_footprint(hdu, (xcs, ycs), (ybox, xbox))[0]
+    # hdu_crop.writeto('crop_' + str(i) + '_fig.fits')
+    # Zscale
+    interval = ZScaleInterval()
+    zmin, zmax = interval.get_limits(hdu_crop)
+    plt.imshow(hdu_crop, cmap='viridis', aspect=1, interpolation='nearest',
+               origin='lower', vmin=zmin, vmax=zmax)
+    ax.set_title('{} ({} stars)'.format(fname, len(f_list[0])), fontsize=8)
+    positions = (f_list[0] - lef + shifts[0], f_list[1] - bot + shifts[1])
+    apertures = CircularAperture(positions, r=20.)
+    apertures.plot(color='r', lw=0.5)
+    # ax.tick_params(axis='both', which='major', labelsize=8)
+
+
+def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap):
     """
     Make plots.
     """
     print("\nPlotting.")
-    fig = plt.figure(figsize=(20, 15))
-    gs = gridspec.GridSpec(10, 12)
+    fig = plt.figure(figsize=(20, 20))
+    p = int(np.sqrt(len(hdu))) + 1
+    gs = gridspec.GridSpec(p, p)
+    fn = join(mypath.replace('tasks', ''), '/'.join(fnames[0].split('/')[:-1]))
 
-    ax = plt.subplot(gs[0:5, 0:5])
-    interval = ZScaleInterval()
-    zmin, zmax = interval.get_limits(hdu[0])
-    plt.imshow(hdu[0], cmap='viridis', aspect=1, interpolation='nearest',
-               origin='lower', vmin=zmin, vmax=zmax)
-    positions = (zip(*f_list[0][1])[0], zip(*f_list[0][1])[1])
-    apertures = CircularAperture(positions, r=10.)
-    apertures.plot(color='red', lw=1.)
-    ax.tick_params(axis='both', which='major', labelsize=8)
-    # plt.colorbar(orientation='horizontal', fraction=0.046, pad=0.04)
+    ax = fig.add_subplot(gs[0])
+    # Height and width (h=y, w=x)
+    h, w = np.shape(hdu[ref_i])
+    lef, bot, rig, top, xcen, ycen, xbox, ybox = overlap
+    plt.scatter(w / 2., h / 2.)
+    cols = ['r', 'b', 'g', 'm', 'c']
+    col_cyc = cycle(cols)
+    for s_xy in shifts:
+        print("Reg shifted by: {:.1f}, {:.1f}".format(s_xy[0], s_xy[1]))
+        ax.add_patch(
+            Rectangle((s_xy[0], s_xy[1]), h, w, fill=None, alpha=1,
+                      color=next(col_cyc)))
+    ax.add_patch(Rectangle((0., 0.), h, w, fill=None, alpha=1, lw=2.,
+                           color='k'))
+    # Overlap area.
+    ax.add_patch(
+        Rectangle((lef, bot), rig - lef, top - bot, fill=1, alpha=.25,
+                  color=next(col_cyc)))
+    plt.scatter(xcen, ycen, c='r', marker='x', zorder=5)
 
-    ax = plt.subplot(gs[0:5, 5:10])
-    interval = ZScaleInterval()
-    zmin, zmax = interval.get_limits(hdu[1])
-    plt.imshow(hdu[1], cmap='viridis', aspect=1, interpolation='nearest',
-               origin='lower', vmin=zmin, vmax=zmax)
-    positions = (zip(*f_list[1][1])[0], zip(*f_list[1][1])[1])
-    apertures = CircularAperture(positions, r=10.)
-    apertures.plot(color='red', lw=1.)
-    ax.tick_params(axis='both', which='major', labelsize=8)
+    ax = fig.add_subplot(gs[1])
+    for i, fl in enumerate(f_list):
+        positions = (fl[0] - lef + shifts[i][0], fl[1] - bot + shifts[i][1])
+        plt.scatter(
+            positions[0], positions[1], label=fnames[i].split('/')[-1], lw=0.5,
+            s=20., facecolors='none', edgecolors=next(col_cyc))
+    plt.legend(loc='upper right', fontsize=8, scatterpoints=1)
+    ax.set_xlim(0., w)
+    ax.set_ylim(0., h)
+
+    for i, hdu_data in enumerate(hdu):
+        ax = fig.add_subplot(gs[i + 2])
+        make_sub_plot(ax, hdu_data, fnames[i], f_list[i], shifts[i], overlap)
 
     fig.tight_layout()
-    plt.savefig(fig_name + '.png', dpi=150, bbox_inches='tight')
-    # Close to release memory.
+    plt.savefig(fn + '/align_crop.png', dpi=150, bbox_inches='tight')
     plt.clf()
     plt.close()
 
@@ -239,23 +292,21 @@ def make_plots(hdu, f_list, fig_name):
 def main():
     """
     """
-
     mypath, pars_f, pars = read_params()
     r_path, fits_list, pars = get_params(mypath, pars_f, pars)
+    ref_i = [_.split('/')[-1] for _ in fits_list].index(pars['ref_im'])
 
-    f_list, l_f = [], []
-    hdu = []
+    f_list, l_f, hdu = [], [], []
     # For each .fits image in the root folder.
     for i, imname in enumerate(fits_list):
-        print("\nFile: {}".format(imname.replace(mypath, "")))
+        print("\nFile: {}".format(
+            imname.replace(mypath.replace('tasks', ''), "")))
 
         # Extract data.
         hdulist = fits.open(imname)
         hdu_data = hdulist[0].data
-        hdu.append(hdu_data)
 
         # Background estimation.
-        print("\nEstimating background mean, median, and STDDEV.")
         sky_mean, sky_median, sky_std = sigma_clipped_stats(
             hdu_data, sigma=3.0, iters=2)
 
@@ -269,27 +320,45 @@ def main():
             psfmeasure.main(
                 pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
                 psf_select, imname, hdu_data)
+        print("Suitable sources found: {}".format(len(fwhm_estim)))
 
-        l_f.append(all_sources)
-        f_list.append(
-            [imname, zip(*[zip(*fwhm_estim)[0], zip(*fwhm_estim)[1]])])
+        if fwhm_estim:
+            l_f.append(all_sources)
+            hdu.append(hdu_data)
+            f_list.append(np.array([zip(*fwhm_estim)[0], zip(*fwhm_estim)[1]]))
+        else:
+            print("\nWARNING: no stars left after rejecting\nby min FWHM"
+                  "and max ellipticity.")
 
-    ref_i = l_f.index(max(l_f))
-    ref = f_list[ref_i][1]
-    print('Reference image: {}'.format(f_list[ref_i][0]))
-    # For each x,y coords set.
-    for i, imname in enumerate(f_list):
+    # Identify reference frame.
+    if pars['ref_im'] not in ['none', 'None', None]:
+        ref_i = [_.split('/')[-1] for _ in fits_list].index(pars['ref_im'])
+    else:
+        ref_i = l_f.index(max(l_f))
+    ref = f_list[ref_i]
+    print('\nReference image: {}'.format(fits_list[ref_i].split('/')[-1]))
+
+    # Find x,y shifts (to reference frame) for alignment.
+    shifts, fnames = [], []
+    for i, f in enumerate(f_list):
+        file = fits_list[i].replace(mypath.replace('tasks', ''), "")
+        fnames.append(file)
         if i != ref_i:
-            print("\nFile: {}".format(imname[0].replace(mypath, "")))
+            print("\nFile: {}".format(file))
             # Obtain shifts
-            f = imname[1]
             d = avrg_dist((pars['x_init_shift'], pars['y_init_shift']),
                           pars['max_shift'], pars['tol'], ref, f)
             print(d)
+            shifts.append([d[0], d[1]])
+        else:
+            # Shift for reference frame.
+            shifts.append([0., 0.])
 
-    fig_name = "test"
+    # Obtain overlapping region.
+    overlap = overlap_reg(hdu_data, shifts)
+
     if pars['do_plots']:
-        make_plots(hdu, f_list, fig_name)
+        make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap)
 
 
 if __name__ == "__main__":

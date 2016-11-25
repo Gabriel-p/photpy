@@ -1,7 +1,8 @@
 # Default parameters for the align_crop.py script
 #
 ff_proc standards/filt_U
-do_plots False
+ref_im stk_2153.fits
+do_plots True
 thresh_level 5.0
 fwhm_init 3.0
 dmax 60000.0
@@ -10,9 +11,5 @@ fwhm_min 1.5
 max_shift_stars 100
 x_init_shift 0.0
 y_init_shift 0.0
-max_shift -1.0
+max_shift 1000.0
 tol 0.05
-gain_key EGAIN
-rdnoise_key ENOISE
-filter_key FILTER
-exp_key EXPTIME
