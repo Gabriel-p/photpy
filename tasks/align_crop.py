@@ -212,13 +212,13 @@ def overlap_reg(hdu, shifts):
     xbox, ybox = rig - lef, top - bot
     # Center of overlap.
     xcen, ycen = (rig + lef) / 2., (top + bot) / 2.
-    print("\nOverlapping area\nCenter: {}, {}".format(xcen, ycen))
-    print("Box: {}, {}".format(xbox, ybox))
+    print("\nOverlapping area\nCenter: {:.2f}, {:.2f}".format(xcen, ycen))
+    print("Box: {:.2f}, {:.2f}".format(xbox, ybox))
 
     return lef, bot, rig, top, xcen, ycen, xbox, ybox
 
 
-def make_sub_plot(ax, hdu, fname, f_list, shifts, overlap):
+def make_sub_plot(ax, hdu, fname, f_list, shifts, overlap, n_ref):
     # Overlap info.
     lef, bot, rig, top, xcen, ycen, xbox, ybox = overlap
     # Re-center
@@ -231,7 +231,8 @@ def make_sub_plot(ax, hdu, fname, f_list, shifts, overlap):
     zmin, zmax = interval.get_limits(hdu_crop)
     plt.imshow(hdu_crop, cmap='viridis', aspect=1, interpolation='nearest',
                origin='lower', vmin=zmin, vmax=zmax)
-    ax.set_title('{} ({} stars)'.format(fname, len(f_list[0])), fontsize=8)
+    ax.set_title('{}{} ({} stars)'.format(n_ref, fname, len(f_list[0])),
+                 fontsize=8)
     positions = (f_list[0] - lef + shifts[0], f_list[1] - bot + shifts[1])
     apertures = CircularAperture(positions, r=20.)
     apertures.plot(color='r', lw=0.5)
@@ -266,7 +267,7 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap):
         Rectangle((lef, bot), rig - lef, top - bot, fill=1, alpha=.25,
                   color=next(col_cyc)))
     plt.scatter(xcen, ycen, c='r', marker='x', zorder=5)
-    ax.set_title("Overlap region.", fontsize=8)
+    ax.set_title("Overlap region", fontsize=8)
 
     # Selected stars.
     ax = fig.add_subplot(gs[1])
@@ -275,14 +276,17 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap):
         plt.scatter(
             positions[0], positions[1], label=fnames[i].split('/')[-1], lw=0.5,
             s=20., facecolors='none', edgecolors=next(col_cyc))
-    plt.legend(loc='upper right', fontsize=8, scatterpoints=1)
+    plt.legend(loc='upper right', fontsize=8, scatterpoints=1, framealpha=0.85)
+    ax.set_title("Stars used for alignment", fontsize=8)
     ax.set_xlim(0., w)
     ax.set_ylim(0., h)
 
     # Aligned and cropped frames.
     for i, hdu_data in enumerate(hdu):
         ax = fig.add_subplot(gs[i + 2])
-        make_sub_plot(ax, hdu_data, fnames[i], f_list[i], shifts[i], overlap)
+        n_ref = '' if i != ref_i else 'Reference - '
+        make_sub_plot(
+            ax, hdu_data, fnames[i], f_list[i], shifts[i], overlap, n_ref)
 
     fig.tight_layout()
     plt.savefig(fn + '/align_crop.png', dpi=150, bbox_inches='tight')
@@ -348,7 +352,8 @@ def main():
             # Obtain shifts
             d = avrg_dist((pars['x_init_shift'], pars['y_init_shift']),
                           pars['max_shift'], pars['tol'], ref, f)
-            print("Reg shifted by: {:.1f}, {:.1f}".format(d[0], d[1]))
+            print("Reg shifted by: {:.2f}, {:.2f}".format(d[0], d[1]))
+            print("Median average distance: {:.2f}".format(d[2]))
             shifts.append([d[0], d[1]])
         else:
             # Shift for reference frame.
