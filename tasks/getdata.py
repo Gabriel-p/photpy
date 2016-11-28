@@ -25,7 +25,7 @@ def create_pars_file(pars_f, pars_list=None):
     """
     # Default values.
     if pars_list is None:
-        pars_list = ['None', 'True', '100', '5.', '3.', '60000.', '0.15',
+        pars_list = ['None', 'y', '100', '5.', '3.', '60000.', '0.15',
                      '1.5', '20', 'EGAIN', 'ENOISE', 'FILTER', 'EXPTIME']
     with open(pars_f, 'w') as f:
         f.write(
@@ -81,9 +81,9 @@ def get_params(mypath, pars_f, pars):
     pars['ff_proc'] = fname
     pars_list.append(pars['ff_proc'])
 
-    answ = raw_input("Show plot for FWHM selected stars? (y/n) ({}): ".format(
+    answ = raw_input("Create plots? (y/n) ({}): ".format(
         pars['do_plots']))
-    pars['do_plots'] = False if answ in ('n', 'N', 'no', 'NO') else True
+    pars['do_plots'] = 'n' if answ in ('n', 'N', 'no', 'NO') else 'y'
     pars_list.append(pars['do_plots'])
 
     answ = raw_input("Max number of stars used to obtain "
@@ -439,6 +439,12 @@ def main():
                 psf_select, imname, hdu_data)
 
         if fwhm_estim:
+            # Save data to file.
+            fn = join(r_path + '/' +
+                      imname.split('/')[-1].replace('.fits', '') + '.coo')
+            with open(fn, 'w') as f:
+                for st in fwhm_estim:
+                    f.write('   '.join(str(_) for _ in st) + '\n')
             # FWHM median an list with no outliers.
             fwhm_median, fwhm_no_outl, fwhm_outl = rm_outliers(fwhm_estim)
 
@@ -461,7 +467,7 @@ def main():
             fig_name = join(r_path.replace(".fits", ""))
         else:
             fig_name = join(r_path, imname.split('/')[-1].replace(".fits", ""))
-        if pars['do_plots']:
+        if pars['do_plots'] is 'y':
             make_plots(
                 hdu_data, pars['max_psf_stars'], pars['crop_side'],
                 all_sources, n_not_satur, fwhm_min_rjct, ellip_rjct,

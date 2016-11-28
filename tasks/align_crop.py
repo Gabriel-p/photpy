@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.patches import Rectangle
 from itertools import cycle
+import datetime
 
 from getdata import st_fwhm_select
 import psfmeasure
@@ -16,7 +17,8 @@ from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from astropy.visualization import ZScaleInterval
 from photutils import CircularAperture
-from photutils.utils import cutout_footprint
+from astropy.wcs import WCS
+from astropy.nddata.utils import Cutout2D
 
 
 def create_pars_file(pars_f, pars_list=None):
@@ -25,12 +27,13 @@ def create_pars_file(pars_f, pars_list=None):
     # Default values.
     if pars_list is None:
         pars_list = [
-            'None', 'None', 'True', '5.', '3.', '60000.', '0.15', '1.5', '100',
-            '0.', '0.', '-1.', '0.05']
+            'None', 'n', 'None', 'y', 'y', '5.', '3.', '60000.', '0.15',
+            '1.5', '100', '0.', '0.', '-1.', '0.05']
     with open(pars_f, 'w') as f:
         f.write(
             "# Default parameters for the align_crop.py script\n#\n"
-            "ff_proc {}\nref_im {}\ndo_plots {}\nthresh_level {}\n"
+            "ff_proc {}\nread_coords {}\nref_im {}\ndo_plots {}\n"
+            "crop_save {}\nthresh_level {}\n"
             "fwhm_init {}\ndmax {}\nellip_max {}\nfwhm_min {}\n"
             "max_shift_stars {}\nx_init_shift {}\ny_init_shift {}\n"
             "max_shift {}\ntol {}\n".format(*pars_list))
@@ -81,6 +84,11 @@ def get_params(mypath, pars_f, pars):
     pars['ff_proc'] = fname
     pars_list.append(pars['ff_proc'])
 
+    answ = raw_input("Read star coordinates from file? (y/n) ({}): ".format(
+        pars['read_coords']))
+    pars['read_coords'] = 'n' if answ in ('n', 'N', 'no', 'NO') else 'y'
+    pars_list.append(pars['read_coords'])
+
     answ = raw_input("Reference image ({}): ".format(pars['ref_im']))
     if answ in ['None', 'none']:
         pars['ref_im'] = 'none'
@@ -94,8 +102,13 @@ def get_params(mypath, pars_f, pars):
 
     answ = raw_input("Create plots? (y/n) ({}): ".format(
         pars['do_plots']))
-    pars['do_plots'] = False if answ in ('n', 'N', 'no', 'NO') else True
+    pars['do_plots'] = 'n' if answ in ('n', 'N', 'no', 'NO') else 'y'
     pars_list.append(pars['do_plots'])
+
+    answ = raw_input("Save cropped fits? (y/n) ({}): ".format(
+        pars['crop_save']))
+    pars['crop_save'] = 'n' if answ in ('n', 'N', 'no', 'NO') else 'y'
+    pars_list.append(pars['crop_save'])
 
     answ = raw_input("Threshold level above STDDEV ({}): ".format(
         pars['thresh_level']))
@@ -154,6 +167,43 @@ def get_params(mypath, pars_f, pars):
     create_pars_file(pars_f, pars_list)
 
     return r_path, fits_list, pars
+
+
+def get_coords_data(r_path, imname, pars, hdu_data):
+    coords_flag = False
+    if pars['read_coords'] == 'y':
+        try:
+            fn = join(r_path + '/' +
+                      imname.split('/')[-1].replace('.fits', '') + '.coo')
+            fwhm_estim = []
+            with open(fn, 'r') as f:
+                content = f.readlines()
+                for l in content:
+                    fwhm_estim.append(map(float, l.split()))
+            all_sources = len(fwhm_estim)
+        except:
+            coords_flag = True
+    else:
+        coords_flag = True
+
+    if coords_flag:
+        # Background estimation.
+        sky_mean, sky_median, sky_std = sigma_clipped_stats(
+            hdu_data, sigma=3.0, iters=2)
+
+        # Stars selection.
+        psf_select, all_sources, n_not_satur = st_fwhm_select(
+            pars['dmax'], pars['max_shift_stars'], pars['thresh_level'],
+            pars['fwhm_init'], sky_std, hdu_data)
+
+        # FWHM selection.
+        fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct =\
+            psfmeasure.main(
+                pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
+                psf_select, imname, hdu_data)
+        print("Suitable sources found: {}".format(len(fwhm_estim)))
+
+    return fwhm_estim, all_sources
 
 
 def avrg_dist(init_shift, max_shift, tol, ref, f):
@@ -218,18 +268,48 @@ def overlap_reg(hdu, shifts):
     return lef, bot, rig, top, xcen, ycen, xbox, ybox
 
 
-def make_sub_plot(ax, hdu, fname, f_list, shifts, overlap, n_ref):
+def crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap):
+    """
+    """
+    fn = join(mypath.replace('tasks', ''), '/'.join(fnames[0].split('/')[:-1]))
     # Overlap info.
     lef, bot, rig, top, xcen, ycen, xbox, ybox = overlap
-    # Re-center
-    xcs, ycs = xcen - shifts[0], ycen - shifts[1]
     # Crop image: (xc, yc), (y length, x length)
-    hdu_crop = cutout_footprint(hdu, (xcs, ycs), (ybox, xbox))[0]
-    # hdu_crop.writeto('crop_' + str(i) + '_fig.fits')
+    hdu_crop = []
+    for i, frame in enumerate(hdu):
+        # Re-center
+        xcs, ycs = xcen - shifts[i][0], ycen - shifts[i][1]
+        # Crop image
+        frame_crop = Cutout2D(frame, (xcs, ycs), (ybox, xbox), wcs=WCS(hdr[i]))
+        # Save for plotting.
+        hdu_crop.append(frame_crop.data)
+        # Save cropped fits.
+        if pars['crop_save'] is 'y':
+            # Cropped WCS
+            wcs_cropped = frame_crop.wcs
+            # Update WCS in header
+            hdr[i].update(wcs_cropped.to_header())
+            # Add comment to header
+            hdr[i]['COMMENT'] = "= Cropped fits file ({}).".format(
+                datetime.date.today())
+            # Write cropped frame to new fits file.
+            crop_name = fn + '/' +\
+                fnames[i].split('/')[-1].replace('.fits', '') + '_crop.fits'
+            try:
+                os.remove(crop_name)
+            except:
+                pass
+            fits.writeto(crop_name, frame_crop.data, hdr[i])
+
+    return hdu_crop
+
+
+def make_sub_plot(ax, frame, fname, f_list, shifts, overlap, n_ref):
+    lef, bot, rig, top, xcen, ycen, xbox, ybox = overlap
     # Zscale
     interval = ZScaleInterval()
-    zmin, zmax = interval.get_limits(hdu_crop)
-    plt.imshow(hdu_crop, cmap='viridis', aspect=1, interpolation='nearest',
+    zmin, zmax = interval.get_limits(frame)
+    plt.imshow(frame, cmap='viridis', aspect=1, interpolation='nearest',
                origin='lower', vmin=zmin, vmax=zmax)
     ax.set_title('{}{} ({} stars)'.format(n_ref, fname, len(f_list[0])),
                  fontsize=8)
@@ -239,7 +319,7 @@ def make_sub_plot(ax, hdu, fname, f_list, shifts, overlap, n_ref):
     # ax.tick_params(axis='both', which='major', labelsize=8)
 
 
-def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap):
+def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap, hdu_crop):
     """
     Make plots.
     """
@@ -282,11 +362,11 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap):
     ax.set_ylim(0., h)
 
     # Aligned and cropped frames.
-    for i, hdu_data in enumerate(hdu):
+    for i, frame in enumerate(hdu_crop):
         ax = fig.add_subplot(gs[i + 2])
         n_ref = '' if i != ref_i else 'Reference - '
         make_sub_plot(
-            ax, hdu_data, fnames[i], f_list[i], shifts[i], overlap, n_ref)
+            ax, frame, fnames[i], f_list[i], shifts[i], overlap, n_ref)
 
     fig.tight_layout()
     plt.savefig(fn + '/align_crop.png', dpi=150, bbox_inches='tight')
@@ -300,36 +380,29 @@ def main():
     mypath, pars_f, pars = read_params()
     r_path, fits_list, pars = get_params(mypath, pars_f, pars)
 
-    f_list, l_f, hdu = [], [], []
+    f_list, l_f, hdu, hdr = [], [], [], []
     # For each .fits image in the root folder.
     for i, imname in enumerate(fits_list):
         print("\nFile: {}".format(
             imname.replace(mypath.replace('tasks', ''), "")))
 
-        # Extract data.
+        # Extract frame data.
         hdulist = fits.open(imname)
         hdu_data = hdulist[0].data
+        # Header
+        header = hdulist[0].header
+        hdulist.close()
 
-        # Background estimation.
-        sky_mean, sky_median, sky_std = sigma_clipped_stats(
-            hdu_data, sigma=3.0, iters=2)
+        # Obtain good stars coordinates and other data from 'psfmeasure'.
+        coords_data, n_sources = get_coords_data(
+            r_path, imname, pars, hdu_data)
 
-        # Stars selection.
-        psf_select, all_sources, n_not_satur = st_fwhm_select(
-            pars['dmax'], pars['max_shift_stars'], pars['thresh_level'],
-            pars['fwhm_init'], sky_std, hdu_data)
-
-        # FWHM selection.
-        fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct =\
-            psfmeasure.main(
-                pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
-                psf_select, imname, hdu_data)
-        print("Suitable sources found: {}".format(len(fwhm_estim)))
-
-        if fwhm_estim:
-            l_f.append(all_sources)
+        if coords_data:
+            l_f.append(n_sources)
             hdu.append(hdu_data)
-            f_list.append(np.array([zip(*fwhm_estim)[0], zip(*fwhm_estim)[1]]))
+            hdr.append(header)
+            f_list.append(
+                np.array([zip(*coords_data)[0], zip(*coords_data)[1]]))
         else:
             print("\nWARNING: no stars left after rejecting\nby min FWHM"
                   "and max ellipticity.")
@@ -362,8 +435,12 @@ def main():
     # Obtain overlapping region.
     overlap = overlap_reg(hdu_data, shifts)
 
-    if pars['do_plots']:
-        make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap)
+    # Crop frames.
+    hdu_crop = crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap)
+
+    if pars['do_plots'] == 'y':
+        make_plots(
+            mypath, hdu, ref_i, fnames, f_list, shifts, overlap, hdu_crop)
 
 
 if __name__ == "__main__":
