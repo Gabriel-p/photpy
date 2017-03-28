@@ -1,5 +1,5 @@
-# photom
+# photpy
 
 Python CCD photometry.
 
-Docs: http://photom.rtfd.io/
+Docs: http://photpy.rtfd.io/
