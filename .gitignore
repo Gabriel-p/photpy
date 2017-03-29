@@ -93,8 +93,8 @@ ENV/
 *.fit
 *.fits
 *.png
-standards/*
-field/*
+input/*
+!input/README.md
 pyraf/*
 tasks/pyraf/*
 uparm/*

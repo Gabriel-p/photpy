@@ -56,7 +56,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'photom'
+project = u'photpy'
 year = datetime.now().year
 copyright = u'%d, Gabriel I Perren' % year
 author = u'Gabriel I Perren'
@@ -137,7 +137,7 @@ html_theme = 'alabaster'
 html_theme_options = {
     'description': 'A guide to performing CCD photometry using Python.',
     'github_user': 'Gabriel-p',
-    'github_repo': 'photom',
+    'github_repo': 'photpy',
     'fixed_sidebar': True,
 }
 
@@ -281,7 +281,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'photom.tex', u'photom Documentation',
+    (master_doc, 'photpy.tex', u'photpy Documentation',
      u'Gabriel I Perren', 'manual'),
 ]
 
@@ -323,7 +323,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'photom', u'photom Documentation',
+    (master_doc, 'photpy', u'photpy Documentation',
      [author], 1)
 ]
 
@@ -338,8 +338,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'photom', u'photom Documentation',
-     author, 'photom', 'One line description of project.',
+    (master_doc, 'photpy', u'photpy Documentation',
+     author, 'photpy', 'One line description of project.',
      'Miscellaneous'),
 ]
 
