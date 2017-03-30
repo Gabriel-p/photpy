@@ -94,9 +94,11 @@ ENV/
 *.fits
 *.png
 input/*
+output/*
 !input/README.md
 pyraf/*
 tasks/pyraf/*
+tasks/*.pars
 uparm/*
 login.cl
 loginuser.cl
