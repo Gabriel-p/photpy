@@ -9,6 +9,8 @@ from matplotlib.patches import Ellipse
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import NullFormatter
 
+from astropy.io import ascii
+from astropy.table import Table
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from astropy.visualization import ZScaleInterval
@@ -42,7 +44,7 @@ def read_params():
     """
     pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath, '.get_data.pars')
+    pars_f = join(mypath, 'get_data.pars')
     if not os.path.isfile(pars_f):
         print("Parameters file missing. Create it.")
         create_pars_file(pars_f)
@@ -65,7 +67,7 @@ def get_params(mypath, pars_f, pars):
         pars['ff_proc']))
     fname = str(answ) if answ is not '' else pars['ff_proc']
     fname = fname[1:] if fname.startswith('/') else fname
-    r_path = join(mypath.replace('/tasks', ''), fname)
+    r_path = join(mypath.replace('tasks', 'input'), fname)
     fits_list = []
     if os.path.isdir(r_path):
         for subdir, dirs, files in os.walk(r_path):
@@ -81,9 +83,10 @@ def get_params(mypath, pars_f, pars):
     pars['ff_proc'] = fname
     pars_list.append(pars['ff_proc'])
 
-    answ = raw_input("Create plots? (y/n) ({}): ".format(
-        pars['do_plots']))
-    pars['do_plots'] = 'n' if answ in ('n', 'N', 'no', 'NO') else 'y'
+    answ = raw_input("Create plots? (y/n) ({}): ".format(pars['do_plots']))
+    pars['do_plots'] = str(answ) if str(answ) is not '' else\
+        str(pars['do_plots'])
+    pars['do_plots'] = 'n' if pars['do_plots'] in ('n', 'N') else 'y'
     pars_list.append(pars['do_plots'])
 
     answ = raw_input("Max number of stars used to obtain "
@@ -190,7 +193,7 @@ def st_fwhm_select(dmax, max_psf_stars, thresh_level, fwhm_init, std,
 
 def rm_outliers(fwhm_estim, out_f=2.):
     """
-    Remove outlier starts with large FWHMs.
+    Remove outlier stars with large FWHMs.
     """
     fwhm_median = np.median(zip(*fwhm_estim)[2])
     fwhm_no_outl, fwhm_outl = [], []
@@ -405,19 +408,16 @@ def main():
     mypath, pars_f, pars = read_params()
     r_path, fits_list, pars = get_params(mypath, pars_f, pars)
 
-    if os.path.isdir(r_path):
-        out_data = join(r_path, "fwhm_final.dat")
-    elif os.path.isfile(r_path):
-        out_data = join(r_path.replace(r_path.split('/')[-1], ''),
-                        "fwhm_final.dat")
-    if not os.path.isfile(out_data):
-        with open(out_data, 'w') as f:
-            f.write("# image      filter   exposure    Sky mean    Sky STDDEV"
-                    "     FWHM (N stars)     FWHM (mean)    FWHM (std)\n")
+    out_path = r_path.replace('input', 'output')
+    if os.path.isfile(r_path):
+        out_path = out_path.replace(out_path.split('/')[-1], '')
+    out_data_file = join(out_path, "fwhm_final.dat")
 
+    out_data = []
     # For each .fits image in the root folder.
     for imname in fits_list:
-        print("\nFile: {}".format(imname.replace(mypath, "")))
+        print("\nFile: {}".format(
+            imname.replace(mypath.replace('tasks', 'input'), "")))
 
         # Extract data.
         hdulist = fits.open(imname)
@@ -439,14 +439,14 @@ def main():
                 psf_select, imname, hdu_data)
 
         if fwhm_estim:
-            # Save data to file.
-            fn = join(r_path + '/' +
-                      imname.split('/')[-1].replace('.fits', '') + '.coo')
-            with open(fn, 'w') as f:
-                for st in fwhm_estim:
-                    f.write('   '.join(str(_) for _ in st) + '\n')
             # FWHM median an list with no outliers.
             fwhm_median, fwhm_no_outl, fwhm_outl = rm_outliers(fwhm_estim)
+            # Save data to file.
+            fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
+            with open(fn, 'w') as f:
+                f.write('#x    y    FWHM    ellip' + '\n')
+                for st in fwhm_no_outl:
+                    f.write('   '.join(str(_) for _ in st) + '\n')
 
             print("\nMedian FWHM: {}".format(fwhm_median))
             fwhm_mean, fwhm_std = np.mean(zip(*fwhm_no_outl)[2]),\
@@ -463,27 +463,37 @@ def main():
             print("\nWARNING: no stars left after rejecting\nby min FWHM"
                   "and max ellipticity.")
 
-        if os.path.isfile(r_path):
-            fig_name = join(r_path.replace(".fits", ""))
+        if os.path.isfile(out_path):
+            fig_name = join(out_path.replace(".fits", ""))
         else:
-            fig_name = join(r_path, imname.split('/')[-1].replace(".fits", ""))
+            fig_name = join(
+                out_path, imname.split('/')[-1].replace(".fits", ""))
         if pars['do_plots'] is 'y':
             make_plots(
                 hdu_data, pars['max_psf_stars'], pars['crop_side'],
                 all_sources, n_not_satur, fwhm_min_rjct, ellip_rjct,
                 fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, fig_name)
 
-        with open(out_data, 'a') as f:
-            im_name = imname.split('/')[-1]
-            filt = hdulist[0].header[pars['filter_key']]
-            exptime = hdulist[0].header[pars['exp_key']]
-            f.write("{}    {}    {}    {:.2f}    {:.2f}    {}    {:.2f}"
-                    "    {:.3f}\n".format(
-                        im_name, filt, exptime, sky_mean, sky_std,
-                        len(fwhm_no_outl), fwhm_mean, fwhm_std))
+        # Store data to write to output file.
+        im_name = imname.split('/')[-1]
+        filt = hdulist[0].header[pars['filter_key']]
+        exptime = hdulist[0].header[pars['exp_key']]
+        out_data.append([im_name, filt, exptime, sky_mean, sky_std,
+                         len(fwhm_no_outl), fwhm_mean, fwhm_std])
 
         # Force the Garbage Collector to release unreferenced memory.
         gc.collect()
+
+    # Write output file.
+    data = Table(zip(*out_data), names=(
+        '# image         ', 'filter', 'exposure', 'Sky_mean', 'Sky_STDDEV',
+        'FWHM_(N_stars)', 'FWHM_(mean)', 'FWHM_(std)'))
+    ascii.write(
+        data, out_data_file, overwrite=True, formats={
+            '# image         ': '%-16s', 'FWHM_(N_stars)': '%14.0f',
+            'Sky_mean': '%10.2f', 'Sky_STDDEV': '%10.2f',
+            'FWHM_(mean)': '%10.2f', 'FWHM_(std)': '%10.2f'},
+        format='fixed_width', delimiter=None)
 
 
 if __name__ == "__main__":
