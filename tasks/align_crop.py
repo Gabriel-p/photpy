@@ -45,7 +45,7 @@ def read_params():
     """
     pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath, '.align_crop.pars')
+    pars_f = join(mypath, 'align_crop.pars')
     if not os.path.isfile(pars_f):
         print("Parameters file missing. Create it.")
         create_pars_file(pars_f)
