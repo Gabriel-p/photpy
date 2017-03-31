@@ -114,6 +114,10 @@ def main():
     t = Table.read(fname, format='ascii')
     x, y = t['x'], t['y']
 
+    # ax = plt.subplot(111)
+    # ax.scatter(x, y, c='r', s=10)
+    # plt.show()
+
     # Center of observed xy points, defined as the center of the minimal
     # rectangle that contains all points.
     xy_center = [(min(x) + max(x)) * .5, (min(y) + max(y)) * .5]
@@ -131,8 +135,8 @@ def main():
     # Tolerance in pixels for match.
     tol = 1.
     # Boundaries.
-    sc_min, sc_max, sc_step = .01, 1., .01
-    ang_min, ang_max, ang_step = 0., 10., 1.
+    sc_min, sc_max, sc_step = .01, .04, .005
+    ang_min, ang_max, ang_step = 82., 83, .1
     xmin, xmax, xstep = -50., 50., 1.
     ymin, ymax, ystep = -50., 50., 1.
 
