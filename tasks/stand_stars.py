@@ -1,18 +1,71 @@
 
+import itertools
 from astropy.table import Table
 import numpy as np
-from scipy.spatial import distance
-import math
-from collections import OrderedDict
 import matplotlib.pyplot as plt
 
 
-def scalePoints(xy_center, delta_x, delta_y, scale):
+def getTriangles(set_X, X_combs):
+    """
+    Inefficient way of obtaining the lengths of each triangle's side.
+    Normalized so that the minimum length is 1.
+    """
+    triang, tr_not_scaled = [], []
+    for p0, p1, p2 in X_combs:
+        d1 = np.sqrt((set_X[p0][0] - set_X[p1][0]) ** 2 +
+                     (set_X[p0][1] - set_X[p1][1]) ** 2)
+        d2 = np.sqrt((set_X[p0][0] - set_X[p2][0]) ** 2 +
+                     (set_X[p0][1] - set_X[p2][1]) ** 2)
+        d3 = np.sqrt((set_X[p1][0] - set_X[p2][0]) ** 2 +
+                     (set_X[p1][1] - set_X[p2][1]) ** 2)
+        d_min = min(d1, d2, d3)
+        d_unsort = [d1 / d_min, d2 / d_min, d3 / d_min]
+        triang.append(sorted(d_unsort))
+        # These are used to obtain the scale between frames.
+        tr_not_scaled.append(sorted([d1, d2, d3]))
+
+    return triang, tr_not_scaled
+
+
+def sumTriangles(A_triang, B_triang):
+    """
+    For each normalized triangle in A, compare with each normalized triangle
+    in B. find the differences between their sides, sum their absolute values,
+    and select the two triangles with the smallest sum of absolute differences.
+    """
+    tr_sum, tr_idx = [], []
+    for i, A_tr in enumerate(A_triang):
+        for j, B_tr in enumerate(B_triang):
+            # Absolute value of lengths differences.
+            tr_diff = abs(np.array(A_tr) - np.array(B_tr))
+            # Sum the differences
+            tr_sum.append(sum(tr_diff))
+            tr_idx.append([i, j])
+
+    # Index of the triangles in A and B with the smallest sum of absolute
+    # length differences.
+    tr_idx_min = tr_idx[tr_sum.index(min(tr_sum))]
+    A_idx, B_idx = tr_idx_min[0], tr_idx_min[1]
+    # print("Smallest difference: {}".format(min(tr_sum)))
+
+    return A_idx, B_idx
+
+
+def centTriangle(tr_match):
+    """
+    Obtain centroid of triangle.
+    """
+    x_sum, y_sum = np.sum(tr_match, axis=0)
+    return (x_sum / 3., y_sum / 3.)
+
+
+def scalePoints(xy_center, xy, scale):
     """
     Scaled xy points.
 
     http://codereview.stackexchange.com/q/159183/35351
     """
+    delta_x, delta_y = xy_center[0] - xy[0], xy_center[1] - xy[1]
     x_scale = xy_center[0] - scale * delta_x
     y_scale = xy_center[1] - scale * delta_y
 
@@ -26,132 +79,89 @@ def rotatePoints(center, x, y, angle):
 
     http://stackoverflow.com/a/20024348/1391441
     """
-    angle = math.radians(angle)
+    angle = np.radians(angle)
     xy_rot = x - center[0], y - center[1]
-    xy_rot = (xy_rot[0] * math.cos(angle) - xy_rot[1] * math.sin(angle),
-              xy_rot[0] * math.sin(angle) + xy_rot[1] * math.cos(angle))
+    xy_rot = (xy_rot[0] * np.cos(angle) - xy_rot[1] * np.sin(angle),
+              xy_rot[0] * np.sin(angle) + xy_rot[1] * np.cos(angle))
     xy_rot = xy_rot[0] + center[0], xy_rot[1] + center[1]
 
     return xy_rot
 
 
-def distancePoints(xy_st, x_transl, y_transl):
-    """
-    Find the sum of the minimum distance of stars in the Landolt frame to
-    stars in the observed frame (scaled, rotates, and moved)
-    """
-    d = distance.cdist(xy_st, zip(*[x_transl, y_transl]), 'euclidean')
-    # Sum of all minimal distances.
-    d_sum = np.sum(np.min(d, axis=1))
-
-    return d_sum
-
-
-def match_frames(
-        xy_st, xy_center, delta_x, delta_y, tol, sc_min, sc_max, sc_step,
-        ang_min, ang_max, ang_step, xmin, xmax, xstep, ymin, ymax, ystep):
-    """
-    Process all possible solutions in the defined ranges.
-    """
-    N = len(xy_st)
-    # Ranges
-    sc_range = np.arange(sc_min, sc_max, sc_step)
-    ang_range = np.arange(ang_min, ang_max, ang_step)
-    x_range = np.arange(xmin, xmax, xstep)
-    y_range = np.arange(ymin, ymax, ystep)
-    print("Total solutions: {:.2e}".format(
-          np.prod([len(_) for _ in [sc_range, ang_range, x_range, y_range]])))
-
-    d_sum_all, xy_transl_all = [], []
-    # Zoom scale.
-    for scale in sc_range:
-        # Scaled points.
-        x_scale, y_scale = scalePoints(xy_center, delta_x, delta_y, scale)
-        for ang in ang_range:
-            # Rotated points.
-            xy_rot = rotatePoints(xy_center, x_scale, y_scale, ang)
-            for x_tr in x_range:
-                x_transl = xy_rot[0] + x_tr
-                for y_tr in y_range:
-                    y_transl = xy_rot[1] + y_tr
-
-                    # Find minimum distance sum.
-                    d_sum = distancePoints(xy_st, x_transl, y_transl)
-
-                    d_sum_all.append([d_sum, scale, ang, x_tr, y_tr])
-                    xy_transl_all.append([x_transl, y_transl])
-
-                    # Condition to break out if given tolerance is achieved.
-                    if d_sum <= tol * N:
-                        print("Stars matched:", scale, ang, x_tr, y_tr)
-                        return d_sum_all, xy_transl_all
-
-        # Print best solution found so far.
-        i_min = zip(*d_sum_all)[0].index(min(zip(*d_sum_all)[0]))
-        print(d_sum_all[i_min])
-
-    print("WARNING: no suitable match could be found.")
-    return d_sum_all, xy_transl_all
-
-
 def main():
     """
+    This algorithm expects at least three standard stars observed in the
+    observed field.
     """
+
     # Load Landolt standard file. Notice that y axis is inverted.
     # plt.imshow(plt.imread("../tasks/landolt/pg1323-086.gif"))
     # plt.show()
 
+    # Dictionary of stars for this standard field.
+    pg1323 = {
+        '86': (211., 158.3), '86A': (162.5, 137.5), '86B': (158.1, 128.),
+        '86C': (160.1, 171.2), '86D': (89.6, 133.7)}
     # Coordinates of stars for this standard field.
-    pg1323 = OrderedDict((
-        ['86', (211., 158.3)], ['86A', (162.5, 137.5)], ['86B', (158.1, 128.)],
-        ['86C', (160.1, 171.2)], ['86D', (89.6, 133.7)]))
-    xy_st = np.array([_ for _ in pg1323.values()])
-    print("Landolt frame x,y range:", max(xy_st[0]) - min(xy_st[0]),
-          max(xy_st[1]) - min(xy_st[1]))
+    xy_std = [_ for _ in pg1323.values()]
 
     # Coordinates from observed frame.
     fname = '../output/standards/filt_U/stk_2085.coo'
     t = Table.read(fname, format='ascii')
-    x, y = t['x'], t['y']
+    xy_obs = zip(*[t['x'], t['y']])
 
-    # ax = plt.subplot(111)
-    # ax.scatter(x, y, c='r', s=10)
-    # plt.show()
+    # Find all possible triangles.
+    std_combs = list(itertools.combinations(range(len(xy_std)), 3))
+    obs_combs = list(itertools.combinations(range(len(xy_obs)), 3))
 
-    # Center of observed xy points, defined as the center of the minimal
-    # rectangle that contains all points.
-    xy_center = [(min(x) + max(x)) * .5, (min(y) + max(y)) * .5]
-    # Difference between the center coordinates and the xy points.
-    delta_x, delta_y = xy_center[0] - x, xy_center[1] - y
+    # Obtain normalized triangles.
+    std_triang, std_tr_not_scaled = getTriangles(xy_std, std_combs)
+    obs_triang, obs_tr_not_scaled = getTriangles(xy_obs, obs_combs)
 
-    # Move Landolt frame to the center of the obserced image. This makes the
-    # reasonable guess that the observed standards field was observed centering
-    # the standard stars in it.
-    landolt_f_cent = [(min(xy_st[0]) + max(xy_st[0])) * .5,
-                      (min(xy_st[1]) + max(xy_st[1])) * .5]
-    landolt_delta = np.array(xy_center) - np.array(landolt_f_cent)
-    xy_st = xy_st + landolt_delta
+    # Index of the triangles with the smallest difference.
+    std_idx, obs_idx = sumTriangles(std_triang, obs_triang)
 
-    # Tolerance in pixels for match.
-    tol = 1.
-    # Boundaries.
-    sc_min, sc_max, sc_step = .01, .04, .005
-    ang_min, ang_max, ang_step = 82., 83, .1
-    xmin, xmax, xstep = -50., 50., 1.
-    ymin, ymax, ystep = -50., 50., 1.
+    # Indexes of points in A and B of the best match triangles.
+    std_idx_pts, obs_idx_pts = std_combs[std_idx], obs_combs[obs_idx]
+    print 'triangle A %s matches triangle B %s' % (std_idx_pts, obs_idx_pts)
 
-    # Find proper zomm + rotation + translation.
-    d_sum_all, xy_transl_all = match_frames(
-        xy_st, xy_center, delta_x, delta_y, tol, sc_min, sc_max, sc_step,
-        ang_min, ang_max, ang_step, xmin, xmax, xstep, ymin, ymax, ystep)
+    # Matched points in A and B.
+    std_tr_match, obs_tr_match = [xy_std[_] for _ in std_idx_pts],\
+        [xy_obs[_] for _ in obs_idx_pts]
+    print "Std:", std_tr_match
+    print "Obs:", obs_tr_match
+    obs_tr_match_copy = obs_tr_match[:]
 
-    i_min = zip(*d_sum_all)[0].index(min(zip(*d_sum_all)[0]))
-    print(d_sum_all[i_min])
+    # Centroids for the best match triangles.
+    std_tr_cent, obs_tr_cent = centTriangle(std_tr_match),\
+        centTriangle(obs_tr_match)
+    # Move observed stars triangle to standard triangle's center.
+    obs_tr_match -= np.array(obs_tr_cent) - np.array(std_tr_cent)
 
-    ax = plt.subplot(111)
-    ax.scatter(*xy_center, marker='x', c='g')
-    ax.scatter(*zip(*xy_st), c='k', s=10)
-    ax.scatter(xy_transl_all[i_min][0], xy_transl_all[i_min][1], c='r', s=10)
+    # Scale between standard stars and observed stars triangle.
+    scale = np.mean(
+        np.array(std_tr_not_scaled[std_idx]) / obs_tr_not_scaled[obs_idx])
+    print("Scale (std / obs): {}".format(scale))
+
+    x_scale, y_scale = scalePoints(std_tr_cent, zip(*obs_tr_match), scale)
+
+    ax1 = plt.subplot(131)
+    ax1.set_title("Standard frame")
+    ax1.scatter(*zip(*xy_std), c='k')
+    ax1.scatter(*zip(*std_tr_match), marker='s', edgecolor='g',
+                facecolor='', lw=2., s=70)
+
+    ax2 = plt.subplot(132)
+    ax2.set_title("Observed frame")
+    ax2.scatter(*zip(*xy_obs), c='r')
+    ax2.scatter(*zip(*obs_tr_match_copy), marker='s', edgecolor='g',
+                facecolor='', lw=2., s=70)
+
+    ax3 = plt.subplot(133)
+    ax3.set_title("Matched stars in standard frame")
+    ax3.scatter(*std_tr_cent, marker='x', c='b')
+    ax3.scatter(*zip(*std_tr_match), edgecolor='k', s=70, lw=1., facecolor='')
+    ax3.scatter(x_scale, y_scale, edgecolor='r', s=70, lw=1., facecolor='')
     plt.show()
 
 
