@@ -433,10 +433,9 @@ def main():
             pars['fwhm_init'], sky_std, hdu_data)
 
         # FWHM selection.
-        fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct =\
-            psfmeasure.main(
-                pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
-                psf_select, imname, hdu_data)
+        fwhm_estim, fwhm_min_rjct, ellip_rjct = psfmeasure.main(
+            pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
+            psf_select, imname, hdu_data)
 
         if fwhm_estim:
             # FWHM median an list with no outliers.
@@ -454,7 +453,6 @@ def main():
             print("Mean FWHM +/- std (no outliers, "
                   "{} stars): {:.2f} +- {:.2f}".format(
                       len(fwhm_no_outl), fwhm_mean, fwhm_std))
-            print("psfmeasure FWHM: {}".format(psfmeasure_estim))
 
             stars = isolate_stars(hdu_data, fwhm_no_outl, pars['crop_side'])
         else:
