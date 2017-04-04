@@ -1,5 +1,6 @@
 
 import os
+from os.path import exists
 import sys
 import gc
 from os.path import join, realpath, dirname
@@ -413,6 +414,10 @@ def main():
         out_path = out_path.replace(out_path.split('/')[-1], '')
     out_data_file = join(out_path, "fwhm_final.dat")
 
+    # Generate output dir/subdir if it doesn't exist.
+    if not exists(out_path):
+        os.makedirs(out_path)
+
     out_data = []
     # For each .fits image in the root folder.
     for imname in fits_list:
@@ -444,7 +449,7 @@ def main():
             fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
             ascii.write(
                 zip(*fwhm_no_outl), fn, names=['x', 'y', 'FWHM', 'Ellip'],
-                format='commented_header', overwrite=True, delimiter='   ')
+                format='commented_header', overwrite=True, delimiter=' ')
 
             print("\nMedian FWHM: {}".format(fwhm_median))
             fwhm_mean, fwhm_std = np.mean(zip(*fwhm_no_outl)[2]),\
