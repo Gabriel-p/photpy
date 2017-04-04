@@ -1,6 +1,7 @@
 
 import os
 from astropy.io import ascii
+import numpy as np
 from pyraf import iraf
 
 
@@ -38,60 +39,27 @@ def main(dmax, ellip_max, fwhm_min, psf_select, imname, hdu_data):
     # plots = Imexamine()
     # plots.set_data(hdu_data)
 
-    fwhm_estim, fwhm_min_rjct, ellip_rjct, psfmeasure_estim = [], [], [], 0
-    with open("psfmeasure", 'r') as f:
-        for i, line in enumerate(f):
-            data = line.split()
-            if data:
-                if data[0] != 'Average':
-                    # First line (star) of output file.
-                    if i == 3:
-                        if float(data[4]) > fwhm_min:
-                            if float(data[5]) <= ellip_max:
-                                fwhm_estim.append(
-                                    map(float, [data[1], data[2], data[4],
-                                                data[5]]))
-                            else:
-                                ellip_rjct.append(
-                                    map(float, [data[1], data[2], data[4],
-                                                data[5]]))
-                        else:
-                            fwhm_min_rjct.append(
-                                map(float, [data[1], data[2], data[4],
-                                            data[5]]))
-                    # Rest of the lines.
-                    elif i > 3:
-                        if float(data[3]) > fwhm_min:
-                            if float(data[4]) <= ellip_max:
-                                fwhm_estim.append(
-                                    map(float, [data[0], data[1], data[3],
-                                                data[4]]))
-                            else:
-                                ellip_rjct.append(
-                                    map(float, [data[0], data[1], data[3],
-                                                data[4]]))
-                            # sys.stdout = open(os.devnull, "w")
-                            # gauss_x = plots.line_fit(
-                            #     float(data[0]), float(data[1]), genplot=False)
-                            # gauss_y = plots.column_fit(
-                            #     float(data[0]), float(data[1]), genplot=False)
-                            # sys.stdout = sys.__stdout__
-                            # print(float(data[3]), float(data[4]),
-                            #       gfwhm(gauss_x.stddev)[0],
-                            #       gfwhm(gauss_y.stddev)[0])
-                        else:
-                            fwhm_min_rjct.append(
-                                map(float, [data[0], data[1], data[3],
-                                            data[4]]))
-                else:
-                    # Averaged FWHM by the 'psfmeasure' task.
-                    psfmeasure_estim = float(data[-1])
+    # Read PSFMEASURE task output, leaving out the last line with the average
+    # FWHM.
+    psf_data = ascii.read(
+        "psfmeasure", format='fixed_width', header_start=1, data_end=-1,
+        col_starts=(15, 23, 32, 40, 48, 56))
+    psf_data = psf_data['Column', 'Line', 'FWHM', 'Ellip']
+
+    # Extract data
+    fwhm_min_rjct = psf_data[psf_data['FWHM'] <= fwhm_min]
+    fwhm_min_accpt = psf_data[psf_data['FWHM'] > fwhm_min]
+    fwhm_estim = fwhm_min_accpt[fwhm_min_accpt['Ellip'] <= ellip_max]
+    ellip_rjct = fwhm_min_accpt[fwhm_min_accpt['Ellip'] > ellip_max]
+
+    # Remove duplicates, if any.
+    fwhm_estim = list(set(np.array(fwhm_estim).tolist()))
 
     os.remove('positions')
     os.remove('cursor')
     os.remove('psfmeasure')
 
-    return fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct
+    return fwhm_estim, fwhm_min_rjct, ellip_rjct
 
 
 if __name__ == "__main__":
