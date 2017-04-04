@@ -442,10 +442,9 @@ def main():
             fwhm_median, fwhm_no_outl, fwhm_outl = rm_outliers(fwhm_estim)
             # Save data to file.
             fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
-            with open(fn, 'w') as f:
-                f.write('#x    y    FWHM    ellip' + '\n')
-                for st in fwhm_no_outl:
-                    f.write('   '.join(str(_) for _ in st) + '\n')
+            ascii.write(
+                zip(*fwhm_no_outl), fn, names=['x', 'y', 'FWHM', 'Ellip'],
+                format='commented_header', overwrite=True, delimiter='   ')
 
             print("\nMedian FWHM: {}".format(fwhm_median))
             fwhm_mean, fwhm_std = np.mean(zip(*fwhm_no_outl)[2]),\
