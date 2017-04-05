@@ -1,11 +1,107 @@
 
+import landolt_fields
+import os
+from os.path import join, realpath, dirname
+import sys
 import itertools
 import math
+
+import numpy as np
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import cdist
+
 from astropy.table import Table
-import numpy as np
+from astropy.io import ascii
+
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+
+def create_pars_file(pars_f, pars_list=None):
+    """
+    Default values for parameters file.
+    """
+    if pars_list is None:
+        pars_list = ['None', 'pg1323', 'y', '0.1', '10.', '0.', '180.']
+    with open(pars_f, 'w') as f:
+        f.write(
+            "# Default parameters for the id_standards script\n#\n"
+            "coo_file {}\nlandolt_fld {}\ndo_plots {}\nscale_min {}\n"
+            "scale_max {}\nrot_min {}\nrot_max {}\n".format(
+                *pars_list))
+    return
+
+
+def read_params():
+    """
+    Read parameter values from .pars file.
+    """
+    pars = {}
+    mypath = realpath(join(os.getcwd(), dirname(__file__)))
+    pars_f = join(mypath, 'id_standards.pars')
+    if not os.path.isfile(pars_f):
+        print("Parameters file missing. Create it.")
+        create_pars_file(pars_f)
+
+    with open(pars_f, 'r') as f:
+        for line in f:
+            if not line.startswith('#'):
+                key, value = line.replace('\n', '').split(' ')
+                pars[key] = value
+
+    return mypath, pars_f, pars
+
+
+def get_params(mypath, pars_f, pars):
+    """
+    """
+    pars_list = []
+
+    answ = raw_input("\n.coo file to process ({}): ".format(pars['coo_file']))
+    fname = str(answ) if answ is not '' else pars['coo_file']
+    # Path to .coo file in with observed standard stars coordinates.
+    fname = fname[1:] if fname.startswith('/') else fname
+    if not os.path.isfile(join(mypath.replace('tasks', ''), fname)):
+        print("\n\n{}\nis not a valid file. Exit.".format(fname))
+        sys.exit()
+    pars['coo_file'] = fname
+    pars_list.append(pars['coo_file'])
+
+    answ = raw_input("Choose Landolt field ({}): ".format(pars['landolt_fld']))
+    pars['landolt_fld'] = str(answ) if str(answ) is not '' else\
+        str(pars['landolt_fld'])
+    pars_list.append(pars['landolt_fld'])
+
+    answ = raw_input("Create plots? (y/n) ({}): ".format(pars['do_plots']))
+    pars['do_plots'] = str(answ) if str(answ) is not '' else\
+        str(pars['do_plots'])
+    pars['do_plots'] = 'n' if pars['do_plots'] in ('n', 'N') else 'y'
+    pars_list.append(pars['do_plots'])
+
+    answ = raw_input("Minimum scaling factor ({}): ".format(pars['scale_min']))
+    pars['scale_min'] = float(answ) if answ is not '' else\
+        float(pars['scale_min'])
+    pars_list.append(pars['scale_min'])
+
+    answ = raw_input("Maximum scaling factor ({}): ".format(pars['scale_max']))
+    pars['scale_max'] = float(answ) if answ is not '' else\
+        float(pars['scale_max'])
+    pars_list.append(pars['scale_max'])
+
+    answ = raw_input("Minimum rotation angle ({}): ".format(pars['rot_min']))
+    pars['rot_min'] = float(answ) if answ is not '' else\
+        float(pars['rot_min'])
+    pars_list.append(pars['rot_min'])
+
+    answ = raw_input("Maximum rotation angle ({}): ".format(pars['rot_max']))
+    pars['rot_max'] = float(answ) if answ is not '' else\
+        float(pars['rot_max'])
+    pars_list.append(pars['rot_max'])
+
+    # Write values to file.
+    create_pars_file(pars_f, pars_list)
+
+    return pars
 
 
 def getTriangles(set_X, X_combs):
@@ -125,7 +221,6 @@ def scalerotTriangles(
         # Scale between observed stars and standard stars triangle.
         scale = np.mean(
             np.array(B_tr_not_scaled[B_idx]) / A_tr_not_scaled[A_idx])
-        print("Scale (obs/std): {:.2f}".format(scale))
 
         # Accepted range of scaling.
         if scale_range[0] <= scale <= scale_range[1]:
@@ -143,14 +238,15 @@ def scalerotTriangles(
 
             # Rotation angle between best match triangles.
             rot_angle = findRotAngle(A_tr_match, B_tr_match)
-            print("Rotation: {:.2f} deg".format(rot_angle))
 
             if rot_range[0] <= rot_angle <= rot_range[1]:
+                print("Scale (obs/std): {:.2f}".format(scale))
+                print("Rotation: {:.2f} deg".format(rot_angle))
                 break
-            else:
-                print("  Rotation angle out of range")
-        else:
-            print("  Scale out of range")
+        #     else:
+        #         print("  Rotation angle out of range")
+        # else:
+        #     print("  Scale out of range")
 
     return A_tr_match, B_tr_match, scale, rot_angle
 
@@ -244,27 +340,52 @@ def standard2observed(xy_std, std_tr_match, obs_tr_match, scale, rot_angle):
     return xy_rot
 
 
-def make_plot(xy_std, xy_obs, std_tr_match, obs_tr_match, xy_rot):
+def make_plot(
+        out_plot_file, xy_std, xy_obs, std_tr_match, obs_tr_match, xy_rot,
+        landolt_field_img):
     """
+    Make plots.
     """
-    ax1 = plt.subplot(131)
+    print("Plotting.")
+    fig = plt.figure(figsize=(20, 20))
+    gs = gridspec.GridSpec(10, 12)
+
+    ax1 = plt.subplot(gs[0:4, 0:4])
+    # ax1.set_aspect('auto')
     ax1.set_title("Standard frame")
-    ax1.scatter(*zip(*xy_std), c='k')
-    ax1.scatter(*zip(*std_tr_match), marker='s', edgecolor='g',
-                facecolor='', lw=2., s=70)
+    land_img = ax1.imshow(plt.imread(landolt_field_img))
+    # ax1.scatter(*zip(*xy_std), c='k')
+    # Extract maximum y axis value
+    max_y = float(len(land_img.get_array()))
+    x, y = zip(*std_tr_match)
+    y_inv = max_y - np.array(y)
+    ax1.scatter(x, y_inv, marker='s', edgecolor='r', facecolor='', lw=1.,
+                s=60)
 
-    ax2 = plt.subplot(132)
+    ax2 = plt.subplot(gs[0:4, 4:8])
+    ax2.set_aspect('auto')
     ax2.set_title("Observed frame")
-    ax2.scatter(*zip(*xy_obs), c='r')
-    ax2.scatter(*zip(*obs_tr_match), marker='s', edgecolor='g',
-                facecolor='', lw=2., s=70)
+    ax2.scatter(*zip(*xy_obs), c='k')
+    ax2.scatter(*zip(*obs_tr_match), marker='s', edgecolor='r',
+                facecolor='', lw=1., s=60)
 
-    ax3 = plt.subplot(133)
+    ax3 = plt.subplot(gs[0:4, 8:12])
+    ax3.set_aspect('auto')
     ax3.set_title("Standard stars in observed frame")
     # ax3.scatter(*obs_tr_cent, marker='x', c='b')
     ax3.scatter(*zip(*obs_tr_match), edgecolor='r', s=70, lw=1., facecolor='')
     ax3.scatter(*xy_rot, marker='s', edgecolor='k', s=150, lw=1., facecolor='')
-    plt.show()
+
+    fig.tight_layout()
+    plt.savefig(out_plot_file + '.png', dpi=150, bbox_inches='tight')
+    plt.clf()
+    plt.close()
+
+
+def make_out_file(out_data_file, xy_rot):
+    """
+    """
+    ascii.write(xy_rot, out_data_file, overwrite=True)
 
 
 def main():
@@ -272,27 +393,27 @@ def main():
     This algorithm expects at least three standard stars observed in the
     observed field.
     """
+    mypath, pars_f, pars = read_params()
+    pars = get_params(mypath, pars_f, pars)
+    scale_range = (pars['scale_min'], pars['scale_max'])
+    rot_range = (pars['rot_min'], pars['rot_max'])
 
-    # Load Landolt standard file. Notice that y axis is inverted.
-    # plt.imshow(plt.imread("../tasks/landolt/pg1323-086.gif"))
-    # plt.show()
+    coo_file = join(mypath.replace('tasks', ''), pars['coo_file'])
+    out_path = coo_file.replace(coo_file.split('/')[-1], '')
+    out_data_file = join(out_path, "standard_coords.dat")
+    out_plot_file = join(out_path, "standard_coords")
+    landolt_field_img = join(mypath, 'landolt', pars['landolt_fld'] + '.gif')
 
-    # Dictionary of stars for this standard field.
-    pg1323 = {
-        '86': (211., 158.3), '86A': (162.5, 137.5), '86B': (158.1, 128.),
-        '86C': (160.1, 171.2), '86D': (89.6, 133.7)}
     # Coordinates of stars for this standard field.
-    xy_std = [_ for _ in pg1323.values()]
+    landolt_t = landolt_fields.main(pars['landolt_fld'])
+    xy_std = zip(*[landolt_t['x'], landolt_t['y']])
 
     # Coordinates from observed frame.
-    fname = '../output/standards/filt_I/stk_2083.coo'
-    t = Table.read(fname, format='ascii')
-    xy_obs = zip(*[t['x'], t['y']])
-
-    scale_range = (0.1, 10.)
-    rot_range = (-5., 5.)
+    coo_t = Table.read(coo_file, format='ascii')
+    xy_obs = zip(*[coo_t['x'], coo_t['y']])
 
     # Best match triangles, scale, and rotation angle between them.
+    print("\nFinding scale, translation, and rotation.")
     std_tr_match, obs_tr_match, scale, rot_angle = triangleMatch(
         xy_std, xy_obs, scale_range, rot_range)
 
@@ -300,7 +421,12 @@ def main():
     xy_rot = standard2observed(
         xy_std, std_tr_match, obs_tr_match, scale, rot_angle)
 
-    make_plot(xy_std, xy_obs, std_tr_match, obs_tr_match, xy_rot)
+    if pars['do_plots'] == 'y':
+        make_plot(out_plot_file, xy_std, xy_obs, std_tr_match, obs_tr_match,
+                  xy_rot, landolt_field_img)
+
+    make_out_file(out_data_file, xy_rot)
+    print("\nFinished.")
 
 
 if __name__ == '__main__':
