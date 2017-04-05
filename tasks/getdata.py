@@ -1,9 +1,8 @@
 
 import os
-from os.path import exists
+from os.path import exists, join, realpath, dirname
 import sys
 import gc
-from os.path import join, realpath, dirname
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
@@ -25,14 +24,14 @@ import psfmeasure
 
 def create_pars_file(pars_f, pars_list=None):
     """
+    Default values for parameters file.
     """
-    # Default values.
     if pars_list is None:
         pars_list = ['None', 'y', '100', '5.', '3.', '60000.', '0.15',
                      '1.5', '20', 'EGAIN', 'ENOISE', 'FILTER', 'EXPTIME']
     with open(pars_f, 'w') as f:
         f.write(
-            "# Default parameters for the get_data.py script\n#\n"
+            "# Default parameters for the get_data script\n#\n"
             "ff_proc {}\ndo_plots {}\nmax_psf_stars {}\nthresh_level {}\n"
             "fwhm_init {}\ndmax {}\nellip_max {}\nfwhm_min {}\ncrop_side {}\n"
             "gain_key {}\nrdnoise_key {}\nfilter_key {}\nexp_key {}\n".format(
@@ -42,6 +41,7 @@ def create_pars_file(pars_f, pars_list=None):
 
 def read_params():
     """
+    Read parameter values from .pars file.
     """
     pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
