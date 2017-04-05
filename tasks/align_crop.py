@@ -23,15 +23,15 @@ from astropy.nddata.utils import Cutout2D
 
 def create_pars_file(pars_f, pars_list=None):
     """
+    Default values for parameters file.
     """
-    # Default values.
     if pars_list is None:
         pars_list = [
             'None', 'n', 'None', 'y', 'y', '5.', '3.', '60000.', '0.15',
             '1.5', '100', '0.', '0.', '-1.', '0.05']
     with open(pars_f, 'w') as f:
         f.write(
-            "# Default parameters for the align_crop.py script\n#\n"
+            "# Default parameters for the align_crop script\n#\n"
             "ff_proc {}\nread_coords {}\nref_im {}\ndo_plots {}\n"
             "crop_save {}\nthresh_level {}\n"
             "fwhm_init {}\ndmax {}\nellip_max {}\nfwhm_min {}\n"
@@ -42,6 +42,7 @@ def create_pars_file(pars_f, pars_list=None):
 
 def read_params():
     """
+    Read parameter values from .pars file.
     """
     pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
