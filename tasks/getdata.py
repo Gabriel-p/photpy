@@ -404,7 +404,8 @@ def make_plots(
 
 def main():
     """
-    Get FWHM, sky mean, and sky standard deviation from a .fits file.
+    Get FWHM, sky mean, and sky standard deviation from a single .fits file or
+    a folder containing .fits files.
     """
     mypath, pars_f, pars = read_params()
     r_path, fits_list, pars = get_params(mypath, pars_f, pars)
