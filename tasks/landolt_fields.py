@@ -6,12 +6,13 @@ def main(field):
     """
     Dictionary of Landolt standard stars.
 
-    # Load Landolt standard file. Notice that y axis is inverted.
-    # plt.imshow(plt.imread("../landolt/pg1323-086.gif"))
-    # plt.show()
-
     http://www.eso.org/sci/observing/tools/standards/Landolt.html
     """
+
+    # Load Landolt standard file. Notice that y axis is inverted.
+    # import matplotlib.pyplot as plt
+    # plt.imshow(plt.imread("landolt/pg1323.gif"))
+    # plt.show()
 
     #  x  y  V  B-V    U-B    V-R    R-I    V-I
     data_rows = [
