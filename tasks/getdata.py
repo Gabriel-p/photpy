@@ -330,10 +330,10 @@ def make_plots(
         gs1.update(wspace=0., hspace=0.25)
         max_s = min(25, len(stars))
         for i in range(max_s):
-            print(
-                "(xc, yc), FWHM, ellipticity: ({:.2f}, {:.2f}), {}, {}".format(
-                    fwhm_no_outl[i][0], fwhm_no_outl[i][1], fwhm_no_outl[i][2],
-                    fwhm_no_outl[i][3]))
+            # print(
+            #     "(xc, yc), FWHM, ellipticity: ({:.2f}, {:.2f}), {}, {}".format(
+            #         fwhm_no_outl[i][0], fwhm_no_outl[i][1], fwhm_no_outl[i][2],
+            #         fwhm_no_outl[i][3]))
             if i < 5:
                 pl_n = 60 + i
             elif 5 <= i < 10:
@@ -449,7 +449,8 @@ def main():
             # Save data to file.
             fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
             ascii.write(
-                zip(*fwhm_no_outl), fn, names=['x', 'y', 'FWHM', 'Ellip'],
+                zip(*fwhm_no_outl), fn,
+                names=['x', 'y', 'FWHM', 'Ellip', 'Mag'],
                 format='commented_header', overwrite=True, delimiter=' ')
 
             print("\nMedian FWHM: {}".format(fwhm_median))
@@ -497,6 +498,8 @@ def main():
             'Sky_mean': '%10.2f', 'Sky_STDDEV': '%10.2f',
             'FWHM_(mean)': '%10.2f', 'FWHM_(std)': '%10.2f'},
         format='fixed_width', delimiter=None)
+
+    print("\nFinished.")
 
 
 if __name__ == "__main__":

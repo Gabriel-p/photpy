@@ -44,7 +44,7 @@ def main(dmax, ellip_max, fwhm_min, psf_select, imname, hdu_data):
     psf_data = ascii.read(
         "psfmeasure", format='fixed_width', header_start=1, data_end=-1,
         col_starts=(15, 23, 32, 40, 48, 56))
-    psf_data = psf_data['Column', 'Line', 'FWHM', 'Ellip']
+    psf_data = psf_data['Column', 'Line', 'FWHM', 'Ellip', 'Mag']
 
     # Extract data
     fwhm_min_rjct = psf_data[psf_data['FWHM'] <= fwhm_min]
