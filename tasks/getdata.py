@@ -466,12 +466,12 @@ def main():
             print("\nWARNING: no stars left after rejecting\nby min FWHM"
                   "and max ellipticity.")
 
-        if os.path.isfile(out_path):
-            fig_name = join(out_path.replace(".fits", ""))
-        else:
-            fig_name = join(
-                out_path, imname.split('/')[-1].replace(".fits", ""))
         if pars['do_plots'] is 'y':
+            if os.path.isfile(out_path):
+                fig_name = join(out_path.replace(".fits", ""))
+            else:
+                fig_name = join(
+                    out_path, imname.split('/')[-1].replace(".fits", ""))
             make_plots(
                 hdu_data, pars['max_psf_stars'], pars['crop_side'],
                 all_sources, n_not_satur, fwhm_min_rjct, ellip_rjct,
