@@ -31,6 +31,22 @@ Picking an aperture size
 .. todo::
    Not finished.
 
+**We assume that you will work with a single aperture radius value for the
+standards from all the nights for all the filters.**
+
+The aperture value should be large enough to contain as much light from
+your observed standards as possible, but at the same time small enough to
+minimize contamination from bad pixels and other stars.
+
+The default convention is to use an aperture radius that is ``~4.5*FWHM`` of a
+stellar image. This is, for a ``FWHM=3 px`` you'll use an aperture around
+``14-15 px``.
+
+Assuming you've already run the ``getdata`` script, these values are stored in
+the ``fwhm_final.dat`` file for each of the observed filters. You can quickly
+obtain an average estimate by running the ``data_avrg`` script on the parent
+folder that contains the filter sub-folders.
+
 
 Setting things up
 -----------------
