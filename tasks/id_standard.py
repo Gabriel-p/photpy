@@ -319,7 +319,8 @@ def standard2observed(xy_std, std_tr_match, obs_tr_match, scale, rot_angle):
     # Centroids for the best match triangles.
     std_tr_cent, obs_tr_cent = centTriangle(std_tr_match),\
         centTriangle(obs_tr_match)
-    print("Translation (x, y): {}".format(obs_tr_cent - std_tr_cent))
+    print("Translation (x, y): ({:.2f}, {:.2f})".format(
+        *(obs_tr_cent - std_tr_cent)))
 
     # Move all standard stars to observed triangle's center.
     std_trans = xy_std - (std_tr_cent - obs_tr_cent)
@@ -340,15 +341,25 @@ def standard2observed(xy_std, std_tr_match, obs_tr_match, scale, rot_angle):
     return xy_rot
 
 
+def star_size(mag, max_mag):
+    '''
+    Convert magnitudes into intensities and define sizes of stars in
+    finding chart.
+    '''
+    # Scale factor.
+    factor = 5. * (1 - 1 / (1 + 150 / len(mag) ** 0.85))
+    return 0.1 + factor * 10 ** ((np.array(mag) / -2.5)) * max_mag
+
+
 def make_plot(
-        out_plot_file, xy_std, xy_obs, std_tr_match, obs_tr_match, xy_rot,
-        landolt_field_img):
+        out_plot_file, xy_std, xy_obs, obs_mag, std_tr_match, obs_tr_match,
+        xy_rot, landolt_field_img):
     """
     Make plots.
     """
     print("Plotting.")
     fig = plt.figure(figsize=(20, 20))
-    gs = gridspec.GridSpec(10, 12)
+    gs = gridspec.GridSpec(10, 10)
 
     ax1 = plt.subplot(gs[0:4, 0:4])
     # ax1.set_aspect('auto')
@@ -365,16 +376,17 @@ def make_plot(
     ax2 = plt.subplot(gs[0:4, 4:8])
     ax2.set_aspect('auto')
     ax2.set_title("Observed frame")
-    ax2.scatter(*zip(*xy_obs), c='k')
+    st_sizes_arr = star_size(obs_mag, max(obs_mag))
+    ax2.scatter(*zip(*xy_obs), c='k', s=st_sizes_arr)
     ax2.scatter(*zip(*obs_tr_match), marker='s', edgecolor='r',
                 facecolor='', lw=1., s=60)
 
-    ax3 = plt.subplot(gs[0:4, 8:12])
-    ax3.set_aspect('auto')
-    ax3.set_title("Standard stars in observed frame")
-    # ax3.scatter(*obs_tr_cent, marker='x', c='b')
-    ax3.scatter(*zip(*obs_tr_match), edgecolor='r', s=70, lw=1., facecolor='')
-    ax3.scatter(*xy_rot, marker='s', edgecolor='k', s=150, lw=1., facecolor='')
+    # ax3 = plt.subplot(gs[0:4, 8:12])
+    # ax3.set_aspect('auto')
+    # ax3.set_title("Standard stars in observed frame")
+    # # ax3.scatter(*obs_tr_cent, marker='x', c='b')
+    # ax3.scatter(*zip(*obs_tr_match), edgecolor='r', s=70, lw=1., facecolor='')
+    # ax3.scatter(*xy_rot, marker='s', edgecolor='k', s=150, lw=1., facecolor='')
 
     fig.tight_layout()
     plt.savefig(out_plot_file + '.png', dpi=150, bbox_inches='tight')
@@ -411,6 +423,7 @@ def main():
     # Coordinates from observed frame.
     coo_t = Table.read(coo_file, format='ascii')
     xy_obs = zip(*[coo_t['x'], coo_t['y']])
+    obs_mag = coo_t['Mag']
 
     # Best match triangles, scale, and rotation angle between them.
     print("\nFinding scale, translation, and rotation.")
@@ -422,8 +435,8 @@ def main():
         xy_std, std_tr_match, obs_tr_match, scale, rot_angle)
 
     if pars['do_plots'] == 'y':
-        make_plot(out_plot_file, xy_std, xy_obs, std_tr_match, obs_tr_match,
-                  xy_rot, landolt_field_img)
+        make_plot(out_plot_file, xy_std, xy_obs, obs_mag, std_tr_match,
+                  obs_tr_match, xy_rot, landolt_field_img)
 
     make_out_file(out_data_file, xy_rot)
     print("\nFinished.")
