@@ -12,7 +12,7 @@ using `photutils`__, an `astropy`__ affiliated package.
 It follows roughly the same steps outlined in Massey & Lindsey's `A User's Guide
 to Stellar CCD Photometry with IRAF (1992)`__.
 
-It is under development as of November 2016, with much work still needed.
+It is under development as of April 2017, with much work still needed.
 
 .. toctree::
     :hidden:

@@ -1,6 +1,6 @@
 
-Crowded field photometry: astropy/photutils
-===========================================
+Crowded field photometry with astropy+photutils
+===============================================
 
 .. todo::
    Not finished.
