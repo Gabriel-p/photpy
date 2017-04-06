@@ -343,17 +343,54 @@ def standard2observed(xy_std, std_tr_match, obs_tr_match, scale, rot_angle):
 
 def star_size(mag, max_mag):
     '''
-    Convert magnitudes into intensities and define sizes of stars in
-    finding chart.
+    Convert "relative magnitudes" from psfmeasure into intensities.
+
+    http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?psfmeasure
     '''
     # Scale factor.
-    factor = 5. * (1 - 1 / (1 + 150 / len(mag) ** 0.85))
+    factor = 10. * (1 - 1 / (1 + 150 / len(mag) ** 0.85))
     return 0.1 + factor * 10 ** ((np.array(mag) / -2.5)) * max_mag
 
 
+def posFinder(xy_rot, x_rang, y_rang):
+    """
+    Finds the offset position to place the IDs of the standard stars in the
+    observed frame, such that they don't overlap with other stars or text.
+    """
+    # This value sets the minimum spacing allowed.
+    txt_sep = max(x_rang, y_rang) * .025
+    used_positions, xy_offset = xy_rot[:], []
+    # For every standard star positioned in the observed frame.
+    for i, xy in enumerate(xy_rot):
+        # Factor that defined the offset separation.
+        for j in np.arange(1., 10, .5):
+            point_done = False
+            # For each possible combinatin of the offsets.
+            for s in [[1., 1.], [1., -1.], [-1., 1.], [-1., -1.]]:
+                rang_perc = .025 * j
+                offset_x = s[0] * rang_perc * x_rang
+                offset_y = s[1] * rang_perc * y_rang
+                xi_off, yi_off = xy[0] + offset_x, xy[1] + offset_y
+                # Distance between the position of the text and all positions
+                # already used.
+                d = cdist(
+                    np.array([[xi_off, yi_off]]), np.array(used_positions))
+                min_d = np.min(d, axis=1)
+                # Store if it is far away enough.
+                if min_d > txt_sep:
+                    used_positions.append([xi_off, yi_off])
+                    xy_offset.append([xi_off, yi_off])
+                    point_done = True
+                    break
+            if point_done:
+                break
+
+    return xy_offset
+
+
 def make_plot(
-        out_plot_file, xy_std, xy_obs, obs_mag, std_tr_match, obs_tr_match,
-        xy_rot, landolt_field_img):
+        out_plot_file, xy_obs, obs_mag, std_tr_match, obs_tr_match,
+        xy_rot, id_std, landolt_field_img):
     """
     Make plots.
     """
@@ -365,7 +402,6 @@ def make_plot(
     # ax1.set_aspect('auto')
     ax1.set_title("Standard frame")
     land_img = ax1.imshow(plt.imread(landolt_field_img))
-    # ax1.scatter(*zip(*xy_std), c='k')
     # Extract maximum y axis value
     max_y = float(len(land_img.get_array()))
     x, y = zip(*std_tr_match)
@@ -376,28 +412,38 @@ def make_plot(
     ax2 = plt.subplot(gs[0:4, 4:8])
     ax2.set_aspect('auto')
     ax2.set_title("Observed frame")
+    ax2.grid(lw=1., ls='--', color='grey', zorder=1)
     st_sizes_arr = star_size(obs_mag, max(obs_mag))
-    ax2.scatter(*zip(*xy_obs), c='k', s=st_sizes_arr)
+    x_obs, y_obs = zip(*xy_obs)
+    ax2.scatter(x_obs, y_obs, c='k', s=st_sizes_arr, zorder=3)
+    # Define offsets.
+    x_rang, y_rang = max(x_obs) - min(x_obs), max(y_obs) - min(y_obs)
+    x, y = xy_rot
+    ax2.scatter(x, y, marker='s', edgecolor='g',
+                facecolor='', lw=.7, s=st_sizes_arr + 50., zorder=4)
+    xy_offset = posFinder(zip(*xy_rot), x_rang, y_rang)
+    for i, txt in enumerate(id_std):
+        ax2.annotate(
+            txt, xy=(x[i], y[i]), xytext=(xy_offset[i][0], xy_offset[i][1]),
+            fontsize=10, arrowprops=dict(
+                arrowstyle="-", connectionstyle="angle3,angleA=90,angleB=0"))
     ax2.scatter(*zip(*obs_tr_match), marker='s', edgecolor='r',
-                facecolor='', lw=1., s=60)
-
-    # ax3 = plt.subplot(gs[0:4, 8:12])
-    # ax3.set_aspect('auto')
-    # ax3.set_title("Standard stars in observed frame")
-    # # ax3.scatter(*obs_tr_cent, marker='x', c='b')
-    # ax3.scatter(*zip(*obs_tr_match), edgecolor='r', s=70, lw=1., facecolor='')
-    # ax3.scatter(*xy_rot, marker='s', edgecolor='k', s=150, lw=1., facecolor='')
+                facecolor='', lw=.7, s=st_sizes_arr + 50., zorder=6)
 
     fig.tight_layout()
-    plt.savefig(out_plot_file + '.png', dpi=150, bbox_inches='tight')
+    plt.savefig(out_plot_file, dpi=150, bbox_inches='tight')
     plt.clf()
     plt.close()
 
 
-def make_out_file(out_data_file, xy_rot):
+def make_out_file(out_data_file, xy_rot, id_std):
     """
+    Write coordinates of standard stars in the observed frame system.
     """
-    ascii.write(xy_rot, out_data_file, overwrite=True)
+    ascii.write([id_std.tolist()] + list(xy_rot), out_data_file,
+                names=['ID', 'x_obs', 'y_obs'], format='fixed_width',
+                delimiter='', formats={'x_obs': '%8.2f', 'y_obs': '%8.2f'},
+                overwrite=True)
 
 
 def main():
@@ -412,13 +458,15 @@ def main():
 
     coo_file = join(mypath.replace('tasks', ''), pars['coo_file'])
     out_path = coo_file.replace(coo_file.split('/')[-1], '')
-    out_data_file = join(out_path, "standard_coords.dat")
-    out_plot_file = join(out_path, "standard_coords")
+    obs_f_name = coo_file.split('/')[-1].split('.')[0]
+    out_data_file = join(out_path, obs_f_name + "_standard.coo")
+    out_plot_file = join(out_path, obs_f_name + "_standard.png")
     landolt_field_img = join(mypath, 'landolt', pars['landolt_fld'] + '.gif')
 
     # Coordinates of stars for this standard field.
     landolt_t = landolt_fields.main(pars['landolt_fld'])
     xy_std = zip(*[landolt_t['x'], landolt_t['y']])
+    id_std = landolt_t['ID']
 
     # Coordinates from observed frame.
     coo_t = Table.read(coo_file, format='ascii')
@@ -435,10 +483,10 @@ def main():
         xy_std, std_tr_match, obs_tr_match, scale, rot_angle)
 
     if pars['do_plots'] == 'y':
-        make_plot(out_plot_file, xy_std, xy_obs, obs_mag, std_tr_match,
-                  obs_tr_match, xy_rot, landolt_field_img)
+        make_plot(out_plot_file, xy_obs, obs_mag, std_tr_match, obs_tr_match,
+                  xy_rot, id_std, landolt_field_img)
 
-    make_out_file(out_data_file, xy_rot)
+    make_out_file(out_data_file, xy_rot, id_std)
     print("\nFinished.")
 
 
