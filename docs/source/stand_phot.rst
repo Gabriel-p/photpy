@@ -8,12 +8,12 @@ Standard stars photometry
 This section describes how to obtain instrumental magnitudes for your standards,
 and set up the transformation from instrumental to standard. The steps are
 
-1. `Identify standard stars`_: identify the coordinates of the stars in the
-   observed standard field.
-2. `Aperture photometry on standard stars`_: obtain aperture photometry for each
-   of the selected standard star frames.
-3. `Define and solve the transformation equations`_: define and fit the
-   transformation equations.
+* `Identify standard stars`_: identify the coordinates of the stars in the
+  observed standard field.
+* `Aperture photometry on standard stars`_: obtain aperture photometry for
+  each of the selected standard star frames.
+* `Define and solve the transformation equations`_: define and fit the
+  instrumental to standard transformation equations.
 
 
 
@@ -30,9 +30,9 @@ using a single observed frame.
 
 .. note::
   If you have more than one exposure per filter for your standard frame, at this
-  point you need to select only one. An ideal frame should allow the detection
-  of   all the standard stars in it. This means no over-exposed saturated stars,
-  and no   under-exposed undetectable stars.
+  point **you need to select only one**. An ideal frame should allow the
+  detection of all the standard stars in it. This means no over-exposed
+  saturated stars, and no under-exposed undetectable stars.
 
 The ``id_standard`` script allows the automatic identification of standard
 stars in your observed frame, requiring minimal information.
