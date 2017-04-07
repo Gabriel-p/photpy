@@ -352,38 +352,51 @@ def star_size(mag, max_mag):
     return 0.1 + factor * 10 ** ((np.array(mag) / -2.5)) * max_mag
 
 
-def posFinder(xy_rot, x_rang, y_rang):
+def posFinder(xy_rot, max_x, min_x, max_y, min_y):
     """
     Finds the offset position to place the IDs of the standard stars in the
     observed frame, such that they don't overlap with other stars or text.
     """
+    # Ranges in x,y
+    x_rang, y_rang = max_x - min_x, max_y - min_y
     # This value sets the minimum spacing allowed.
     txt_sep = max(x_rang, y_rang) * .025
+    # Initiate list with the coordinates of the points themeselves.
     used_positions, xy_offset = xy_rot[:], []
     # For every standard star positioned in the observed frame.
     for i, xy in enumerate(xy_rot):
+        point_done = False
         # Factor that defined the offset separation.
         for j in np.arange(1., 10, .5):
-            point_done = False
+            rang_perc = .025 * j
             # For each possible combinatin of the offsets.
             for s in [[1., 1.], [1., -1.], [-1., 1.], [-1., -1.]]:
-                rang_perc = .025 * j
                 offset_x = s[0] * rang_perc * x_rang
                 offset_y = s[1] * rang_perc * y_rang
+                # Offset coordinates.
                 xi_off, yi_off = xy[0] + offset_x, xy[1] + offset_y
-                # Distance between the position of the text and all positions
-                # already used.
-                d = cdist(
-                    np.array([[xi_off, yi_off]]), np.array(used_positions))
-                min_d = np.min(d, axis=1)
-                # Store if it is far away enough.
-                if min_d > txt_sep:
-                    used_positions.append([xi_off, yi_off])
-                    xy_offset.append([xi_off, yi_off])
-                    point_done = True
-                    break
+                # Check that the coordinates are inside the figure.
+                if min_x < xi_off < max_x and min_y < yi_off < max_y:
+                    # Distance between the position of the text and all
+                    # positions already used.
+                    d = cdist(
+                        np.array([[xi_off, yi_off]]), np.array(used_positions))
+                    min_d = np.min(d, axis=1)
+                    # Store if it is far away enough.
+                    if min_d > txt_sep:
+                        used_positions.append([xi_off, yi_off])
+                        xy_offset.append([xi_off, yi_off])
+                        point_done = True
+                        break
             if point_done:
                 break
+        if not point_done:
+            # If no suitable position was found for this point, assign an
+            # offset close to its coordinates.
+            offset_x, offset_y = .025 * x_rang, .025 * y_rang
+            xi_off, yi_off = xy[0] + offset_x, xy[1] + offset_y
+            used_positions.append([xi_off, yi_off])
+            xy_offset.append([xi_off, yi_off])
 
     return xy_offset
 
@@ -417,11 +430,11 @@ def make_plot(
     x_obs, y_obs = zip(*xy_obs)
     ax2.scatter(x_obs, y_obs, c='k', s=st_sizes_arr, zorder=3)
     # Define offsets.
-    x_rang, y_rang = max(x_obs) - min(x_obs), max(y_obs) - min(y_obs)
+    max_x, min_x, max_y, min_y = max(x_obs), min(x_obs), max(y_obs), min(y_obs)
     x, y = xy_rot
     ax2.scatter(x, y, marker='s', edgecolor='g',
                 facecolor='', lw=.7, s=st_sizes_arr + 50., zorder=4)
-    xy_offset = posFinder(zip(*xy_rot), x_rang, y_rang)
+    xy_offset = posFinder(zip(*xy_rot), max_x, min_x, max_y, min_y)
     for i, txt in enumerate(id_std):
         ax2.annotate(
             txt, xy=(x[i], y[i]), xytext=(xy_offset[i][0], xy_offset[i][1]),
