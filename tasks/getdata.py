@@ -444,7 +444,7 @@ def main():
             psf_select, imname, hdu_data)
 
         if fwhm_estim:
-            # FWHM median an list with no outliers.
+            # FWHM median and separate outliers.
             fwhm_median, fwhm_no_outl, fwhm_outl = rm_outliers(fwhm_estim)
             # Save data to file.
             fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
