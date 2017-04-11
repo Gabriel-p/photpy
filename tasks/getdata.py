@@ -145,7 +145,12 @@ def get_params(mypath, pars_f, pars):
     # Write values to file.
     create_pars_file(pars_f, pars_list)
 
-    return r_path, fits_list, pars
+    # Create path to output folder
+    out_path = r_path.replace('input', 'output')
+    if os.path.isfile(r_path):
+        out_path = out_path.replace(out_path.split('/')[-1], '')
+
+    return out_path, fits_list, pars
 
 
 def bckg_data(hdulist, hdu_data, gain_key, rdnoise_key):
@@ -229,7 +234,7 @@ def isolate_stars(hdu_data, fwhm_no_outl, crop_side):
 def make_plots(
     hdu_data, max_psf_stars, crop_side, all_sources, n_not_satur,
         fwhm_min_rjct, ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean,
-        fwhm_std, stars, fig_name):
+        fwhm_std, stars, out_path, imname):
     """
     Make plots.
     """
@@ -330,10 +335,6 @@ def make_plots(
         gs1.update(wspace=0., hspace=0.25)
         max_s = min(25, len(stars))
         for i in range(max_s):
-            # print(
-            #     "(xc, yc), FWHM, ellipticity: ({:.2f}, {:.2f}), {}, {}".format(
-            #         fwhm_no_outl[i][0], fwhm_no_outl[i][1], fwhm_no_outl[i][2],
-            #         fwhm_no_outl[i][3]))
             if i < 5:
                 pl_n = 60 + i
             elif 5 <= i < 10:
@@ -396,10 +397,34 @@ def make_plots(
         axy.xaxis.set_major_formatter(nullfmt)
         axy.yaxis.set_major_formatter(nullfmt)
 
+    if os.path.isfile(out_path):
+        fig_name = join(out_path.replace(".fits", ""))
+    else:
+        fig_name = join(
+            out_path, imname.split('/')[-1].replace(".fits", ""))
     plt.savefig(fig_name + '.png', dpi=150, bbox_inches='tight')
+
     # Close to release memory.
     plt.clf()
     plt.close()
+    # Force the Garbage Collector to release unreferenced memory.
+    gc.collect()
+
+
+def storeOutFile(out_path, out_data):
+    """
+    Write output file.
+    """
+    out_data_file = join(out_path, "getdata.dat")
+    data = Table(zip(*out_data), names=(
+        '# image         ', 'filter', 'exposure', 'Sky_mean', 'Sky_STDDEV',
+        'FWHM_(N_stars)', 'FWHM_(mean)', 'FWHM_(std)'))
+    ascii.write(
+        data, out_data_file, overwrite=True, formats={
+            '# image         ': '%-16s', 'FWHM_(N_stars)': '%14.0f',
+            'Sky_mean': '%10.2f', 'Sky_STDDEV': '%10.2f',
+            'FWHM_(mean)': '%10.2f', 'FWHM_(std)': '%10.2f'},
+        format='fixed_width', delimiter=None)
 
 
 def main():
@@ -408,12 +433,7 @@ def main():
     a folder containing .fits files.
     """
     mypath, pars_f, pars = read_params()
-    r_path, fits_list, pars = get_params(mypath, pars_f, pars)
-
-    out_path = r_path.replace('input', 'output')
-    if os.path.isfile(r_path):
-        out_path = out_path.replace(out_path.split('/')[-1], '')
-    out_data_file = join(out_path, "fwhm_final.dat")
+    out_path, fits_list, pars = get_params(mypath, pars_f, pars)
 
     # Generate output dir/subdir if it doesn't exist.
     if not exists(out_path):
@@ -446,7 +466,7 @@ def main():
         if fwhm_estim:
             # FWHM median and separate outliers.
             fwhm_median, fwhm_no_outl, fwhm_outl = rm_outliers(fwhm_estim)
-            # Save data to file.
+            # Save coordinates data to file.
             fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
             ascii.write(
                 zip(*fwhm_no_outl), fn,
@@ -468,15 +488,11 @@ def main():
                   "and max ellipticity.")
 
         if pars['do_plots'] is 'y':
-            if os.path.isfile(out_path):
-                fig_name = join(out_path.replace(".fits", ""))
-            else:
-                fig_name = join(
-                    out_path, imname.split('/')[-1].replace(".fits", ""))
             make_plots(
                 hdu_data, pars['max_psf_stars'], pars['crop_side'],
                 all_sources, n_not_satur, fwhm_min_rjct, ellip_rjct,
-                fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, fig_name)
+                fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, out_path,
+                imname)
 
         # Store data to write to output file.
         im_name = imname.split('/')[-1]
@@ -485,19 +501,7 @@ def main():
         out_data.append([im_name, filt, exptime, sky_mean, sky_std,
                          len(fwhm_no_outl), fwhm_mean, fwhm_std])
 
-        # Force the Garbage Collector to release unreferenced memory.
-        gc.collect()
-
-    # Write output file.
-    data = Table(zip(*out_data), names=(
-        '# image         ', 'filter', 'exposure', 'Sky_mean', 'Sky_STDDEV',
-        'FWHM_(N_stars)', 'FWHM_(mean)', 'FWHM_(std)'))
-    ascii.write(
-        data, out_data_file, overwrite=True, formats={
-            '# image         ': '%-16s', 'FWHM_(N_stars)': '%14.0f',
-            'Sky_mean': '%10.2f', 'Sky_STDDEV': '%10.2f',
-            'FWHM_(mean)': '%10.2f', 'FWHM_(std)': '%10.2f'},
-        format='fixed_width', delimiter=None)
+    storeOutFile(out_path, out_data)
 
     print("\nFinished.")
 

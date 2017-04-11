@@ -93,6 +93,7 @@ ENV/
 *.fit
 *.fits
 *.png
+!docs/source/_figs/*.png
 input/*
 output/*
 !input/README.md
