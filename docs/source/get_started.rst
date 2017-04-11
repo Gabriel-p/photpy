@@ -2,7 +2,7 @@
 Getting started
 ===============
 
-.. todo::
+.. warning::
    Not finished.
 
 The first step is to estimate the FWHM, sky mean, and sky standard deviation for
@@ -26,7 +26,7 @@ files (where ``xxxxx`` is the name of the .fits file):
   .fits file processed.
 
 .. image:: _figs/getdata.png
-   :width: 80%
+   :width: 95%
 
 * **getdata.dat**: output file that contains the relevant data found after
   the analysis of either the single .fits file processed, or all the .fits files
