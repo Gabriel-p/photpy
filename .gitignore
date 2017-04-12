@@ -104,3 +104,4 @@ uparm/*
 login.cl
 loginuser.cl
 *.dat
+test.py

@@ -27,14 +27,14 @@ def create_pars_file(pars_f, pars_list=None):
     Default values for parameters file.
     """
     if pars_list is None:
-        pars_list = ['None', 'y', '100', '5.', '3.', '60000.', '0.15',
-                     '1.5', '20', 'EGAIN', 'ENOISE', 'FILTER', 'EXPTIME']
+        pars_list = ['None', 'y', '60000.', '5.', '3.', '100', '0.15',
+                     '1.5', 'EGAIN', 'ENOISE', 'FILTER', 'EXPTIME']
     with open(pars_f, 'w') as f:
         f.write(
-            "# Default parameters for the get_data script\n#\n"
-            "ff_proc {}\ndo_plots {}\nmax_psf_stars {}\nthresh_level {}\n"
-            "fwhm_init {}\ndmax {}\nellip_max {}\nfwhm_min {}\ncrop_side {}\n"
-            "gain_key {}\nrdnoise_key {}\nfilter_key {}\nexp_key {}\n".format(
+            "# Default parameters for the 'getdata' script\n#\n"
+            "ff_proc {}\ndo_plots {}\ndmax {}\nthresh_level {}\nfwhm_init {}"
+            "\nmax_stars {}\nellip_max {}\nfwhm_min {}\ngain_key {}"
+            "\nrdnoise_key {}\nfilter_key {}\nexp_key {}\n".format(
                 *pars_list))
     return
 
@@ -45,7 +45,7 @@ def read_params():
     """
     pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath, 'get_data.pars')
+    pars_f = join(mypath, 'getdata.pars')
     if not os.path.isfile(pars_f):
         print("Parameters file missing. Create it.")
         create_pars_file(pars_f)
@@ -90,11 +90,9 @@ def get_params(mypath, pars_f, pars):
     pars['do_plots'] = 'n' if pars['do_plots'] in ('n', 'N') else 'y'
     pars_list.append(pars['do_plots'])
 
-    answ = raw_input("Max number of stars used to obtain "
-                     "FWHM ({}): ".format(pars['max_psf_stars']))
-    pars['max_psf_stars'] = int(answ) if answ is not '' else\
-        int(pars['max_psf_stars'])
-    pars_list.append(pars['max_psf_stars'])
+    answ = raw_input("Maximum flux ({}): ".format(pars['dmax']))
+    pars['dmax'] = float(answ) if answ is not '' else float(pars['dmax'])
+    pars_list.append(pars['dmax'])
 
     answ = raw_input("Threshold level above STDDEV ({}): ".format(
         pars['thresh_level']))
@@ -107,9 +105,11 @@ def get_params(mypath, pars_f, pars):
         float(pars['fwhm_init'])
     pars_list.append(pars['fwhm_init'])
 
-    answ = raw_input("Maximum flux ({}): ".format(pars['dmax']))
-    pars['dmax'] = float(answ) if answ is not '' else float(pars['dmax'])
-    pars_list.append(pars['dmax'])
+    answ = raw_input("Max number of stars used to obtain "
+                     "FWHM ({}): ".format(pars['max_stars']))
+    pars['max_stars'] = int(answ) if answ is not '' else\
+        int(pars['max_stars'])
+    pars_list.append(pars['max_stars'])
 
     answ = raw_input("Maximum ellipticity ({}): ".format(pars['ellip_max']))
     pars['ellip_max'] = float(answ) if answ is not '' else\
@@ -120,11 +120,6 @@ def get_params(mypath, pars_f, pars):
     pars['fwhm_min'] = float(answ) if answ is not '' else\
         float(pars['fwhm_min'])
     pars_list.append(pars['fwhm_min'])
-
-    answ = raw_input("Crop side for PSF stars ({}): ".format(
-        pars['crop_side']))
-    pars['crop_side'] = int(answ) if answ is not '' else int(pars['crop_side'])
-    pars_list.append(pars['crop_side'])
 
     answ = raw_input("GAIN keyword ({}): ".format(pars['gain_key']))
     pars['gain_key'] = str(answ) if answ is not '' else pars['gain_key']
@@ -153,11 +148,34 @@ def get_params(mypath, pars_f, pars):
     return out_path, fits_list, pars
 
 
-def bckg_data(hdulist, hdu_data, gain_key, rdnoise_key):
+def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exp_key):
+    """
+    Check that all necessary header information is present.
+    """
+    header_flag = True
+    passed_keys = [gain_key, rdnoise_key, filter_key, exp_key]
+    i = 0
+    try:
+        hdr[gain_key]
+        i += 1
+        hdr[rdnoise_key]
+        i += 1
+        hdr[filter_key]
+        i += 1
+        hdr[exp_key]
+    except KeyError:
+        _key = ['Gain', 'Rdnoise', 'Filter', 'Exposure']
+        print("{} key '{}' is not present in header.".format(
+            _key[i], passed_keys[i]))
+        header_flag = False
+
+    return header_flag
+
+
+def bckg_data(hdr, hdu_data, gain_key, rdnoise_key):
     """
     Estimate sky's mean, median, and standard deviation.
     """
-    hdr = hdulist[0].header
     gain = hdr[gain_key]
     rdnoise = hdr[rdnoise_key]
     print("Gain, Rdnoise: {}, {}".format(gain, rdnoise))
@@ -170,15 +188,15 @@ def bckg_data(hdulist, hdu_data, gain_key, rdnoise_key):
     print("STDDEV estimated from GAIN, RDNOISE, and median: {:.2f}".format(
         np.sqrt(sky_median * gain + rdnoise ** 2) / gain))
 
-    return sky_mean, sky_median, sky_std
+    return sky_mean, sky_std
 
 
-def st_fwhm_select(dmax, max_psf_stars, thresh_level, fwhm_init, std,
-                   hdu_data):
+def st_fwhm_select(
+        dmax, max_stars, thresh_level, fwhm_init, std, hdu_data):
     """
     Find stars in image with DAOStarFinder, filter out saturated stars (with
     peak values greater than the maximum accepted in 'dmax'), order by the
-    largest (most negative) magnitude, and select a maximum of 'max_psf_stars'.
+    largest (most negative) magnitude, and select a maximum of 'max_stars'.
     """
     print("\nFinding stars.")
     thresh = thresh_level * std
@@ -190,16 +208,16 @@ def st_fwhm_select(dmax, max_psf_stars, thresh_level, fwhm_init, std,
     sour_no_satur = sources[mask]
     print("Non-saturated sources found: {}".format(len(sour_no_satur)))
     sour_no_satur.sort('mag')
-    if max_psf_stars == 'max':
-        max_psf_stars = len(sour_no_satur)
-    psf_select = sour_no_satur[:int(max_psf_stars)]
+    if max_stars == 'max':
+        max_stars = len(sour_no_satur)
+    psf_select = sour_no_satur[:int(max_stars)]
 
     return psf_select, len(sources), len(sour_no_satur)
 
 
 def rm_outliers(fwhm_estim, out_f=2.):
     """
-    Remove outlier stars with large FWHMs.
+    Remove stars with large FWHMs.
     """
     fwhm_median = np.median(zip(*fwhm_estim)[2])
     fwhm_no_outl, fwhm_outl = [], []
@@ -209,7 +227,18 @@ def rm_outliers(fwhm_estim, out_f=2.):
         else:
             fwhm_outl.append(st)
 
-    return fwhm_median, fwhm_no_outl, fwhm_outl
+    if fwhm_no_outl:
+        fwhm_mean, fwhm_std = np.mean(zip(*fwhm_no_outl)[2]),\
+            np.std(zip(*fwhm_no_outl)[2])
+        print("\nMean FWHM +/- std (no outliers, "
+              "{} stars): {:.2f} +- {:.2f}".format(
+                  len(fwhm_no_outl), fwhm_mean, fwhm_std))
+    else:
+        print("  WARNING: all selected stars rejected as outliers.\n"
+              "  Could not obtain a mean FWHM.")
+        fwhm_mean, fwhm_std = 0., 0.
+
+    return fwhm_no_outl, fwhm_mean, fwhm_std, fwhm_outl
 
 
 def isolate_stars(hdu_data, fwhm_no_outl, crop_side):
@@ -220,21 +249,36 @@ def isolate_stars(hdu_data, fwhm_no_outl, crop_side):
     stars = []
     for st in fwhm_no_outl:
         # Crop image
-        crop = cutout_footprint(
-            hdu_data, (st[0], st[1]), (crop_side, crop_side))
+        crop = cutout_footprint(hdu_data, (st[0], st[1]), crop_side)
         # Skip stars placed on borders.
         if len(crop[0]) == crop_side:
             stars.append(crop[0])
         else:
             print("Skip star on border (xc, yc)=({}, {})".format(st[0], st[1]))
 
-    return stars
+    if stars:
+        # Obtain average combined PSF.
+        # Meshgrid of coordinates (0,1,...,N) times (0,1,...,N)
+        stars = np.array(stars, dtype='float32')
+        y, x = np.mgrid[:len(stars[0, :, 0]), :len(stars[0, 0, :])]
+        # duplicating the grids
+        xcoord, ycoord = np.array([x] * len(stars)), np.array([y] * len(stars))
+        # compute histogram with coordinates as x,y
+        psf_avrg = np.histogram2d(
+            xcoord.ravel(), ycoord.ravel(),
+            bins=[len(stars[0, 0, :]), len(stars[0, :, 0])],
+            weights=stars.ravel())[0]
+    else:
+        print("  WARNING: no suitable stars found to obtain average PSF.")
+        psf_avrg = []
+
+    return stars, psf_avrg
 
 
 def make_plots(
-    hdu_data, max_psf_stars, crop_side, all_sources, n_not_satur,
+    hdu_data, max_stars, crop_side, all_sources, n_not_satur,
         fwhm_min_rjct, ellip_rjct, fwhm_no_outl, fwhm_outl, fwhm_mean,
-        fwhm_std, stars, out_path, imname):
+        fwhm_std, stars, psf_avrg, out_path, imname):
     """
     Make plots.
     """
@@ -261,15 +305,15 @@ def make_plots(
     ax = plt.subplot(gs0[0:2, 5:10])
     ax.set_xlim(-0.2, 2.2)
     x = np.arange(3)
-    y = np.array([len(fwhm_min_rjct) / float(max_psf_stars),
-                  len(ellip_rjct) / float(max_psf_stars),
-                  len(fwhm_outl) / float(max_psf_stars)])
+    y = np.array([len(fwhm_min_rjct) / float(max_stars),
+                  len(ellip_rjct) / float(max_stars),
+                  len(fwhm_outl) / float(max_stars)])
     ax.bar(x, y, align='center', width=0.2, color='g')
     ax.set_xticks(x)
     ax.set_xticklabels(['FWHM min rjct', 'Ellip max rjct', 'Outliers rjct'],
                        fontsize=9)
     ax.tick_params(axis='both', which='major', labelsize=8)
-    ax.set_title("As % of max FWHM stars ({})".format(max_psf_stars),
+    ax.set_title("As % of max FWHM stars ({})".format(max_stars),
                  fontsize=9)
 
     gs3 = gridspec.GridSpec(10, 12)
@@ -329,7 +373,7 @@ def make_plots(
                  fontsize=9)
     ax.tick_params(axis='both', which='major', labelsize=8)
 
-    if stars:
+    if getattr(stars, 'size', len(stars)):
         stars = np.array(stars, dtype='float32')
         gs1 = gridspec.GridSpec(10, 12)
         gs1.update(wspace=0., hspace=0.25)
@@ -353,37 +397,30 @@ def make_plots(
                 fwhm_no_outl[i][0], fwhm_no_outl[i][1]), fontsize=8, y=-0.2)
             ax.set_axis_off()
 
-        # Create a meshgrid of coordinates (0,1,...,N) times (0,1,...,N)
-        y, x = np.mgrid[:len(stars[0, :, 0]), :len(stars[0, 0, :])]
-        # duplicating the grids
-        xcoord, ycoord = np.array([x] * len(stars)), np.array([y] * len(stars))
-        # compute histogram with coordinates as x,y
-        h, xe, ye = np.histogram2d(
-            xcoord.ravel(), ycoord.ravel(),
-            bins=[len(stars[0, 0, :]), len(stars[0, :, 0])],
-            weights=stars.ravel())
-        hx, hy = h.sum(axis=0), h.sum(axis=1)
-        # The argmax of the combined stars.
-        combined_star_argmax = np.unravel_index(np.argmax(h), h.shape)
-
+    if getattr(psf_avrg, 'size', len(psf_avrg)):
         gs2 = gridspec.GridSpec(10, 12)
         gs2.update(hspace=0.05, wspace=0.05, left=0.17, right=0.85, top=0.85)
         ax0 = plt.subplot(gs2[6:10, 5:9])
-        ax0.imshow(h, cmap=plt.cm.hot, interpolation='nearest',
+        ax0.imshow(psf_avrg, cmap=plt.cm.hot, interpolation='nearest',
                    origin='lower', vmin=0., aspect='auto')
+        # x,y center of the average PSF.
+        combined_star_argmax = np.unravel_index(
+            np.argmax(psf_avrg), psf_avrg.shape)
         ax0.axhline(combined_star_argmax[0], ls='--', lw=2, c='w')
         ax0.axvline(combined_star_argmax[1], ls='--', lw=2, c='w')
         cent = int(crop_side / 2.) - 1
         apertures = CircularAperture((cent, cent), r=fwhm_mean)
         apertures.plot(color='b', lw=0.75)
 
-        # Top plot
+        # x,y histograms of average PSF.
+        hx, hy = psf_avrg.sum(axis=0), psf_avrg.sum(axis=1)
+        # Top histogram
         axx = plt.subplot(gs2[5:6, 5:9])
         axx.plot(hx)
         axx.set_xlim(ax0.get_xlim())
         axx.set_title("Average PSF model (FWHM={:.2f})".format(fwhm_mean),
                       fontsize=9)
-        # Right plot
+        # Right histogram
         axy = plt.subplot(gs2[6:10, 9:10])
         axy.plot(hy, range(len(hy)))
         axy.set_ylim(ax0.get_ylim())
@@ -409,6 +446,18 @@ def make_plots(
     plt.close()
     # Force the Garbage Collector to release unreferenced memory.
     gc.collect()
+
+
+def storeCooFile(out_path, imname, fwhm_no_outl):
+    """
+    Write .coo file.
+    """
+    # Save coordinates data to file.
+    fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
+    ascii.write(
+        zip(*fwhm_no_outl), fn,
+        names=['x', 'y', 'FWHM', 'Ellip', 'Mag'],
+        format='commented_header', overwrite=True, delimiter=' ')
 
 
 def storeOutFile(out_path, out_data):
@@ -439,23 +488,38 @@ def main():
     if not exists(out_path):
         os.makedirs(out_path)
 
+    # HARDCODED: length used to isolate stars used to obtain the average FWHM.
+    crop_side = 20
+
     out_data = []
     # For each .fits image in the root folder.
     for imname in fits_list:
         print("\nFile: {}".format(
             imname.replace(mypath.replace('tasks', 'input'), "")))
 
-        # Extract data.
+        # Load .fits file.
         hdulist = fits.open(imname)
+        # Extract header.
+        hdr = hdulist[0].header
+
+        # Check header keys.
+        header_flag = headerCheck(
+            hdr, pars['gain_key'], pars['rdnoise_key'], pars['filter_key'],
+            pars['exp_key'])
+        if not header_flag:
+            print("  ERROR: Missing header information. Skipping this file.")
+            break
+
+        # Extract data.
         hdu_data = hdulist[0].data
 
         # Background estimation.
-        sky_mean, sky_median, sky_std = bckg_data(
-            hdulist, hdu_data, pars['gain_key'], pars['rdnoise_key'])
+        sky_mean, sky_std = bckg_data(
+            hdr, hdu_data, pars['gain_key'], pars['rdnoise_key'])
 
         # Stars selection.
         psf_select, all_sources, n_not_satur = st_fwhm_select(
-            pars['dmax'], pars['max_psf_stars'], pars['thresh_level'],
+            pars['dmax'], pars['max_stars'], pars['thresh_level'],
             pars['fwhm_init'], sky_std, hdu_data)
 
         # FWHM selection.
@@ -464,44 +528,40 @@ def main():
             psf_select, imname, hdu_data)
 
         if fwhm_estim:
-            # FWHM median and separate outliers.
-            fwhm_median, fwhm_no_outl, fwhm_outl = rm_outliers(fwhm_estim)
-            # Save coordinates data to file.
-            fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
-            ascii.write(
-                zip(*fwhm_no_outl), fn,
-                names=['x', 'y', 'FWHM', 'Ellip', 'Mag'],
-                format='commented_header', overwrite=True, delimiter=' ')
+            # Separate outliers.
+            fwhm_no_outl, fwhm_mean, fwhm_std, fwhm_outl = rm_outliers(
+                fwhm_estim)
 
-            print("\nMedian FWHM: {}".format(fwhm_median))
-            fwhm_mean, fwhm_std = np.mean(zip(*fwhm_no_outl)[2]),\
-                np.std(zip(*fwhm_no_outl)[2])
-            print("Mean FWHM +/- std (no outliers, "
-                  "{} stars): {:.2f} +- {:.2f}".format(
-                      len(fwhm_no_outl), fwhm_mean, fwhm_std))
-
-            stars = isolate_stars(hdu_data, fwhm_no_outl, pars['crop_side'])
+            stars, psf_avrg = [], []
+            if fwhm_no_outl:
+                # Create .coo file.
+                storeCooFile(out_path, imname, fwhm_no_outl)
+                # Isolated stars, and average PSF.
+                stars, psf_avrg = isolate_stars(
+                    hdu_data, fwhm_no_outl, crop_side)
+            else:
+                print("  Could not obtain the average PSF.")
         else:
-            fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars =\
-                [], [], -1., -1., []
-            print("\nWARNING: no stars left after rejecting\nby min FWHM"
+            fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, psf_avrg =\
+                [], [], -1., -1., [], []
+            print("  WARNING: no stars left after rejecting\n  by min FWHM"
                   "and max ellipticity.")
 
         if pars['do_plots'] is 'y':
             make_plots(
-                hdu_data, pars['max_psf_stars'], pars['crop_side'],
+                hdu_data, pars['max_stars'], crop_side,
                 all_sources, n_not_satur, fwhm_min_rjct, ellip_rjct,
-                fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, out_path,
-                imname)
+                fwhm_no_outl, fwhm_outl, fwhm_mean, fwhm_std, stars, psf_avrg,
+                out_path, imname)
 
         # Store data to write to output file.
         im_name = imname.split('/')[-1]
-        filt = hdulist[0].header[pars['filter_key']]
-        exptime = hdulist[0].header[pars['exp_key']]
-        out_data.append([im_name, filt, exptime, sky_mean, sky_std,
-                         len(fwhm_no_outl), fwhm_mean, fwhm_std])
+        out_data.append(
+            [im_name, hdr[pars['filter_key']], hdr[pars['exp_key']], sky_mean,
+             sky_std, len(fwhm_no_outl), fwhm_mean, fwhm_std])
 
-    storeOutFile(out_path, out_data)
+    if out_data:
+        storeOutFile(out_path, out_data)
 
     print("\nFinished.")
 

@@ -1,6 +1,6 @@
 
-Crowded field photometry with photutils
-=======================================
+Crowded field photometry
+========================
 
-.. todo::
+.. warning::
    Not finished.
