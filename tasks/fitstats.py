@@ -31,7 +31,7 @@ def create_pars_file(pars_f, pars_list=None):
                      '1.5', 'EGAIN', 'ENOISE', 'FILTER', 'EXPTIME']
     with open(pars_f, 'w') as f:
         f.write(
-            "# Default parameters for the 'getdata' script\n#\n"
+            "# Default parameters for the 'fitstats' script\n#\n"
             "ff_proc {}\ndo_plots {}\ndmax {}\nthresh_level {}\nfwhm_init {}"
             "\nmax_stars {}\nellip_max {}\nfwhm_min {}\ngain_key {}"
             "\nrdnoise_key {}\nfilter_key {}\nexp_key {}\n".format(
@@ -45,7 +45,7 @@ def read_params():
     """
     pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath, 'getdata.pars')
+    pars_f = join(mypath, 'fitstats.pars')
     if not os.path.isfile(pars_f):
         print("Parameters file missing. Create it.")
         create_pars_file(pars_f)
@@ -226,13 +226,14 @@ def rm_outliers(fwhm_estim, out_f=2.):
             fwhm_no_outl.append(st)
         else:
             fwhm_outl.append(st)
+    print("Outliers with FWHM>{:.2f} rejected: {}".format(
+        out_f * fwhm_median, len(fwhm_outl)))
 
     if fwhm_no_outl:
+        print("\nFinal number of accepted stars: {}".format(len(fwhm_no_outl)))
         fwhm_mean, fwhm_std = np.mean(zip(*fwhm_no_outl)[2]),\
             np.std(zip(*fwhm_no_outl)[2])
-        print("\nMean FWHM +/- std (no outliers, "
-              "{} stars): {:.2f} +- {:.2f}".format(
-                  len(fwhm_no_outl), fwhm_mean, fwhm_std))
+        print("Mean FWHM +/- std: {:.2f}, {:.2f}".format(fwhm_mean, fwhm_std))
     else:
         print("  WARNING: all selected stars rejected as outliers.\n"
               "  Could not obtain a mean FWHM.")
@@ -245,7 +246,6 @@ def isolate_stars(hdu_data, fwhm_no_outl, crop_side):
     """
     Create crop centered at each star used to obtain the FWHM.
     """
-    print("\nCrop regions around selected stars.")
     stars = []
     for st in fwhm_no_outl:
         # Crop image
@@ -351,18 +351,21 @@ def make_plots(
     ymax, xmax = np.shape(hdu_data)
     ax.set_xlim(0., xmax)
     ax.set_ylim(0., ymax)
+    f = min(xmax, ymax) * .05
     if fwhm_no_outl:
         ax.scatter(*positions, s=0.5 * np.exp(zip(*fwhm_no_outl)[2]), lw=0.7,
                    facecolors='none', edgecolors='r')
     if fwhm_min_rjct:
         fwhm_min_pos = (zip(*fwhm_min_rjct)[0], zip(*fwhm_min_rjct)[1])
-        r = 0.5 * np.exp(zip(*fwhm_min_rjct)[2])
-        r[r > 200.] = xmax * 0.25
+        r = 10. * np.array(zip(*fwhm_min_rjct)[2])
+        r[r > 2. * f] = 2. * f
         ax.scatter(*fwhm_min_pos, s=r, lw=0.7, facecolors='none',
                    edgecolors='g')
     if ellip_rjct:
-        r = 0.5 * np.exp(zip(*ellip_rjct)[2])
-        r[r > 200.] = xmax * 0.25
+        fwhm_log = np.log(zip(*ellip_rjct)[2])
+        fwhm_log[fwhm_log < 0.] = 1.
+        r = f * fwhm_log
+        r[r > 2. * f] = 2. * f
         for i, st in enumerate(ellip_rjct):
             e = Ellipse(
                 xy=(st[0], st[1]), width=r[i],
@@ -376,7 +379,7 @@ def make_plots(
     if getattr(stars, 'size', len(stars)):
         stars = np.array(stars, dtype='float32')
         gs1 = gridspec.GridSpec(10, 12)
-        gs1.update(wspace=0., hspace=0.25)
+        gs1.update(wspace=0., hspace=0.25, top=0.85)
         max_s = min(25, len(stars))
         for i in range(max_s):
             if i < 5:
@@ -394,12 +397,12 @@ def make_plots(
                 stars[i], cmap=plt.cm.viridis, interpolation='nearest',
                 origin='lower', vmin=0.)
             ax.set_title("({:.0f}, {:.0f})".format(
-                fwhm_no_outl[i][0], fwhm_no_outl[i][1]), fontsize=8, y=-0.2)
+                fwhm_no_outl[i][0], fwhm_no_outl[i][1]), fontsize=8, y=-0.23)
             ax.set_axis_off()
 
     if getattr(psf_avrg, 'size', len(psf_avrg)):
         gs2 = gridspec.GridSpec(10, 12)
-        gs2.update(hspace=0.05, wspace=0.05, left=0.17, right=0.85, top=0.85)
+        gs2.update(hspace=0.05, wspace=0.05, left=0.22, right=0.85, top=0.82)
         ax0 = plt.subplot(gs2[6:10, 5:9])
         ax0.imshow(psf_avrg, cmap=plt.cm.hot, interpolation='nearest',
                    origin='lower', vmin=0., aspect='auto')

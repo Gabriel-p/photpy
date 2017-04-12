@@ -30,10 +30,10 @@ To display the header of a .fits file you can use the following code:
 Extract data from your observed frames
 --------------------------------------
 
-The ``getdata`` script is used to estimate the FWHM, sky mean, and sky standard
+The ``fitstats`` script is used to estimate the FWHM, sky mean, and sky standard
 deviation for your observed set of standard and field frames.
 Once executed, it will automatically go through all the files defined as input 
-(see :ref:`input-getdata` below) and process them.
+(see :ref:`Input <secinput>` section below) and process them.
 
 The steps followed by the script are:
 
@@ -48,22 +48,25 @@ The steps followed by the script are:
 5. Obtain mean and standard deviation FWHM values for each frame processed.
 6. Save date to files and plot.
 
+All files produced by the script are described in :ref:`Output <secoutput>`.
 
-.. _input-getdata:
+.. _secinput:
+
 Input
-......
+.....
 
 The required input information for this script is listed in its ``.pars``
 file. This file can be accessed within the ``/tasks`` folder, or simply filled
 when the script is called. A description of each required parameter is presented
 below.
 
-.. parsed-literal::
+::
+
     ff_proc        Name of the .fits file to be processed, or a folder
                    containing more than one .fits files.
     do_plots       Flag to determine whether the output plot is produced or not.
                    Accepted inputs are y/n.
-    dmax:          60000.0
+    dmax           Maximum flux value of a non-saturated star.
     thresh_level   Threshold detection level in units of the sky's STDDEV used
                    by DAOStarFinder.
     fwhm_init      Initial estimate of the FWHM used by DAOStarFinder.
@@ -76,6 +79,8 @@ below.
     filter_key     Header key for the filter's name.
     exp_key        Header key for the exposure time of the frame.
 
+
+.. _secoutput:
 
 Output
 ......
@@ -97,10 +102,10 @@ the .fits file processed):
 * ``xxxxx`` **.png**: output image showing the analysis performed on each
   .fits file processed.
 
-.. image:: _figs/getdata.png
+.. image:: _figs/fitstats.png
    :width: 95%
 
-* **getdata.dat**: output file that contains the relevant data found after
+* **fitstats.dat**: output file that contains the relevant data found after
   the analysis of either the single .fits file processed, or all the .fits files
   in the processed folder.
 

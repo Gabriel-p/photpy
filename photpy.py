@@ -1,7 +1,7 @@
 
 import argparse
 
-from tasks import getdata
+from tasks import fitstats
 from tasks import id_standard
 
 
@@ -16,8 +16,8 @@ def main():
     task = args.task
     print("\nCalling task: {}".format(task))
 
-    if task == 'getdata':
-        getdata.main()
+    if task == 'fitstats':
+        fitstats.main()
     elif task == 'id_standard':
         id_standard.main()
     else:

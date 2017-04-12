@@ -47,13 +47,19 @@ def main(dmax, ellip_max, fwhm_min, psf_select, imname, hdu_data):
     psf_data = psf_data['Column', 'Line', 'FWHM', 'Ellip', 'Mag']
 
     # Extract data
+    print("Total number of analyzed stars: {}".format(len(psf_data)))
     fwhm_min_rjct = psf_data[psf_data['FWHM'] <= fwhm_min]
+    print("Stars with FWHM<{:.1f} rejected: {}".format(
+        fwhm_min, len(fwhm_min_rjct)))
     fwhm_min_accpt = psf_data[psf_data['FWHM'] > fwhm_min]
     fwhm_estim = fwhm_min_accpt[fwhm_min_accpt['Ellip'] <= ellip_max]
     ellip_rjct = fwhm_min_accpt[fwhm_min_accpt['Ellip'] > ellip_max]
+    print("Stars with ellip>{:.1f} rejected: {}".format(
+        ellip_max, len(ellip_rjct)))
 
     # Remove duplicates, if any.
     fwhm_estim = list(set(np.array(fwhm_estim).tolist()))
+    print("Accepted stars: {}".format(len(fwhm_estim)))
 
     os.remove('positions')
     os.remove('cursor')
