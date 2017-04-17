@@ -60,16 +60,16 @@ file. This file can be accessed within the ``/tasks`` folder, or simply filled
 when the script is called. A description of each required parameter is presented
 below.
 
-::
+.. code-block:: none
 
     ff_proc        Name of the .fits file to be processed, or a folder
                    containing more than one .fits files.
-    do_plots       Flag to determine whether the output plot is produced or not.
+    do_plots       Flag to determine whether the output plot is produced.
                    Accepted inputs are y/n.
     dmax           Maximum flux value of a non-saturated star.
-    thresh_level   Threshold detection level in units of the sky's STDDEV used
+    thresh_level   Threshold detection level in units of the sky's STDDEV, used
                    by DAOStarFinder.
-    fwhm_init      Initial estimate of the FWHM used by DAOStarFinder.
+    fwhm_init      Initial estimate of the FWHM, used by DAOStarFinder.
     max_stars      Maximum number of bright unsaturated stars used to estimate
                    the average FWHM of stars in the frame.
     ellip_max      Maximum accepted ellipticity value.
@@ -92,11 +92,11 @@ the .fits file processed):
   and relative magnitude values of the stars selected in the  .fits file.
 
 .. parsed-literal::
-    # x y FWHM Ellip Mag
-    2635.46 847.5 5.076 0.02 3.23
-    130.46 3820.8 4.788 0.04 1.91
-    3848.14 2100.48 5.224 0.04 2.24
-    3858.27 108.83 4.468 0.12 4.26
+    # x      y        FWHM   Ellip  Mag
+    2635.46  847.5    5.076  0.02   3.23
+    130.46   3820.8   4.788  0.04   1.91
+    3848.14  2100.48  5.224  0.04   2.24
+    3858.27  108.83   4.468  0.12   4.26
     ...
 
 * ``xxxxx`` **.png**: output image showing the analysis performed on each

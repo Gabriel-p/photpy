@@ -1,16 +1,13 @@
 
 import os
 from astropy.io import ascii
-import numpy as np
 from pyraf import iraf
 
 
-def main(dmax, ellip_max, fwhm_min, psf_select, imname, hdu_data):
+def main(dmax, psf_select, imname, hdu_data):
     """
     Use the IRAF task 'psfmeasure' to estimate the FWHM and ellipticity of
     all the stars in the 'psf_select' list.
-    Reject those with a large ellipticity (> ellip_max), and a very low
-    FWHM (<fwhm_min).
     """
     print("\nRun 'psfmeasure' task to estimate the FWHMs.")
     try:
@@ -20,6 +17,7 @@ def main(dmax, ellip_max, fwhm_min, psf_select, imname, hdu_data):
     except OSError:
         pass
 
+    print("Total number of analyzed stars: {}".format(len(psf_select)))
     ascii.write(
         psf_select, output='positions',
         include_names=['xcentroid', 'ycentroid'], format='fast_no_header')
@@ -45,27 +43,14 @@ def main(dmax, ellip_max, fwhm_min, psf_select, imname, hdu_data):
         "psfmeasure", format='fixed_width', header_start=1, data_end=-1,
         col_starts=(15, 23, 32, 40, 48, 56))
     psf_data = psf_data['Column', 'Line', 'FWHM', 'Ellip', 'Mag']
-
-    # Extract data
-    print("Total number of analyzed stars: {}".format(len(psf_data)))
-    fwhm_min_rjct = psf_data[psf_data['FWHM'] <= fwhm_min]
-    print("Stars with FWHM<{:.1f} rejected: {}".format(
-        fwhm_min, len(fwhm_min_rjct)))
-    fwhm_min_accpt = psf_data[psf_data['FWHM'] > fwhm_min]
-    fwhm_estim = fwhm_min_accpt[fwhm_min_accpt['Ellip'] <= ellip_max]
-    ellip_rjct = fwhm_min_accpt[fwhm_min_accpt['Ellip'] > ellip_max]
-    print("Stars with ellip>{:.1f} rejected: {}".format(
-        ellip_max, len(ellip_rjct)))
-
-    # Remove duplicates, if any.
-    fwhm_estim = list(set(np.array(fwhm_estim).tolist()))
-    print("Accepted stars: {}".format(len(fwhm_estim)))
+    print("Stars rejected by 'psfmeasure': {}".format(
+        len(psf_select) - len(psf_data)))
 
     os.remove('positions')
     os.remove('cursor')
     os.remove('psfmeasure')
 
-    return fwhm_estim, fwhm_min_rjct, ellip_rjct
+    return psf_data
 
 
 if __name__ == "__main__":
