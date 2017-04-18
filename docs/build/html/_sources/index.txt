@@ -36,4 +36,4 @@ It is under development as of April 2017, with much work still needed.
 
 .. __: https://photutils.readthedocs.io
 .. __: http://astropy.org
-.. __: ftp://iraf.noao.edu/ftp/docs/daophot2.ps.Z
+.. __: https://www.mn.uio.no/astro/english/services/it/help/visualization/iraf/daophot2.pdf

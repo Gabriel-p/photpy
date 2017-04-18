@@ -21,19 +21,25 @@ from imexam.math_helper import gfwhm
 
 # Load data.
 mypath = realpath(join(os.getcwd(), dirname(__file__)))
-image_file = mypath + '/standards/filt_U/stk_2153.fits'
+image_file = mypath + '/input/standards/filt_U/stk_2153.fits'
 
 # viewer=imexam.connect(viewer='ginga')
-viewer=imexam.connect()
-viewer.load_fits(image_file)
-viewer.imexam()
-viewer.close()
+# viewer=imexam.connect()
+# viewer.load_fits(image_file)
+# viewer.imexam()
+# viewer.close()
 
-# Extract header data
+# Load .fits file
 hdulist = fits.open(image_file)
 # Image data.
 hdu_data = hdulist[0].data
+# Extract header.
+hdr = hdulist[0].header
 hdulist.close()
+
+import pdb; pdb.set_trace()  # breakpoint 674d8c4a //
+
+
 # Crop image
 crop = cutout_footprint(hdu_data, (2100, 1800), (500, 1100))
 hdu_crop = crop[0]
