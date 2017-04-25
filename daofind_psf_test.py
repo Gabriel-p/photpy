@@ -16,17 +16,20 @@ from photutils import DAOStarFinder
 from photutils import CircularAperture
 
 import imexam
-from imexam.imexamine import Imexamine
-from imexam.math_helper import gfwhm
+# from imexam.imexamine import Imexamine
+# from imexam.math_helper import gfwhm
+
+
+os.environ['XPA_METHOD'] = "local"
 
 # Load data.
 mypath = realpath(join(os.getcwd(), dirname(__file__)))
-image_file = mypath + '/input/standards/filt_U/stk_2153.fits'
+image_file = mypath + '/input/standards/filt_B/stk_2080.fits'
 
-# viewer=imexam.connect(viewer='ginga')
-# viewer=imexam.connect()
-# viewer.load_fits(image_file)
-# viewer.imexam()
+# viewer = imexam.connect(viewer='ginga')
+viewer = imexam.connect()
+viewer.load_fits(image_file)
+viewer.imexam()
 # viewer.close()
 
 # Load .fits file
