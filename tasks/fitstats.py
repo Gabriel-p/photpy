@@ -9,66 +9,40 @@ from matplotlib.patches import Ellipse
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import NullFormatter
 
+from hlpr import bckg_data, st_fwhm_select, psf_filter
+
 from astropy.io import ascii
 from astropy.table import Table
 from astropy.io import fits
-from astropy.stats import sigma_clipped_stats
 from astropy.visualization import ZScaleInterval
 
-from photutils import DAOStarFinder
 from photutils import CircularAperture
 from photutils.utils import cutout_footprint
 
 import psfmeasure
 
 
-def create_pars_file(pars_f, pars_list=None):
-    """
-    Default values for parameters file.
-    """
-    if pars_list is None:
-        pars_list = ['None', 'y', '60000.', '5.', '3.', '100', '0.15',
-                     '1.5', 'EGAIN', 'ENOISE', 'FILTER', 'EXPTIME']
-    with open(pars_f, 'w') as f:
-        f.write(
-            "# Default parameters for the 'fitstats' script\n#\n"
-            "ff_proc {}\ndo_plots {}\ndmax {}\nthresh_level {}\nfwhm_init {}"
-            "\nmax_stars {}\nellip_max {}\nfwhm_min {}\ngain_key {}"
-            "\nrdnoise_key {}\nfilter_key {}\nexp_key {}\n".format(
-                *pars_list))
-    return
-
-
 def read_params():
     """
-    Read parameter values from .pars file.
+    Read parameter values.
     """
-    pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath, 'fitstats.pars')
+    pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
     if not os.path.isfile(pars_f):
-        print("Parameters file missing. Create it.")
-        create_pars_file(pars_f)
+        print("Parameters file is missing. Exit.")
+        sys.exit()
 
+    pars = {}
     with open(pars_f, 'r') as f:
         for line in f:
-            if not line.startswith('#'):
-                key, value = line.replace('\n', '').split(' ')
+            if not line.startswith('#') and line != '\n':
+                key, value = line.replace('\n', '').split()
                 pars[key] = value
 
-    return mypath, pars_f, pars
-
-
-def get_params(mypath, pars_f, pars):
-    """
-    """
-    pars_list = []
-
-    answ = raw_input("\nDir or file to process ({}): ".format(
-        pars['ff_proc']))
-    fname = str(answ) if answ is not '' else pars['ff_proc']
+    fname = pars['ff_stats']
     fname = fname[1:] if fname.startswith('/') else fname
     r_path = join(mypath.replace('tasks', 'input'), fname)
+
     fits_list = []
     if os.path.isdir(r_path):
         for subdir, dirs, files in os.walk(r_path):
@@ -81,78 +55,21 @@ def get_params(mypath, pars_f, pars):
     else:
         print("{}\nis neither a folder nor a file. Exit.".format(r_path))
         sys.exit()
-    pars['ff_proc'] = fname
-    pars_list.append(pars['ff_proc'])
-
-    answ = raw_input("Create plots? (y/n) ({}): ".format(pars['do_plots']))
-    pars['do_plots'] = str(answ) if str(answ) is not '' else\
-        str(pars['do_plots'])
-    pars['do_plots'] = 'n' if pars['do_plots'] in ('n', 'N') else 'y'
-    pars_list.append(pars['do_plots'])
-
-    answ = raw_input("Maximum flux ({}): ".format(pars['dmax']))
-    pars['dmax'] = float(answ) if answ is not '' else float(pars['dmax'])
-    pars_list.append(pars['dmax'])
-
-    answ = raw_input("Threshold level above STDDEV ({}): ".format(
-        pars['thresh_level']))
-    pars['thresh_level'] = float(answ) if answ is not '' else\
-        float(pars['thresh_level'])
-    pars_list.append(pars['thresh_level'])
-
-    answ = raw_input("Initial FWHM ({}): ".format(pars['fwhm_init']))
-    pars['fwhm_init'] = float(answ) if answ is not '' else\
-        float(pars['fwhm_init'])
-    pars_list.append(pars['fwhm_init'])
-
-    answ = raw_input("Max number of stars used to obtain FWHM ({}): ".format(
-        pars['max_stars']))
-    pars['max_stars'] = int(answ) if answ is not '' else int(pars['max_stars'])
-    pars_list.append(pars['max_stars'])
-
-    answ = raw_input("Maximum ellipticity ({}): ".format(pars['ellip_max']))
-    pars['ellip_max'] = float(answ) if answ is not '' else\
-        float(pars['ellip_max'])
-    pars_list.append(pars['ellip_max'])
-
-    answ = raw_input("Minimum FWHM ({}): ".format(pars['fwhm_min']))
-    pars['fwhm_min'] = float(answ) if answ is not '' else\
-        float(pars['fwhm_min'])
-    pars_list.append(pars['fwhm_min'])
-
-    answ = raw_input("GAIN keyword ({}): ".format(pars['gain_key']))
-    pars['gain_key'] = str(answ) if answ is not '' else pars['gain_key']
-    pars_list.append(pars['gain_key'])
-
-    answ = raw_input("RDNOISE keyword ({}): ".format(pars['rdnoise_key']))
-    pars['rdnoise_key'] = str(answ) if answ is not '' else pars['rdnoise_key']
-    pars_list.append(pars['rdnoise_key'])
-
-    answ = raw_input("FILTER keyword ({}): ".format(pars['filter_key']))
-    pars['filter_key'] = str(answ) if answ is not '' else pars['filter_key']
-    pars_list.append(pars['filter_key'])
-
-    answ = raw_input("EXPOSURE keyword ({}): ".format(pars['exp_key']))
-    pars['exp_key'] = str(answ) if answ is not '' else pars['exp_key']
-    pars_list.append(pars['exp_key'])
-
-    # Write values to file.
-    create_pars_file(pars_f, pars_list)
 
     # Create path to output folder
     out_path = r_path.replace('input', 'output')
     if os.path.isfile(r_path):
         out_path = out_path.replace(out_path.split('/')[-1], '')
 
-    return out_path, fits_list, pars
+    return mypath, pars, fits_list, out_path
 
 
-def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exp_key):
+def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exposure_key):
     """
     Check that all necessary header information is present.
     """
     header_flag = True
-    passed_keys = [gain_key, rdnoise_key, filter_key, exp_key]
+    passed_keys = [gain_key, rdnoise_key, filter_key, exposure_key]
     i = 0
     try:
         hdr[gain_key]
@@ -161,7 +78,7 @@ def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exp_key):
         i += 1
         hdr[filter_key]
         i += 1
-        hdr[exp_key]
+        hdr[exposure_key]
     except KeyError:
         _key = ['Gain', 'Rdnoise', 'Filter', 'Exposure']
         print("{} key '{}' is not present in header.".format(
@@ -169,90 +86,6 @@ def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exp_key):
         header_flag = False
 
     return header_flag
-
-
-def bckg_data(hdr, hdu_data, gain_key, rdnoise_key):
-    """
-    Estimate sky's mean, median, and standard deviation.
-    """
-    gain = hdr[gain_key]
-    rdnoise = hdr[rdnoise_key]
-    print("Gain, Rdnoise: {}, {}".format(gain, rdnoise))
-
-    print("\nEstimating background mean, median, and STDDEV.")
-    sky_mean, sky_median, sky_std = sigma_clipped_stats(
-        hdu_data, sigma=3.0, iters=5)
-    print("Mean, median, and STDDEV: {:.2f}, {:.2f}, {:.2f}".format(
-        sky_mean, sky_median, sky_std))
-    print("STDDEV estimated from GAIN, RDNOISE, and median: {:.2f}".format(
-        np.sqrt(sky_median * gain + rdnoise ** 2) / gain))
-
-    return sky_mean, sky_std
-
-
-def st_fwhm_select(
-        dmax, max_stars, thresh_level, fwhm_init, std, hdu_data):
-    """
-    Find stars in image with DAOStarFinder, filter out saturated stars (with
-    peak values greater than the maximum accepted in 'dmax'), order by the
-    largest (most negative) magnitude, and select a maximum of 'max_stars'.
-    """
-    print("\nFinding stars.")
-    thresh = thresh_level * std
-    print('Threshold, initial FWHM: {:.1f}, {:.1f}'.format(thresh, fwhm_init))
-    stfind = DAOStarFinder(threshold=thresh, fwhm=fwhm_init)
-    sources = stfind(hdu_data)
-    print("Sources found: {}".format(len(sources)))
-    mask = sources['peak'] < dmax
-    sour_no_satur = sources[mask]
-    print("Non-saturated sources found: {}".format(len(sour_no_satur)))
-    sour_no_satur.sort('mag')
-    psf_select = sour_no_satur[:int(max_stars)]
-
-    return psf_select, len(sources), len(sour_no_satur)
-
-
-def psf_filter(fwhm_min, ellip_max, psf_data, out_f=2.):
-    """
-    Reject stars with a large ellipticity (> ellip_max), a very low
-    FWHM (<fwhm_min), or large FWHMs (outliers).
-    """
-    fwhm_min_rjct = psf_data[psf_data['FWHM'] <= fwhm_min]
-    print("Stars with FWHM<{:.1f} rejected: {}".format(
-        fwhm_min, len(fwhm_min_rjct)))
-    fwhm_min_accpt = psf_data[psf_data['FWHM'] > fwhm_min]
-    fwhm_estim = fwhm_min_accpt[fwhm_min_accpt['Ellip'] <= ellip_max]
-    ellip_rjct = fwhm_min_accpt[fwhm_min_accpt['Ellip'] > ellip_max]
-    print("Stars with ellip>{:.1f} rejected: {}".format(
-        ellip_max, len(ellip_rjct)))
-
-    # Remove duplicates, if any.
-    fwhm_estim_no_dups = list(set(np.array(fwhm_estim).tolist()))
-    print("Duplicated stars rejected: {}".format(
-        len(fwhm_estim) - len(fwhm_estim_no_dups)))
-
-    fwhm_median = np.median(zip(*fwhm_estim_no_dups)[2])
-    fwhm_accptd, fwhm_outl = [], []
-    for st in fwhm_estim_no_dups:
-        if st[2] <= out_f * fwhm_median:
-            fwhm_accptd.append(st)
-        else:
-            fwhm_outl.append(st)
-    print("Outliers with FWHM>{:.2f} rejected: {}".format(
-        out_f * fwhm_median, len(fwhm_outl)))
-
-    if fwhm_accptd:
-        print("\nFinal number of accepted stars: {}".format(len(fwhm_accptd)))
-        fwhm_mean, fwhm_std = np.mean(zip(*fwhm_accptd)[2]),\
-            np.std(zip(*fwhm_accptd)[2])
-        print("Mean FWHM +/- std: {:.2f}, {:.2f}".format(fwhm_mean, fwhm_std))
-    else:
-        print("  WARNING: all stars were rejected.\n"
-              "  Could not obtain a mean FWHM.")
-        fwhm_mean, fwhm_std = 0., 0.
-
-    return fwhm_min_rjct, ellip_rjct, fwhm_accptd, fwhm_mean, fwhm_std,\
-        fwhm_outl
 
 
 def isolate_stars(hdu_data, fwhm_accptd, crop_side):
@@ -370,13 +203,18 @@ def make_plots(
     ax.set_ylim(0., ymax)
     ax.grid(b=True, which='major', color='grey', linestyle=':', lw=.5,
             zorder=1)
+    ax.set_title('Spatial distribution of FWHM stars',
+                 fontsize=9)
+    ax.tick_params(axis='both', which='major', labelsize=8)
     f = min(xmax, ymax) * .05
     if fwhm_accptd:
         ax.scatter(*positions, s=0.5 * np.exp(zip(*fwhm_accptd)[2]), lw=0.7,
                    facecolors='none', edgecolors='r', zorder=4)
     if fwhm_outl:
         positions = (zip(*fwhm_outl)[0], zip(*fwhm_outl)[1])
-        ax.scatter(*positions, s=0.01 * np.exp(zip(*fwhm_outl)[2]), lw=0.7,
+        sz = 0.01 * np.exp(zip(*fwhm_outl)[2])
+        sz[sz > max(ymax, xmax)] = max(ymax, xmax)
+        ax.scatter(*positions, s=sz, lw=0.7,
                    facecolors='none', edgecolors='k', zorder=4)
     if fwhm_min_rjct:
         fwhm_min_pos = (zip(*fwhm_min_rjct)[0], zip(*fwhm_min_rjct)[1])
@@ -395,9 +233,6 @@ def make_plots(
                 height=r[i] * np.sqrt(1 - st[3] ** 2),
                 angle=0., lw=0.7, fc='None', edgecolor='b', zorder=4)
             ax.add_artist(e)
-    ax.set_title('Spatial distribution of (exponential) FWHM sizes',
-                 fontsize=9)
-    ax.tick_params(axis='both', which='major', labelsize=8)
 
     if getattr(stars, 'size', len(stars)):
         stars = np.array(stars, dtype='float32')
@@ -490,7 +325,7 @@ def storeOutFile(out_path, out_data):
     """
     Write output file.
     """
-    out_data_file = join(out_path, "getdata.dat")
+    out_data_file = join(out_path, "fitstats.dat")
     data = Table(zip(*out_data), names=(
         '# image         ', 'filter', 'exposure', 'Sky_mean', 'Sky_STDDEV',
         'FWHM_(N_stars)', 'FWHM_(mean)', 'FWHM_(std)'))
@@ -507,8 +342,7 @@ def main():
     Get FWHM, sky mean, and sky standard deviation from a single .fits file or
     a folder containing .fits files.
     """
-    mypath, pars_f, pars = read_params()
-    out_path, fits_list, pars = get_params(mypath, pars_f, pars)
+    mypath, pars, fits_list, out_path = read_params()
 
     # Generate output dir/subdir if it doesn't exist.
     if not exists(out_path):
@@ -531,7 +365,7 @@ def main():
         # Check header keys.
         header_flag = headerCheck(
             hdr, pars['gain_key'], pars['rdnoise_key'], pars['filter_key'],
-            pars['exp_key'])
+            pars['exposure_key'])
         if not header_flag:
             print("  ERROR: Missing header information. Skipping this file.")
             break
@@ -541,21 +375,25 @@ def main():
 
         # Background estimation.
         sky_mean, sky_std = bckg_data(
-            hdr, hdu_data, pars['gain_key'], pars['rdnoise_key'])
+            hdr, hdu_data, pars['gain_key'], pars['rdnoise_key'],
+            pars['sky_method'])
 
         # Stars selection.
         psf_select, all_sources, n_not_satur = st_fwhm_select(
-            pars['dmax'], pars['max_stars'], pars['thresh_level'],
-            pars['fwhm_init'], sky_std, hdu_data)
+            float(pars['dmax']), int(pars['max_stars']),
+            float(pars['thresh_level']), float(pars['fwhm_init']),
+            sky_std, hdu_data)
 
         # IRAF 'psfmeasure' task.
-        psf_data = psfmeasure.main(pars['dmax'], psf_select, imname, hdu_data)
+        psf_data = psfmeasure.main(
+            float(pars['dmax']), psf_select, imname, hdu_data)
 
         if psf_data:
             # Filter out stars.
             fwhm_min_rjct, ellip_rjct, fwhm_accptd, fwhm_mean, fwhm_std,\
                 fwhm_outl = psf_filter(
-                    pars['fwhm_min'], pars['ellip_max'], psf_data)
+                    float(pars['fwhm_min']), float(pars['ellip_max']),
+                    psf_data)
 
             stars, psf_avrg = [], []
             if fwhm_accptd:
@@ -565,9 +403,9 @@ def main():
                 stars, psf_avrg = isolate_stars(
                     hdu_data, fwhm_accptd, crop_side)
 
-            if pars['do_plots'] is 'y':
+            if pars['do_plots_A'] is 'y':
                 make_plots(
-                    hdu_data, crop_side, pars['max_stars'], all_sources,
+                    hdu_data, crop_side, int(pars['max_stars']), all_sources,
                     n_not_satur, fwhm_min_rjct, ellip_rjct, fwhm_accptd,
                     fwhm_outl, fwhm_mean, fwhm_std, stars, psf_avrg, out_path,
                     imname)
@@ -575,7 +413,7 @@ def main():
             # Store data to write to output file.
             im_name = imname.split('/')[-1]
             out_data.append(
-                [im_name, hdr[pars['filter_key']], hdr[pars['exp_key']],
+                [im_name, hdr[pars['filter_key']], hdr[pars['exposure_key']],
                  sky_mean, sky_std, len(fwhm_accptd), fwhm_mean, fwhm_std])
         else:
             print("  ERROR: no stars returned from 'psfmeasure' task.")

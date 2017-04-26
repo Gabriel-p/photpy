@@ -17,91 +17,24 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 
-def create_pars_file(pars_f, pars_list=None):
-    """
-    Default values for parameters file.
-    """
-    if pars_list is None:
-        pars_list = ['None', 'pg1323', 'y', '0.1', '10.', '0.', '180.']
-    with open(pars_f, 'w') as f:
-        f.write(
-            "# Default parameters for the id_standards script\n#\n"
-            "coo_file {}\nlandolt_fld {}\ndo_plots {}\nscale_min {}\n"
-            "scale_max {}\nrot_min {}\nrot_max {}\n".format(
-                *pars_list))
-    return
-
-
 def read_params():
     """
-    Read parameter values from .pars file.
+    Read parameter values.
     """
-    pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath, 'id_standards.pars')
+    pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
     if not os.path.isfile(pars_f):
-        print("Parameters file missing. Create it.")
-        create_pars_file(pars_f)
+        print("Parameters file missing. Exit.")
+        sys.exit()
 
+    pars = {}
     with open(pars_f, 'r') as f:
         for line in f:
-            if not line.startswith('#'):
-                key, value = line.replace('\n', '').split(' ')
+            if not line.startswith('#') and line != '\n':
+                key, value = line.replace('\n', '').split()
                 pars[key] = value
 
-    return mypath, pars_f, pars
-
-
-def get_params(mypath, pars_f, pars):
-    """
-    """
-    pars_list = []
-
-    answ = raw_input("\n.coo file to process ({}): ".format(pars['coo_file']))
-    fname = str(answ) if answ is not '' else pars['coo_file']
-    # Path to .coo file in with observed standard stars coordinates.
-    fname = fname[1:] if fname.startswith('/') else fname
-    if not os.path.isfile(join(mypath.replace('tasks', ''), fname)):
-        print("\n\n{}\nis not a valid file. Exit.".format(fname))
-        sys.exit()
-    pars['coo_file'] = fname
-    pars_list.append(pars['coo_file'])
-
-    answ = raw_input("Choose Landolt field ({}): ".format(pars['landolt_fld']))
-    pars['landolt_fld'] = str(answ) if str(answ) is not '' else\
-        str(pars['landolt_fld'])
-    pars_list.append(pars['landolt_fld'])
-
-    answ = raw_input("Create plots? (y/n) ({}): ".format(pars['do_plots']))
-    pars['do_plots'] = str(answ) if str(answ) is not '' else\
-        str(pars['do_plots'])
-    pars['do_plots'] = 'n' if pars['do_plots'] in ('n', 'N') else 'y'
-    pars_list.append(pars['do_plots'])
-
-    answ = raw_input("Minimum scaling factor ({}): ".format(pars['scale_min']))
-    pars['scale_min'] = float(answ) if answ is not '' else\
-        float(pars['scale_min'])
-    pars_list.append(pars['scale_min'])
-
-    answ = raw_input("Maximum scaling factor ({}): ".format(pars['scale_max']))
-    pars['scale_max'] = float(answ) if answ is not '' else\
-        float(pars['scale_max'])
-    pars_list.append(pars['scale_max'])
-
-    answ = raw_input("Minimum rotation angle ({}): ".format(pars['rot_min']))
-    pars['rot_min'] = float(answ) if answ is not '' else\
-        float(pars['rot_min'])
-    pars_list.append(pars['rot_min'])
-
-    answ = raw_input("Maximum rotation angle ({}): ".format(pars['rot_max']))
-    pars['rot_max'] = float(answ) if answ is not '' else\
-        float(pars['rot_max'])
-    pars_list.append(pars['rot_max'])
-
-    # Write values to file.
-    create_pars_file(pars_f, pars_list)
-
-    return pars
+    return mypath, pars
 
 
 def getTriangles(set_X, X_combs):
@@ -402,7 +335,7 @@ def posFinder(xy_rot, max_x, min_x, max_y, min_y):
 
 
 def make_plot(
-        out_plot_file, xy_obs, obs_mag, std_tr_match, obs_tr_match,
+        coo_file, out_plot_file, xy_obs, obs_mag, std_tr_match, obs_tr_match,
         xy_rot, id_std, landolt_field_img):
     """
     Make plots.
@@ -424,7 +357,7 @@ def make_plot(
 
     ax2 = plt.subplot(gs[0:4, 4:8])
     ax2.set_aspect('auto')
-    ax2.set_title("Observed frame")
+    ax2.set_title("Observed frame ({})".format(coo_file))
     ax2.grid(lw=1., ls='--', color='grey', zorder=1)
     st_sizes_arr = star_size(obs_mag, max(obs_mag))
     x_obs, y_obs = zip(*xy_obs)
@@ -464,16 +397,14 @@ def main():
     This algorithm expects at least three standard stars observed in the
     observed field.
     """
-    mypath, pars_f, pars = read_params()
-    pars = get_params(mypath, pars_f, pars)
-    scale_range = (pars['scale_min'], pars['scale_max'])
-    rot_range = (pars['rot_min'], pars['rot_max'])
+    mypath, pars = read_params()
+    print("Coordinates file: {}".format(pars['coo_file']))
+    coo_file = join(mypath.replace('tasks', 'output'), pars['coo_file'])
 
-    coo_file = join(mypath.replace('tasks', ''), pars['coo_file'])
     out_path = coo_file.replace(coo_file.split('/')[-1], '')
-    obs_f_name = coo_file.split('/')[-1].split('.')[0]
-    out_data_file = join(out_path, obs_f_name + "_standard.coo")
-    out_plot_file = join(out_path, obs_f_name + "_standard.png")
+    # obs_f_name = coo_file.split('/')[-1].split('.')[0]
+    out_data_file = join(out_path, pars['landolt_fld'] + "_obs.coo")
+    out_plot_file = join(out_path, pars['landolt_fld'] + "_obs.png")
     landolt_field_img = join(mypath, 'landolt', pars['landolt_fld'] + '.gif')
 
     # Coordinates of stars for this standard field.
@@ -487,6 +418,8 @@ def main():
     obs_mag = coo_t['Mag']
 
     # Best match triangles, scale, and rotation angle between them.
+    scale_range = (float(pars['scale_min']), float(pars['scale_max']))
+    rot_range = (float(pars['rot_min']), float(pars['rot_max']))
     print("\nFinding scale, translation, and rotation.")
     std_tr_match, obs_tr_match, scale, rot_angle = triangleMatch(
         xy_std, xy_obs, scale_range, rot_range)
@@ -495,9 +428,10 @@ def main():
     xy_rot = standard2observed(
         xy_std, std_tr_match, obs_tr_match, scale, rot_angle)
 
-    if pars['do_plots'] == 'y':
-        make_plot(out_plot_file, xy_obs, obs_mag, std_tr_match, obs_tr_match,
-                  xy_rot, id_std, landolt_field_img)
+    if pars['do_plots_C'] == 'y':
+        make_plot(
+            pars['coo_file'], out_plot_file, xy_obs, obs_mag, std_tr_match,
+            obs_tr_match, xy_rot, id_std, landolt_field_img)
 
     make_out_file(out_data_file, xy_rot, id_std)
     print("\nFinished.")

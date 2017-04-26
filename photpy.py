@@ -2,6 +2,7 @@
 import argparse
 
 from tasks import fitstats
+from tasks import align_crop
 from tasks import id_standard
 
 
@@ -18,6 +19,8 @@ def main():
 
     if task == 'fitstats':
         fitstats.main()
+    elif task == 'align_crop':
+        align_crop.main()
     elif task == 'id_standard':
         id_standard.main()
     else:

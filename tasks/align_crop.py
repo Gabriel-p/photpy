@@ -10,8 +10,7 @@ from matplotlib.patches import Rectangle
 from itertools import cycle
 import datetime
 
-from getdata import st_fwhm_select
-import psfmeasure
+from hlpr import st_fwhm_select
 
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
@@ -21,168 +20,63 @@ from astropy.wcs import WCS
 from astropy.nddata.utils import Cutout2D
 
 
-def create_pars_file(pars_f, pars_list=None):
-    """
-    Default values for parameters file.
-    """
-    if pars_list is None:
-        pars_list = [
-            'None', 'n', 'None', 'y', 'y', '5.', '3.', '60000.', '0.15',
-            '1.5', '100', '0.', '0.', '-1.', '0.05']
-    with open(pars_f, 'w') as f:
-        f.write(
-            "# Default parameters for the align_crop script\n#\n"
-            "ff_proc {}\nread_coords {}\nref_im {}\ndo_plots {}\n"
-            "crop_save {}\nthresh_level {}\n"
-            "fwhm_init {}\ndmax {}\nellip_max {}\nfwhm_min {}\n"
-            "max_shift_stars {}\nx_init_shift {}\ny_init_shift {}\n"
-            "max_shift {}\ntol {}\n".format(*pars_list))
-    return
-
-
 def read_params():
     """
-    Read parameter values from .pars file.
+    Read parameter values.
     """
-    pars = {}
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath, 'align_crop.pars')
+    pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
     if not os.path.isfile(pars_f):
-        print("Parameters file missing. Create it.")
-        create_pars_file(pars_f)
+        print("Parameters file is missing. Exit.")
+        sys.exit()
 
+    pars = {}
     with open(pars_f, 'r') as f:
         for line in f:
-            if not line.startswith('#'):
-                key, value = line.replace('\n', '').split(' ')
+            if not line.startswith('#') and line != '\n':
+                key, value = line.replace('\n', '').split()
                 pars[key] = value
 
-    return mypath, pars_f, pars
-
-
-def get_params(mypath, pars_f, pars):
-    """
-    """
-    pars_list = []
-
-    answ = raw_input("\nDir or file to process ({}): ".format(
-        pars['ff_proc']))
-    fname = str(answ) if answ is not '' else pars['ff_proc']
+    fname = pars['ff_crop']
     fname = fname[1:] if fname.startswith('/') else fname
-    r_path = join(mypath.replace('/tasks', ''), fname)
+    in_path = join(mypath.replace('tasks', 'input'), fname)
+
+    if pars['ref_im'] not in ['none', 'None', None]:
+        ref_im_f = join(in_path, pars['ref_im'])
+        if not os.path.isfile(ref_im_f):
+            print("{}\nreference image is not a file. Exit.".format(ref_im_f))
+            sys.exit()
+        else:
+            pars['ref_im'] = ref_im_f
+
     fits_list = []
-    if os.path.isdir(r_path):
-        for subdir, dirs, files in os.walk(r_path):
+    if os.path.isdir(in_path):
+        for subdir, dirs, files in os.walk(in_path):
             for file in files:
                 if file.endswith('.fits'):
                     fits_list.append(os.path.join(subdir, file))
-    elif os.path.isfile(r_path):
-        print("  Single .fits file found in folder.")
-        sys.exit()
     else:
-        print("{}\nis neither a folder nor a file. Exit.".format(str(r_path)))
+        print("{}\nis not a folder. Exit.".format(in_path))
         sys.exit()
-    pars['ff_proc'] = fname
-    pars_list.append(pars['ff_proc'])
 
-    answ = raw_input("Read star coordinates from file? (y/n) ({}): ".format(
-        pars['read_coords']))
-    pars['read_coords'] = 'n' if answ in ('n', 'N', 'no', 'NO') else 'y'
-    pars_list.append(pars['read_coords'])
-
-    answ = raw_input("Reference image ({}): ".format(pars['ref_im']))
-    if answ in ['None', 'none']:
-        pars['ref_im'] = 'none'
-    elif answ is not '':
-        pars['ref_im'] = str(answ)
-        try:
-            os.path.isfile(join(r_path, pars['ref_im']))
-        except:
-            print("Reference image does not exist. Exit.")
-    pars_list.append(pars['ref_im'])
-
-    answ = raw_input("Create plots? (y/n) ({}): ".format(
-        pars['do_plots']))
-    pars['do_plots'] = 'n' if answ in ('n', 'N', 'no', 'NO') else 'y'
-    pars_list.append(pars['do_plots'])
-
-    answ = raw_input("Save cropped fits? (y/n) ({}): ".format(
-        pars['crop_save']))
-    pars['crop_save'] = 'n' if answ in ('n', 'N', 'no', 'NO') else 'y'
-    pars_list.append(pars['crop_save'])
-
-    answ = raw_input("Threshold level above STDDEV ({}): ".format(
-        pars['thresh_level']))
-    pars['thresh_level'] = float(answ) if answ is not '' else\
-        float(pars['thresh_level'])
-    pars_list.append(pars['thresh_level'])
-
-    answ = raw_input("Initial FWHM ({}): ".format(pars['fwhm_init']))
-    pars['fwhm_init'] = float(answ) if answ is not '' else\
-        float(pars['fwhm_init'])
-    pars_list.append(pars['fwhm_init'])
-
-    answ = raw_input("Maximum flux ({}): ".format(pars['dmax']))
-    pars['dmax'] = float(answ) if answ is not '' else float(pars['dmax'])
-    pars_list.append(pars['dmax'])
-
-    answ = raw_input("Maximum ellipticity ({}): ".format(pars['ellip_max']))
-    pars['ellip_max'] = float(answ) if answ is not '' else\
-        float(pars['ellip_max'])
-    pars_list.append(pars['ellip_max'])
-
-    answ = raw_input("Minimum FWHM ({}): ".format(pars['fwhm_min']))
-    pars['fwhm_min'] = float(answ) if answ is not '' else\
-        float(pars['fwhm_min'])
-    pars_list.append(pars['fwhm_min'])
-
-    answ = raw_input("Max number of stars used to obtain "
-                     "shift ({}): ".format(pars['max_shift_stars']))
-    pars['max_shift_stars'] = int(answ) if answ is not '' else\
-        int(pars['max_shift_stars'])
-    pars_list.append(pars['max_shift_stars'])
-
-    answ = raw_input("Initial estimated shift in x ({}): ".format(
-        pars['x_init_shift']))
-    pars['x_init_shift'] = float(answ) if answ is not '' else\
-        float(pars['x_init_shift'])
-    pars_list.append(pars['x_init_shift'])
-
-    answ = raw_input("Initial estimated shift in y ({}): ".format(
-        pars['y_init_shift']))
-    pars['y_init_shift'] = float(answ) if answ is not '' else\
-        float(pars['y_init_shift'])
-    pars_list.append(pars['y_init_shift'])
-
-    answ = raw_input("Maximum shift allowed ({}): ".format(
-        pars['max_shift']))
-    pars['max_shift'] = float(answ) if answ is not '' else\
-        float(pars['max_shift'])
-    pars_list.append(pars['max_shift'])
-
-    answ = raw_input("Matching tolerance ({}): ".format(pars['tol']))
-    pars['tol'] = float(answ) if answ is not '' else float(pars['tol'])
-    pars_list.append(pars['tol'])
-
-    # Write values to file.
-    create_pars_file(pars_f, pars_list)
-
-    return r_path, fits_list, pars
+    return mypath, fits_list, pars
 
 
-def get_coords_data(r_path, imname, pars, hdu_data):
+def get_coords_data(imname, pars, hdu_data):
+    """
+    """
+    print("Obtaining stars coordinates for aligning.")
     coords_flag = False
     if pars['read_coords'] == 'y':
         try:
-            fn = join(r_path + '/' +
-                      imname.split('/')[-1].replace('.fits', '') + '.coo')
-            fwhm_estim = []
+            fn = imname.replace('input', 'output').replace('fits', 'coo')
+            fwhm_accptd = []
             with open(fn, 'r') as f:
-                content = f.readlines()
-                for l in content:
-                    fwhm_estim.append(map(float, l.split()))
-            all_sources = len(fwhm_estim)
-        except:
+                for l in f:
+                    if not l.startswith('#'):
+                        fwhm_accptd.append(map(float, l.split()))
+            all_sources = len(fwhm_accptd)
+        except IOError:
             coords_flag = True
     else:
         coords_flag = True
@@ -193,18 +87,12 @@ def get_coords_data(r_path, imname, pars, hdu_data):
             hdu_data, sigma=3.0, iters=2)
 
         # Stars selection.
-        psf_select, all_sources, n_not_satur = st_fwhm_select(
-            pars['dmax'], pars['max_shift_stars'], pars['thresh_level'],
-            pars['fwhm_init'], sky_std, hdu_data)
+        fwhm_accptd, all_sources, n_not_satur = st_fwhm_select(
+            float(pars['dmax']), int(pars['max_stars']),
+            float(pars['thresh_level']), float(pars['fwhm_init']),
+            sky_std, hdu_data)
 
-        # FWHM selection.
-        fwhm_estim, psfmeasure_estim, fwhm_min_rjct, ellip_rjct =\
-            psfmeasure.main(
-                pars['dmax'], pars['ellip_max'], pars['fwhm_min'],
-                psf_select, imname, hdu_data)
-        print("Suitable sources found: {}".format(len(fwhm_estim)))
-
-    return fwhm_estim, all_sources
+    return fwhm_accptd, all_sources
 
 
 def avrg_dist(init_shift, max_shift, tol, ref, f):
@@ -272,7 +160,6 @@ def overlap_reg(hdu, shifts):
 def crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap):
     """
     """
-    fn = join(mypath.replace('tasks', ''), '/'.join(fnames[0].split('/')[:-1]))
     # Overlap info.
     lef, bot, rig, top, xcen, ycen, xbox, ybox = overlap
     # Crop image: (xc, yc), (y length, x length)
@@ -294,11 +181,13 @@ def crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap):
             hdr[i]['COMMENT'] = "= Cropped fits file ({}).".format(
                 datetime.date.today())
             # Write cropped frame to new fits file.
-            crop_name = fn + '/' +\
-                fnames[i].split('/')[-1].replace('.fits', '') + '_crop.fits'
+            crop_name = join(
+                mypath.replace('tasks', ''),
+                fnames[i].replace('input', 'output').replace(
+                    '.fits', '_crop.fits'))
             try:
                 os.remove(crop_name)
-            except:
+            except OSError:
                 pass
             fits.writeto(crop_name, frame_crop.data, hdr[i])
 
@@ -312,15 +201,16 @@ def make_sub_plot(ax, frame, fname, f_list, shifts, overlap, n_ref):
     zmin, zmax = interval.get_limits(frame)
     plt.imshow(frame, cmap='viridis', aspect=1, interpolation='nearest',
                origin='lower', vmin=zmin, vmax=zmax)
-    ax.set_title('{}{} ({} stars)'.format(n_ref, fname, len(f_list[0])),
-                 fontsize=8)
+    ax.set_title('{}{} ({} stars)'.format(
+        n_ref, fname.replace('input/', ''), len(f_list[0])), fontsize=8)
     positions = (f_list[0] - lef + shifts[0], f_list[1] - bot + shifts[1])
     apertures = CircularAperture(positions, r=20.)
     apertures.plot(color='r', lw=0.5)
-    # ax.tick_params(axis='both', which='major', labelsize=8)
 
 
-def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap, hdu_crop):
+def make_plots(
+        mypath, out_folder, hdu, ref_i, fnames, f_list, shifts, overlap,
+        hdu_crop):
     """
     Make plots.
     """
@@ -328,7 +218,6 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap, hdu_crop):
     fig = plt.figure(figsize=(20, 20))
     p = int(np.sqrt(len(hdu))) + 1
     gs = gridspec.GridSpec(p, p)
-    fn = join(mypath.replace('tasks', ''), '/'.join(fnames[0].split('/')[:-1]))
 
     ax = fig.add_subplot(gs[0])
     # Height and width (h=y, w=x)
@@ -352,25 +241,33 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap, hdu_crop):
 
     # Selected stars.
     ax = fig.add_subplot(gs[1])
+    maxl = 10
     for i, fl in enumerate(f_list):
         positions = (fl[0] - lef + shifts[i][0], fl[1] - bot + shifts[i][1])
+        lbl = fnames[i].split('/')[-1]
         plt.scatter(
-            positions[0], positions[1], label=fnames[i].split('/')[-1], lw=0.5,
-            s=20., facecolors='none', edgecolors=next(col_cyc))
+            positions[0], positions[1], label=(i // maxl) * "_" + lbl,
+            lw=0.5, s=20., facecolors='none', edgecolors=next(col_cyc))
     plt.legend(loc='upper right', fontsize=8, scatterpoints=1, framealpha=0.85)
     ax.set_title("Stars used for alignment", fontsize=8)
     ax.set_xlim(0., w)
     ax.set_ylim(0., h)
 
     # Aligned and cropped frames.
+    ax = fig.add_subplot(gs[2])
+    make_sub_plot(
+        ax, hdu_crop[ref_i], fnames[ref_i], f_list[ref_i], shifts[ref_i],
+        overlap, 'Reference - ')
+    for _ in [hdu_crop, fnames, f_list, shifts]:
+        del _[ref_i]
     for i, frame in enumerate(hdu_crop):
-        ax = fig.add_subplot(gs[i + 2])
-        n_ref = '' if i != ref_i else 'Reference - '
+        ax = fig.add_subplot(gs[i + 3])
         make_sub_plot(
-            ax, frame, fnames[i], f_list[i], shifts[i], overlap, n_ref)
+            ax, frame, fnames[i], f_list[i], shifts[i], overlap, '')
 
     fig.tight_layout()
-    plt.savefig(fn + '/align_crop.png', dpi=150, bbox_inches='tight')
+    fn = join(mypath.replace('tasks', 'output'), out_folder, 'align_crop.png')
+    plt.savefig(fn, dpi=150, bbox_inches='tight')
     plt.clf()
     plt.close()
 
@@ -378,14 +275,13 @@ def make_plots(mypath, hdu, ref_i, fnames, f_list, shifts, overlap, hdu_crop):
 def main():
     """
     """
-    mypath, pars_f, pars = read_params()
-    r_path, fits_list, pars = get_params(mypath, pars_f, pars)
+    mypath, fits_list, pars = read_params()
 
     f_list, l_f, hdu, hdr = [], [], [], []
     # For each .fits image in the root folder.
     for i, imname in enumerate(fits_list):
         print("\nFile: {}".format(
-            imname.replace(mypath.replace('tasks', ''), "")))
+            imname.replace(mypath.replace('tasks', 'input'), "")))
 
         # Extract frame data.
         hdulist = fits.open(imname)
@@ -394,9 +290,8 @@ def main():
         header = hdulist[0].header
         hdulist.close()
 
-        # Obtain good stars coordinates and other data from 'psfmeasure'.
-        coords_data, n_sources = get_coords_data(
-            r_path, imname, pars, hdu_data)
+        # Obtain stars coordinates.
+        coords_data, n_sources = get_coords_data(imname, pars, hdu_data)
 
         if coords_data:
             l_f.append(n_sources)
@@ -410,7 +305,7 @@ def main():
 
     # Identify reference frame.
     if pars['ref_im'] not in ['none', 'None', None]:
-        ref_i = [_.split('/')[-1] for _ in fits_list].index(pars['ref_im'])
+        ref_i = fits_list.index(pars['ref_im'])
     else:
         ref_i = l_f.index(max(l_f))
     ref = f_list[ref_i]
@@ -422,10 +317,11 @@ def main():
         file = fits_list[i].replace(mypath.replace('tasks', ''), "")
         fnames.append(file)
         if i != ref_i:
-            print("\nFile: {}".format(file))
+            print("\nFile: {}".format(file.replace('input', '')))
             # Obtain shifts
-            d = avrg_dist((pars['x_init_shift'], pars['y_init_shift']),
-                          pars['max_shift'], pars['tol'], ref, f)
+            d = avrg_dist(
+                (float(pars['x_init_shift']), float(pars['y_init_shift'])),
+                float(pars['max_shift']), float(pars['tolerance']), ref, f)
             print("Reg shifted by: {:.2f}, {:.2f}".format(d[0], d[1]))
             print("Median average distance: {:.2f}".format(d[2]))
             shifts.append([d[0], d[1]])
@@ -439,9 +335,10 @@ def main():
     # Crop frames.
     hdu_crop = crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap)
 
-    if pars['do_plots'] == 'y':
+    if pars['do_plots_B'] == 'y':
         make_plots(
-            mypath, hdu, ref_i, fnames, f_list, shifts, overlap, hdu_crop)
+            mypath, pars['ff_crop'], hdu, ref_i, fnames, f_list, shifts,
+            overlap, hdu_crop)
 
 
 if __name__ == "__main__":

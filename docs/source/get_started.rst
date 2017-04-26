@@ -6,13 +6,49 @@ Getting started
    Not finished.
 
 
+Folder structure
+----------------
+
+The code expects standard and field observed frames to exist separately in
+corresponding folders within the ``photpy/input/`` folder. The folder structure
+must look like this:
+
+
+.. code-block:: none
+
+    input/
+    │
+    ├── standards/
+    │   ├── stand_001.fits
+    │   ├── stand_002.fits
+    │   ├── stand_003.fits
+    │   └── ...
+    │
+    ├── field/
+    │   ├── field_100.fits
+    │   ├── field_101.fits
+    │   ├── field_102.fits
+    │   └── ...
+
+
+The names of the ``.fits`` files are not important, as long as their headers
+contain all the required information. See the next section to learn of to check
+if your headers are correct.
+
+
 Fixing your headers
 -------------------
 
 The required information that needs to be present in the header of each .fits
-file is: gain, read noise, filter, exposure time. These keys should all be
-present and equal throughout all files that will be processed.
-To display the header of a .fits file you can use the following code:
+file is:
+
+* ``Gain``
+* ``Read noise``
+* ``Filter``
+* ``Exposure time``
+
+These keys should all be present and equal throughout all files that will be
+processed. To display the header of a .fits file you can use the following code:
 
 .. code-block:: python
 
@@ -27,35 +63,13 @@ To display the header of a .fits file you can use the following code:
         print(k, v)
 
 
-Extract data from your observed frames
---------------------------------------
-
-The ``fitstats`` script is used to estimate the FWHM, sky mean, and sky standard
-deviation for your observed set of standard and field frames.
-Once executed, it will automatically go through all the files defined as input 
-(see :ref:`Input <secinput>` section below) and process them.
-
-The steps followed by the script are:
-
-1. Estimate the sky's mean and standard deviation values using the
-   `sigma_clipped_stats`__ function.
-2. Find candidate stars in the frame through the `DAOStarFinder`__ class.
-   Only bright, unsaturated stars are selected.
-3. Extract FWHM values for each of the stars selected in the above step,
-   using IRAF's `psfmeasure`__ task. Those stars with large ellipticities or
-   suspiciously small FWHMs are rejected.
-4. Remove outliers with large FWHM values.
-5. Obtain mean and standard deviation FWHM values for each frame processed.
-6. Save date to files and plot.
-
-All files produced by the script are described in :ref:`Output <secoutput>`.
-
 .. _secinput:
 
-Input
-.....
+Input parameters
+----------------
 
-The required input information for this script is listed in its ``.pars``
+
+The required input information for all the scripts is listed in its ``.pars``
 file. This file can be accessed within the ``/tasks`` folder, or simply filled
 when the script is called. A description of each required parameter is presented
 below.
@@ -80,10 +94,27 @@ below.
     exp_key        Header key for the exposure time of the frame.
 
 
-.. _secoutput:
 
-Output
-......
+Extract data from your observed frames
+--------------------------------------
+
+The ``fitstats`` script is used to estimate the FWHM, sky mean, and sky standard
+deviation for your observed set of standard and field frames.
+Once executed, it will go through all the files defined as input 
+(see :ref:`Input <secinput>` section) and automatically process them.
+
+The steps followed by the script are:
+
+1. Estimate the sky's mean and standard deviation values using the
+   `sigma_clipped_stats`__ function.
+2. Find candidate stars in the frame through the `DAOStarFinder`__ class.
+   Only bright, unsaturated stars are selected.
+3. Extract FWHM values for each of the stars selected in the above step,
+   using IRAF's `psfmeasure`__ task. Those stars with large ellipticities or
+   suspiciously small FWHMs are rejected.
+4. Remove outliers with large FWHM values.
+5. Obtain mean and standard deviation FWHM values for each frame processed.
+6. Save date to files and plot.
 
 The script generates the following output files (where ``xxxxx`` is the name of
 the .fits file processed):
@@ -122,17 +153,6 @@ Align your images
 
 xxxxxx
 
-
-Input
-.....
-
-xxxxxxxxxx
-
-
-Output
-......
-
-xxxxxxxxxxx
 
 
 .. __: http://docs.astropy.org/en/stable/api/astropy.stats.sigma_clipped_stats.html
