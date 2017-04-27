@@ -1,19 +1,18 @@
 
 import os
 import sys
-from os.path import join, realpath, dirname
+from os.path import join, realpath, dirname, isfile
 import numpy as np
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.offsetbox import AnchoredText
 from matplotlib.patches import Rectangle
 from itertools import cycle
 import datetime
 
-from hlpr import st_fwhm_select
-
-from astropy.io import fits
-from astropy.stats import sigma_clipped_stats
+from astropy.io import ascii, fits
+from astropy.table import Column
 from astropy.visualization import ZScaleInterval
 from photutils import CircularAperture
 from astropy.wcs import WCS
@@ -26,7 +25,7 @@ def read_params():
     """
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
     pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
-    if not os.path.isfile(pars_f):
+    if not isfile(pars_f):
         print("Parameters file is missing. Exit.")
         sys.exit()
 
@@ -37,62 +36,55 @@ def read_params():
                 key, value = line.replace('\n', '').split()
                 pars[key] = value
 
-    fname = pars['ff_crop']
-    fname = fname[1:] if fname.startswith('/') else fname
-    in_path = join(mypath.replace('tasks', 'input'), fname)
-
-    if pars['ref_im'] not in ['none', 'None', None]:
-        ref_im_f = join(in_path, pars['ref_im'])
-        if not os.path.isfile(ref_im_f):
-            print("{}\nreference image is not a file. Exit.".format(ref_im_f))
-            sys.exit()
-        else:
-            pars['ref_im'] = ref_im_f
+    folder = pars['in_folder']
+    folder = folder[1:] if folder.startswith('/') else folder
+    in_path = join(mypath.replace('tasks', 'input'), folder)
 
     fits_list = []
     if os.path.isdir(in_path):
-        for subdir, dirs, files in os.walk(in_path):
-            for file in files:
-                if file.endswith('.fits'):
-                    fits_list.append(os.path.join(subdir, file))
+        for file in os.listdir(in_path):
+            f = join(in_path, file)
+            if isfile(f):
+                if f.endswith('.fits'):
+                    fits_list.append(f)
     else:
         print("{}\nis not a folder. Exit.".format(in_path))
         sys.exit()
 
-    return mypath, fits_list, pars
+    if pars['ref_align'] not in ['none', 'None', None]:
+        ref_im_f = join(in_path, pars['ref_align'])
+        if not os.path.isfile(ref_im_f):
+            print("{}\nreference image is not present. Exit.".format(ref_im_f))
+            sys.exit()
+        else:
+            pars['ref_align'] = ref_im_f
+
+    # Create path to output folder
+    out_path = in_path.replace('input', 'output')
+
+    return mypath, fits_list, pars, out_path
 
 
-def get_coords_data(imname, pars, hdu_data):
+def get_coords_data(imname):
     """
+    Read stars coordinates from .coo files.
     """
-    print("Obtaining stars coordinates for aligning.")
-    coords_flag = False
-    if pars['read_coords'] == 'y':
-        try:
-            fn = imname.replace('input', 'output').replace('fits', 'coo')
-            fwhm_accptd = []
-            with open(fn, 'r') as f:
-                for l in f:
-                    if not l.startswith('#'):
-                        fwhm_accptd.append(map(float, l.split()))
-            all_sources = len(fwhm_accptd)
-        except IOError:
-            coords_flag = True
-    else:
-        coords_flag = True
+    fn = imname.replace('input', 'output').replace('fits', 'coo')
+    coords_data = []
+    try:
+        with open(fn, 'r') as f:
+            for l in f:
+                if not l.startswith('#'):
+                    coords_data.append(map(float, l.split())[:2])
+    except IOError:
+        print("{}\nFile not found.".format(fn))
+        sys.exit()
 
-    if coords_flag:
-        # Background estimation.
-        sky_mean, sky_median, sky_std = sigma_clipped_stats(
-            hdu_data, sigma=3.0, iters=2)
+    if not coords_data:
+        print("\nERROR: no stars in .coo file:\n{}".format(fn))
+        sys.exit()
 
-        # Stars selection.
-        fwhm_accptd, all_sources, n_not_satur = st_fwhm_select(
-            float(pars['dmax']), int(pars['max_stars']),
-            float(pars['thresh_level']), float(pars['fwhm_init']),
-            sky_std, hdu_data)
-
-    return fwhm_accptd, all_sources
+    return zip(*coords_data)
 
 
 def avrg_dist(init_shift, max_shift, tol, ref, f):
@@ -134,15 +126,17 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
             if dists[min_idx][2] > 5.:
                 print("  WARNING: match is probably wrong.")
 
-    return dists[min_idx]
+    d = dists[min_idx]
+    print("Reg shifted by: {:.2f}, {:.2f}".format(d[0], d[1]))
+    print("Median average distance: {:.2f}".format(d[2]))
+
+    return d
 
 
-def overlap_reg(hdu, shifts):
+def overlap_reg(h, w, shifts):
     """
+    Obtain edges of overlap.
     """
-    # Height and width (h=y, w=x)
-    h, w = np.shape(hdu)
-    # Obtain edges of overlap.
     lef = max(zip(*shifts)[0])
     bot = max(zip(*shifts)[1])
     rig = min(zip(*shifts)[0]) + w
@@ -151,13 +145,14 @@ def overlap_reg(hdu, shifts):
     xbox, ybox = rig - lef, top - bot
     # Center of overlap.
     xcen, ycen = (rig + lef) / 2., (top + bot) / 2.
-    print("\nOverlapping area\nCenter: {:.2f}, {:.2f}".format(xcen, ycen))
+    print("\nOverlapping area")
+    print("Center: {:.2f}, {:.2f}".format(xcen, ycen))
     print("Box: {:.2f}, {:.2f}".format(xbox, ybox))
 
     return lef, bot, rig, top, xcen, ycen, xbox, ybox
 
 
-def crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap):
+def crop_frames(fits_list, pars, hdu, hdr, shifts, overlap):
     """
     """
     # Overlap info.
@@ -181,10 +176,8 @@ def crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap):
             hdr[i]['COMMENT'] = "= Cropped fits file ({}).".format(
                 datetime.date.today())
             # Write cropped frame to new fits file.
-            crop_name = join(
-                mypath.replace('tasks', ''),
-                fnames[i].replace('input', 'output').replace(
-                    '.fits', '_crop.fits'))
+            crop_name = join(fits_list[i].replace('input', 'output').replace(
+                             '.fits', '_crop.fits'))
             try:
                 os.remove(crop_name)
             except OSError:
@@ -194,7 +187,7 @@ def crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap):
     return hdu_crop
 
 
-def make_sub_plot(ax, frame, fname, f_list, shifts, overlap, n_ref):
+def make_sub_plot(ax, frame, fname, xy, shifts, overlap, n_ref):
     lef, bot, rig, top, xcen, ycen, xbox, ybox = overlap
     # Zscale
     interval = ZScaleInterval()
@@ -202,21 +195,24 @@ def make_sub_plot(ax, frame, fname, f_list, shifts, overlap, n_ref):
     plt.imshow(frame, cmap='viridis', aspect=1, interpolation='nearest',
                origin='lower', vmin=zmin, vmax=zmax)
     ax.set_title('{}{} ({} stars)'.format(
-        n_ref, fname.replace('input/', ''), len(f_list[0])), fontsize=8)
-    positions = (f_list[0] - lef + shifts[0], f_list[1] - bot + shifts[1])
+        n_ref, fname.split('/')[-1], len(xy[0])), fontsize=8)
+    positions = (xy[0] - lef + shifts[0], xy[1] - bot + shifts[1])
     apertures = CircularAperture(positions, r=20.)
     apertures.plot(color='r', lw=0.5)
+    txt = AnchoredText("Median dist: {:.2f}".format(shifts[2]), loc=1,
+                       prop=dict(size=8))
+    txt.patch.set(boxstyle='square,pad=0.', alpha=0.85)
+    ax.add_artist(txt)
 
 
-def make_plots(
-        mypath, out_folder, hdu, ref_i, fnames, f_list, shifts, overlap,
-        hdu_crop):
+def make_plots(out_path, hdu, ref_i, fits_list, xy_coo, shifts, overlap,
+               hdu_crop):
     """
     Make plots.
     """
     print("\nPlotting.")
     fig = plt.figure(figsize=(20, 20))
-    p = int(np.sqrt(len(hdu))) + 1
+    p = int(round(np.sqrt(len(hdu)))) + 1
     gs = gridspec.GridSpec(p, p)
 
     ax = fig.add_subplot(gs[0])
@@ -242,9 +238,9 @@ def make_plots(
     # Selected stars.
     ax = fig.add_subplot(gs[1])
     maxl = 10
-    for i, fl in enumerate(f_list):
-        positions = (fl[0] - lef + shifts[i][0], fl[1] - bot + shifts[i][1])
-        lbl = fnames[i].split('/')[-1]
+    for i, xy in enumerate(xy_coo):
+        positions = (xy[0] - lef + shifts[i][0], xy[1] - bot + shifts[i][1])
+        lbl = fits_list[i].split('/')[-1]
         plt.scatter(
             positions[0], positions[1], label=(i // maxl) * "_" + lbl,
             lw=0.5, s=20., facecolors='none', edgecolors=next(col_cyc))
@@ -256,17 +252,17 @@ def make_plots(
     # Aligned and cropped frames.
     ax = fig.add_subplot(gs[2])
     make_sub_plot(
-        ax, hdu_crop[ref_i], fnames[ref_i], f_list[ref_i], shifts[ref_i],
-        overlap, 'Reference - ')
-    for _ in [hdu_crop, fnames, f_list, shifts]:
+        ax, hdu_crop[ref_i], fits_list[ref_i], xy_coo[ref_i], shifts[ref_i],
+        overlap, 'Reference: ')
+    for _ in [hdu_crop, fits_list, xy_coo, shifts]:
         del _[ref_i]
     for i, frame in enumerate(hdu_crop):
         ax = fig.add_subplot(gs[i + 3])
         make_sub_plot(
-            ax, frame, fnames[i], f_list[i], shifts[i], overlap, '')
+            ax, frame, fits_list[i], xy_coo[i], shifts[i], overlap, '')
 
     fig.tight_layout()
-    fn = join(mypath.replace('tasks', 'output'), out_folder, 'align_crop.png')
+    fn = join(out_path, 'align_crop.png')
     plt.savefig(fn, dpi=150, bbox_inches='tight')
     plt.clf()
     plt.close()
@@ -275,70 +271,70 @@ def make_plots(
 def main():
     """
     """
-    mypath, fits_list, pars = read_params()
+    mypath, fits_list, pars, out_path = read_params()
 
-    f_list, l_f, hdu, hdr = [], [], [], []
+    print("Read coordinates from .coo files.")
+    xy_coo, hdu, hdr, hw = [], [], [], [[], []]
     # For each .fits image in the root folder.
     for i, imname in enumerate(fits_list):
-        print("\nFile: {}".format(
-            imname.replace(mypath.replace('tasks', 'input'), "")))
-
         # Extract frame data.
         hdulist = fits.open(imname)
         hdu_data = hdulist[0].data
-        # Header
-        header = hdulist[0].header
+        hdu.append(hdu_data)
+        # Height and width (h=y, w=x)
+        h, w = np.shape(hdu_data)
+        hw[0].append(h)
+        hw[1].append(w)
+        hdr.append(hdulist[0].header)
         hdulist.close()
 
         # Obtain stars coordinates.
-        coords_data, n_sources = get_coords_data(imname, pars, hdu_data)
+        xy_coo.append(get_coords_data(imname))
 
-        if coords_data:
-            l_f.append(n_sources)
-            hdu.append(hdu_data)
-            hdr.append(header)
-            f_list.append(
-                np.array([zip(*coords_data)[0], zip(*coords_data)[1]]))
-        else:
-            print("\nWARNING: no stars left after rejecting\nby min FWHM"
-                  "and max ellipticity.")
+    # Check that all observed frames are of the same size.
+    if hw[0][1:] == hw[0][:-1] and hw[1][1:] == hw[1][:-1]:
+        h, w = hw[0][0], hw[1][0]
+    else:
+        print("ERROR: frames are not all of the same size.")
+        sys.exit()
 
     # Identify reference frame.
-    if pars['ref_im'] not in ['none', 'None', None]:
-        ref_i = fits_list.index(pars['ref_im'])
+    if pars['ref_align'] not in ['none', 'None', None]:
+        ref_i = fits_list.index(pars['ref_align'])
     else:
-        ref_i = l_f.index(max(l_f))
-    ref = f_list[ref_i]
-    print('\nReference image: {}'.format(fits_list[ref_i].split('/')[-1]))
+        # Else, select the one with the most stars.
+        N_coo = [len(_[0]) for _ in xy_coo]
+        ref_i = N_coo.index(max(N_coo))
+    ref = xy_coo[ref_i]
+    print('Reference image: {}'.format(fits_list[ref_i].split('/')[-1]))
+    # Write reference image file used to output file.
+    ascii.write(
+        {'': [fits_list[ref_i]]}, join(out_path, 'ref_coo_file.dat'),
+        overwrite=True, delimiter=' ', format='no_header')
 
     # Find x,y shifts (to reference frame) for alignment.
-    shifts, fnames = [], []
-    for i, f in enumerate(f_list):
-        file = fits_list[i].replace(mypath.replace('tasks', ''), "")
-        fnames.append(file)
+    shifts = []
+    for i, xy in enumerate(xy_coo):
         if i != ref_i:
-            print("\nFile: {}".format(file.replace('input', '')))
+            print("\nFile: {}".format(fits_list[i].split('/')[-1]))
             # Obtain shifts
             d = avrg_dist(
                 (float(pars['x_init_shift']), float(pars['y_init_shift'])),
-                float(pars['max_shift']), float(pars['tolerance']), ref, f)
-            print("Reg shifted by: {:.2f}, {:.2f}".format(d[0], d[1]))
-            print("Median average distance: {:.2f}".format(d[2]))
-            shifts.append([d[0], d[1]])
+                float(pars['max_shift']), float(pars['tolerance']), ref, xy)
+            shifts.append(d)
         else:
             # Shift for reference frame.
-            shifts.append([0., 0.])
+            shifts.append([0., 0., 0.])
 
     # Obtain overlapping region.
-    overlap = overlap_reg(hdu_data, shifts)
+    overlap = overlap_reg(h, w, shifts)
 
     # Crop frames.
-    hdu_crop = crop_frames(mypath, fnames, pars, hdu, hdr, shifts, overlap)
+    hdu_crop = crop_frames(fits_list, pars, hdu, hdr, shifts, overlap)
 
     if pars['do_plots_B'] == 'y':
         make_plots(
-            mypath, pars['ff_crop'], hdu, ref_i, fnames, f_list, shifts,
-            overlap, hdu_crop)
+            out_path, hdu, ref_i, fits_list, xy_coo, shifts, overlap, hdu_crop)
 
 
 if __name__ == "__main__":

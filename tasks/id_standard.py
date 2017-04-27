@@ -34,7 +34,20 @@ def read_params():
                 key, value = line.replace('\n', '').split()
                 pars[key] = value
 
-    return mypath, pars
+    in_path = join(mypath.replace('tasks', 'output/standards'))
+    if pars['coo_file'] not in ['none', 'None', None]:
+        coo_file = join(in_path, pars['coo_file'])
+        if not os.path.isfile(coo_file):
+            print("{}\n.coo file is not present. Exit.".format(
+                coo_file))
+            sys.exit()
+        else:
+            pars['coo_file'] = coo_file
+
+    # Create path to output folder
+    out_path = in_path.replace('input', 'output')
+
+    return mypath, pars, out_path
 
 
 def getTriangles(set_X, X_combs):
@@ -294,7 +307,7 @@ def posFinder(xy_rot, max_x, min_x, max_y, min_y):
     x_rang, y_rang = max_x - min_x, max_y - min_y
     # This value sets the minimum spacing allowed.
     txt_sep = max(x_rang, y_rang) * .025
-    # Initiate list with the coordinates of the points themeselves.
+    # Initiate list with the coordinates of the points themselves.
     used_positions, xy_offset = xy_rot[:], []
     # For every standard star positioned in the observed frame.
     for i, xy in enumerate(xy_rot):
@@ -397,15 +410,8 @@ def main():
     This algorithm expects at least three standard stars observed in the
     observed field.
     """
-    mypath, pars = read_params()
-    print("Coordinates file: {}".format(pars['coo_file']))
-    coo_file = join(mypath.replace('tasks', 'output'), pars['coo_file'])
-
-    out_path = coo_file.replace(coo_file.split('/')[-1], '')
-    # obs_f_name = coo_file.split('/')[-1].split('.')[0]
-    out_data_file = join(out_path, pars['landolt_fld'] + "_obs.coo")
-    out_plot_file = join(out_path, pars['landolt_fld'] + "_obs.png")
-    landolt_field_img = join(mypath, 'landolt', pars['landolt_fld'] + '.gif')
+    mypath, pars, out_path = read_params()
+    print("Reference frame: {}".format(pars['coo_file']))
 
     # Coordinates of stars for this standard field.
     landolt_t = landolt_fields.main(pars['landolt_fld'])
@@ -413,7 +419,7 @@ def main():
     id_std = landolt_t['ID']
 
     # Coordinates from observed frame.
-    coo_t = Table.read(coo_file, format='ascii')
+    coo_t = Table.read(pars['coo_file'], format='ascii')
     xy_obs = zip(*[coo_t['x'], coo_t['y']])
     obs_mag = coo_t['Mag']
 
@@ -427,6 +433,11 @@ def main():
     # Move, scale, and rotate standard stars to observed frame.
     xy_rot = standard2observed(
         xy_std, std_tr_match, obs_tr_match, scale, rot_angle)
+
+    # Names of output files.
+    out_data_file = join(out_path, pars['landolt_fld'] + "_obs.coo")
+    out_plot_file = join(out_path, pars['landolt_fld'] + "_obs.png")
+    landolt_field_img = join(mypath, 'landolt', pars['landolt_fld'] + '.gif')
 
     if pars['do_plots_C'] == 'y':
         make_plot(

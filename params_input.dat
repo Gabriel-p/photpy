@@ -1,6 +1,12 @@
 
+###############################################################################
+# Parameters that affect multiple scripts
 
-# General data parameters
+# Working folder.
+#
+in_folder        standards
+
+# General data parameters 
 #
 gain_key         EGAIN
 rdnoise_key      ENOISE
@@ -9,38 +15,43 @@ exposure_key     EXPTIME
 dmin             a
 dmax             60000.0
 
+###############################################################################
+
+
+
+###############################################################################
+# Scripts applied on both standard and field frames.
 
 # Parameters used by 'fitstats'
 #
-ff_stats         standards
 ellip_max        0.15
 fwhm_min         1.5
 sky_method       BW
-do_plots_A       y
-#
-# Also used by 'align_crop' if 'read_coords' is 'n'
-#
 thresh_level     5.0
 fwhm_init        3.0
 max_stars        100
+do_plots_A       y
 
 
 # Parameters used by 'align_crop'
 #
-ff_crop          standards
-ref_im           none
-read_coords      y
-crop_save        n
+ref_align        none
+crop_save        y
 x_init_shift     0.0
 y_init_shift     0.0
 max_shift        -1.0
 tolerance        0.05
 do_plots_B       y
 
+###############################################################################
+
+
+
+###############################################################################
+# Standard stars identification, photometry, and transformations.
 
 # Parameters used by 'id_standards'
 #
-coo_file         standards/stk_2084.coo
 landolt_fld      pg1323
 scale_min        0.1
 scale_max        10.0
@@ -56,3 +67,4 @@ do_plots_C       y
 # Parameters used by 'fit_standards'
 #
 
+###############################################################################

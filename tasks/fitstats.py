@@ -1,6 +1,6 @@
 
 import os
-from os.path import exists, join, realpath, dirname
+from os.path import exists, join, realpath, dirname, isfile
 import sys
 import gc
 import numpy as np
@@ -28,7 +28,7 @@ def read_params():
     """
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
     pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
-    if not os.path.isfile(pars_f):
+    if not isfile(pars_f):
         print("Parameters file is missing. Exit.")
         sys.exit()
 
@@ -39,27 +39,27 @@ def read_params():
                 key, value = line.replace('\n', '').split()
                 pars[key] = value
 
-    fname = pars['ff_stats']
-    fname = fname[1:] if fname.startswith('/') else fname
-    r_path = join(mypath.replace('tasks', 'input'), fname)
+    folder = pars['in_folder']
+    folder = folder[1:] if folder.startswith('/') else folder
+    in_path = join(mypath.replace('tasks', 'input'), folder)
 
     fits_list = []
-    if os.path.isdir(r_path):
-        for subdir, dirs, files in os.walk(r_path):
-            for file in files:
-                if file.endswith('.fits'):
-                    fits_list.append(os.path.join(subdir, file))
-    elif os.path.isfile(r_path):
-        print("  Single .fits file.")
-        fits_list.append(r_path)
+    if os.path.isdir(in_path):
+        for file in os.listdir(in_path):
+            f = join(in_path, file)
+            if isfile(f):
+                if f.endswith('.fits'):
+                    fits_list.append(f)
+        # for subdir, dirs, files in os.walk(in_path):
+        #     for file in files:
+        #         if file.endswith('.fits'):
+        #             fits_list.append(os.path.join(subdir, file))
     else:
-        print("{}\nis neither a folder nor a file. Exit.".format(r_path))
+        print("{}\nis not a folder. Exit.".format(in_path))
         sys.exit()
 
     # Create path to output folder
-    out_path = r_path.replace('input', 'output')
-    if os.path.isfile(r_path):
-        out_path = out_path.replace(out_path.split('/')[-1], '')
+    out_path = in_path.replace('input', 'output')
 
     return mypath, pars, fits_list, out_path
 
