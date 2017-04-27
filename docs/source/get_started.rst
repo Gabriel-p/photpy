@@ -186,9 +186,6 @@ rotation or scaling among the frames is expected*.
 The user can either select a reference frame to which all other frames
 will be aligned to, or let the script automatically select one. In this last
 case, the frame with the largest number of detected stars will be selected.
-This reference frame is stored in a ``ref_coo_file.dat`` file, since it is used
-by the ``id_standard`` script to perform the aperture photometry on standard
-stars.
 
 Cropped ``.fits`` files are saved to the same ``output/`` folder where the
 ``.coo`` files exist, under the name ``xxxxx_crop.fits``. A final image is also

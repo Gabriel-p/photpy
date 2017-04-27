@@ -11,8 +11,7 @@ from matplotlib.patches import Rectangle
 from itertools import cycle
 import datetime
 
-from astropy.io import ascii, fits
-from astropy.table import Column
+from astropy.io import fits
 from astropy.visualization import ZScaleInterval
 from photutils import CircularAperture
 from astropy.wcs import WCS
@@ -307,10 +306,6 @@ def main():
         ref_i = N_coo.index(max(N_coo))
     ref = xy_coo[ref_i]
     print('Reference image: {}'.format(fits_list[ref_i].split('/')[-1]))
-    # Write reference image file used to output file.
-    ascii.write(
-        {'': [fits_list[ref_i]]}, join(out_path, 'ref_coo_file.dat'),
-        overwrite=True, delimiter=' ', format='no_header')
 
     # Find x,y shifts (to reference frame) for alignment.
     shifts = []

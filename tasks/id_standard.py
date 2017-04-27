@@ -10,8 +10,10 @@ import numpy as np
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import cdist
 
+from hlpr import bckg_data, st_fwhm_select
+
 from astropy.table import Table
-from astropy.io import ascii
+from astropy.io import ascii, fits
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -35,19 +37,49 @@ def read_params():
                 pars[key] = value
 
     in_path = join(mypath.replace('tasks', 'output/standards'))
-    if pars['coo_file'] not in ['none', 'None', None]:
-        coo_file = join(in_path, pars['coo_file'])
-        if not os.path.isfile(coo_file):
-            print("{}\n.coo file is not present. Exit.".format(
-                coo_file))
-            sys.exit()
-        else:
-            pars['coo_file'] = coo_file
+    ref_id_std = join(in_path, pars['ref_id_std'])
+    if not os.path.isfile(ref_id_std):
+        print("{}\n Reference frame is not present. Exit.".format(
+            ref_id_std))
+        sys.exit()
+    else:
+        pars['ref_id_std'] = ref_id_std
 
     # Create path to output folder
     out_path = in_path.replace('input', 'output')
 
     return mypath, pars, out_path
+
+
+def relative_mag(flux):
+    """
+    """
+    return -2.5 * np.log10(flux / max(flux))
+
+
+def coo_ref_frame(pars):
+    """
+    """
+    # Load .fits file.
+    hdulist = fits.open(pars['ref_id_std'])
+    hdr = hdulist[0].header
+    hdu_data = hdulist[0].data
+
+    # Background estimation.
+    sky_mean, sky_std = bckg_data(
+        hdr, hdu_data, pars['gain_key'], pars['rdnoise_key'],
+        pars['sky_method'])
+
+    # Stars selection.
+    psf_select, all_sources, n_not_satur = st_fwhm_select(
+        float(pars['dmax']), int(pars['max_stars']),
+        float(pars['thresh_level']), float(pars['fwhm_init']),
+        sky_std, hdu_data)
+
+    xy_obs = zip(*[psf_select['xcentroid'], psf_select['ycentroid']])
+    obs_mag = relative_mag(psf_select['flux'])
+
+    return xy_obs, obs_mag
 
 
 def getTriangles(set_X, X_combs):
@@ -411,7 +443,7 @@ def main():
     observed field.
     """
     mypath, pars, out_path = read_params()
-    print("Reference frame: {}".format(pars['coo_file']))
+    print("Reference frame: {}".format(pars['ref_id_std']))
 
     # Coordinates of stars for this standard field.
     landolt_t = landolt_fields.main(pars['landolt_fld'])
@@ -419,9 +451,7 @@ def main():
     id_std = landolt_t['ID']
 
     # Coordinates from observed frame.
-    coo_t = Table.read(pars['coo_file'], format='ascii')
-    xy_obs = zip(*[coo_t['x'], coo_t['y']])
-    obs_mag = coo_t['Mag']
+    xy_obs, obs_mag = coo_ref_frame(pars)
 
     # Best match triangles, scale, and rotation angle between them.
     scale_range = (float(pars['scale_min']), float(pars['scale_max']))
@@ -441,7 +471,7 @@ def main():
 
     if pars['do_plots_C'] == 'y':
         make_plot(
-            pars['coo_file'], out_plot_file, xy_obs, obs_mag, std_tr_match,
+            pars['ref_id_std'], out_plot_file, xy_obs, obs_mag, std_tr_match,
             obs_tr_match, xy_rot, id_std, landolt_field_img)
 
     make_out_file(out_data_file, xy_rot, id_std)

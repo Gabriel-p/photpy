@@ -11,9 +11,8 @@ from matplotlib.ticker import NullFormatter
 
 from hlpr import bckg_data, st_fwhm_select, psf_filter
 
-from astropy.io import ascii
+from astropy.io import ascii, fits
 from astropy.table import Table
-from astropy.io import fits
 from astropy.visualization import ZScaleInterval
 
 from photutils import CircularAperture
