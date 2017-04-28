@@ -49,10 +49,6 @@ def read_params():
             if isfile(f):
                 if f.endswith('.fits'):
                     fits_list.append(f)
-        # for subdir, dirs, files in os.walk(in_path):
-        #     for file in files:
-        #         if file.endswith('.fits'):
-        #             fits_list.append(os.path.join(subdir, file))
     else:
         print("{}\nis not a folder. Exit.".format(in_path))
         sys.exit()
@@ -63,12 +59,14 @@ def read_params():
     return mypath, pars, fits_list, out_path
 
 
-def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exposure_key):
+def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exposure_key,
+                airmass_key):
     """
     Check that all necessary header information is present.
     """
     header_flag = True
-    passed_keys = [gain_key, rdnoise_key, filter_key, exposure_key]
+    passed_keys = [
+        gain_key, rdnoise_key, filter_key, exposure_key, airmass_key]
     i = 0
     try:
         hdr[gain_key]
@@ -78,8 +76,10 @@ def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exposure_key):
         hdr[filter_key]
         i += 1
         hdr[exposure_key]
+        i += 1
+        hdr[airmass_key]
     except KeyError:
-        _key = ['Gain', 'Rdnoise', 'Filter', 'Exposure']
+        _key = ['Gain', 'Rdnoise', 'Filter', 'Exposure', 'Airmass']
         print("{} key '{}' is not present in header.".format(
             _key[i], passed_keys[i]))
         header_flag = False
@@ -364,7 +364,7 @@ def main():
         # Check header keys.
         header_flag = headerCheck(
             hdr, pars['gain_key'], pars['rdnoise_key'], pars['filter_key'],
-            pars['exposure_key'])
+            pars['exposure_key'], pars['airmass_key'])
         if not header_flag:
             print("  ERROR: Missing header information. Skipping this file.")
             break

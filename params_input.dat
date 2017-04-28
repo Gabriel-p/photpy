@@ -1,10 +1,6 @@
 
 ###############################################################################
-# Parameters that affect multiple scripts
-
-# Working folder.
-#
-in_folder        standards
+# Parameters that affect multiple scripts.
 
 # General data parameters 
 #
@@ -12,6 +8,7 @@ gain_key         EGAIN
 rdnoise_key      ENOISE
 filter_key       FILTER
 exposure_key     EXPTIME
+airmass_key     AIRMASS
 dmin             a
 dmax             60000.0
 
@@ -21,6 +18,11 @@ dmax             60000.0
 
 ###############################################################################
 # Scripts applied on both standard and field frames.
+
+# Working folder (either 'standards' or 'field').
+#
+in_folder        standards
+
 
 # 'fitstats' parameters
 #
@@ -50,18 +52,26 @@ do_plots_B       y
 ###############################################################################
 # Standard stars identification, photometry, and transformations.
 
+# Shared parameter
+#
+landolt_fld      pg1323
+
 # 'id_standards' parameters
 #
-ref_id_std       stk_2078_crop.fits
-landolt_fld      pg1323
+ref_id_std       stk_2130_crop.fits
 scale_min        0.1
 scale_max        10.0
 rot_min          0.0
 rot_max          5.0
-do_plots_C       n
+do_plots_C       y
 
 
 # 'fit_standards' parameters
 #
+aperture         15
+annulus_in       20
+annulus_out      25
+extin_coeffs     U,.49;B,.27;V,.12;I,.02
+do_plots_D       y
 
 ###############################################################################
