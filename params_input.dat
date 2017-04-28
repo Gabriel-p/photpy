@@ -22,7 +22,7 @@ dmax             60000.0
 ###############################################################################
 # Scripts applied on both standard and field frames.
 
-# Parameters used by 'fitstats'
+# 'fitstats' parameters
 #
 ellip_max        0.15
 fwhm_min         1.5
@@ -33,7 +33,7 @@ max_stars        100
 do_plots_A       y
 
 
-# Parameters used by 'align_crop'
+# 'align_crop' parameters
 #
 ref_align        none
 crop_save        y
@@ -50,7 +50,7 @@ do_plots_B       y
 ###############################################################################
 # Standard stars identification, photometry, and transformations.
 
-# Parameters used by 'id_standards'
+# 'id_standards' parameters
 #
 ref_id_std       stk_2078_crop.fits
 landolt_fld      pg1323
@@ -58,14 +58,10 @@ scale_min        0.1
 scale_max        10.0
 rot_min          0.0
 rot_max          5.0
-do_plots_C       y
+do_plots_C       n
 
 
-# Parameters used by 'phot_standards'
-#
-
-
-# Parameters used by 'fit_standards'
+# 'fit_standards' parameters
 #
 
 ###############################################################################

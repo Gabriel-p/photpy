@@ -2,7 +2,7 @@
 Getting started
 ===============
 
-.. warning::
+.. todo::
    Not finished.
 
 
@@ -73,48 +73,58 @@ The required input information for all the scripts is stored in the
 ``params_input.dat`` file. A description of each required parameter is presented
 below.
 
-1. General parameters
+General
+..................
 
 * ``gain_key``: Header key for the gain value.
-* ``rdnoise_key``:     Header key for the noise value.
-* ``filter_key``:      Header key for the filter's name.
-* ``exposure_key``:    Header key for the exposure time of the frame.
-* ``dmin``:            Minimum flux value accepted.
-* ``dmax``:            Maximum flux value of a non-saturated star.
+* ``rdnoise_key``: Header key for the noise value.
+* ``filter_key``: Header key for the filter's name.
+* ``exposure_key``: Header key for the exposure time of the frame.
+* ``dmin``: Minimum flux value accepted.
+* ``dmax``: Maximum flux value of a non-saturated star.
 
 
-2. ``fitstats`` parameters
+``fitstats``
+.......................
 
-.. code-block:: none
-
-  * ff_stats       Name of the .fits file to be processed, or a folder
-                   containing more than one .fits files.
-  * ellip_max      Maximum accepted ellipticity value.
-  * fwhm_min       Minimum accepted FWHM value.
-  * sky_method     BW
-  * do_plots_A     Flag to determine whether the output plot is produced.
-                   Accepted inputs are y/n.
-  * thresh_level   Threshold detection level in units of the sky's STDDEV, used
-                   by DAOStarFinder.
-  * fwhm_init      Initial estimate of the FWHM, used by DAOStarFinder.
-  * max_stars      Maximum number of bright unsaturated stars used to estimate
-                   the average FWHM of stars in the frame.
-
-3. ``align_crop`` parameters
-
-.. code-block:: none
-
-  * ff_crop          standards
-  * ref_im           none
-  * read_coords      y
-  * crop_save        n
-  * x_init_shift     0.0
-  * y_init_shift     0.0
-  * max_shift        -1.0
-  * tolerance        0.05
-  * do_plots_B       y
+* ``ellip_max``: Maximum accepted ellipticity value.
+* ``fwhm_min``: Minimum accepted FWHM value.
+* ``sky_method``: BW
+* ``thresh_level``: Threshold detection level in units of the sky's STDDEV,
+  used by DAOStarFinder.
+* ``fwhm_init``: Initial estimate of the FWHM, used by DAOStarFinder.
+* ``max_stars``: Maximum number of bright unsaturated stars used to estimate
+  the average FWHM of stars in the frame.
+* ``do_plots_A``: Flag to determine whether the output plot is produced.
+  Accepted inputs are y/n.
 
 
+``align_crop``
+.........................
+
+* ``ref_align``:        none
+* ``crop_save``:        y
+* ``x_init_shift``:     0.0
+* ``y_init_shift``:     0.0
+* ``max_shift``:        -1.0
+* ``tolerance``:        0.05
+* ``do_plots_B``:       y
+
+
+``id_standards``
+...........................
+
+* ``ref_id_std``:       stk_2078_crop.fits
+* ``landolt_fld``:      pg1323
+* ``scale_min``:        0.1
+* ``scale_max``:        10.0
+* ``rot_min``:          0.0
+* ``rot_max``:          5.0
+* ``do_plots_C``:       y
+
+
+``fit_standards``
+............................
 
 
 

@@ -12,7 +12,7 @@ from scipy.spatial.distance import cdist
 
 from hlpr import bckg_data, st_fwhm_select
 
-from astropy.table import Table
+from astropy.table import Table, hstack
 from astropy.io import ascii, fits
 
 import matplotlib.pyplot as plt
@@ -232,9 +232,10 @@ def scalerotTriangles(
 def triangleMatch(A_pts, B_pts, scale_range, rot_range):
     """
     Given two sets of 2D points, generate all possible combinations of three
-    points for each (triangles), normalize the lenghts, and identify the best
+    points for each (triangles), normalize the lengths, and identify the best
     match triangle in each set.
     """
+    print("Generating all triangle combinations.")
     # Find all possible triangles.
     A_combs = list(itertools.combinations(range(len(A_pts)), 3))
     B_combs = list(itertools.combinations(range(len(B_pts)), 3))
@@ -427,14 +428,16 @@ def make_plot(
     plt.close()
 
 
-def make_out_file(out_data_file, xy_rot, id_std):
+def make_out_file(landolt_fld, out_data_file, landolt_t, xy_rot):
     """
     Write coordinates of standard stars in the observed frame system.
     """
-    ascii.write([id_std.tolist()] + list(xy_rot), out_data_file,
-                names=['ID', 'x_obs', 'y_obs'], format='fixed_width',
-                delimiter='', formats={'x_obs': '%8.2f', 'y_obs': '%8.2f'},
-                overwrite=True)
+    landolt_t['ID'] = [landolt_fld + '-' + _ for _ in landolt_t['ID']]
+    xy_obs = Table(xy_rot, names=('x_obs', 'y_obs'))
+    tt = hstack([landolt_t, xy_obs])
+
+    ascii.write(tt, out_data_file, format='fixed_width', delimiter='',
+                formats={'x_obs': '%9.3f', 'y_obs': '%9.3f'}, overwrite=True)
 
 
 def main():
@@ -443,9 +446,11 @@ def main():
     observed field.
     """
     mypath, pars, out_path = read_params()
-    print("Reference frame: {}".format(pars['ref_id_std']))
+    f_name = pars['ref_id_std'].replace(mypath.replace(
+        'tasks', 'output/standards/'), '')
+    print("Reference frame: {}".format(f_name))
 
-    # Coordinates of stars for this standard field.
+    # Selected standard field.
     landolt_t = landolt_fields.main(pars['landolt_fld'])
     xy_std = zip(*[landolt_t['x'], landolt_t['y']])
     id_std = landolt_t['ID']
@@ -464,17 +469,16 @@ def main():
     xy_rot = standard2observed(
         xy_std, std_tr_match, obs_tr_match, scale, rot_angle)
 
-    # Names of output files.
-    out_data_file = join(out_path, pars['landolt_fld'] + "_obs.coo")
-    out_plot_file = join(out_path, pars['landolt_fld'] + "_obs.png")
-    landolt_field_img = join(mypath, 'landolt', pars['landolt_fld'] + '.gif')
-
     if pars['do_plots_C'] == 'y':
+        out_plot_file = join(out_path, pars['landolt_fld'] + "_obs.png")
+        landolt_field_img = join(
+            mypath, 'landolt', pars['landolt_fld'] + '.gif')
         make_plot(
-            pars['ref_id_std'], out_plot_file, xy_obs, obs_mag, std_tr_match,
+            f_name, out_plot_file, xy_obs, obs_mag, std_tr_match,
             obs_tr_match, xy_rot, id_std, landolt_field_img)
 
-    make_out_file(out_data_file, xy_rot, id_std)
+    out_data_file = join(out_path, pars['landolt_fld'] + "_obs.coo")
+    make_out_file(pars['landolt_fld'], out_data_file, landolt_t, xy_rot)
     print("\nFinished.")
 
 
