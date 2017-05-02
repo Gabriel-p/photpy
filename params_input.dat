@@ -58,7 +58,7 @@ landolt_fld      pg1323
 
 # 'id_standards' parameters
 #
-ref_id_std       stk_2130_crop.fits
+ref_id_std       stk_2127_crop.fits
 scale_min        0.1
 scale_max        10.0
 rot_min          0.0
