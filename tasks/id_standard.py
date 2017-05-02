@@ -14,6 +14,8 @@ from hlpr import bckg_data, st_fwhm_select
 
 from astropy.table import Table, hstack
 from astropy.io import ascii, fits
+from photutils import centroid_2dg
+from photutils.utils import cutout_footprint
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -79,13 +81,13 @@ def coo_ref_frame(pars):
     xy_obs = zip(*[psf_select['xcentroid'], psf_select['ycentroid']])
     obs_mag = relative_mag(psf_select['flux'])
 
-    return xy_obs, obs_mag
+    return xy_obs, obs_mag, hdu_data
 
 
 def getTriangles(set_X, X_combs):
     """
     Inefficient way of obtaining the lengths of each triangle's side.
-    Normalized so that the minimum length is 1 and sorted so that smaler
+    Normalized so that the minimum length is 1 and sorted so that smaller
     sides are presented first.
     """
     triang, tr_not_scaled = [], []
@@ -428,6 +430,24 @@ def make_plot(
     plt.close()
 
 
+def reCenter(hdu_data, positions, side=30):
+    """
+    Find better center coordinates for standards in the observed frame.
+    """
+    xy_cent = [[], []]
+    for x, y in zip(*positions):
+        crop = cutout_footprint(hdu_data, (x, y), side)[0]
+        xy = centroid_2dg(crop)
+        xy_cent[0].append(x + xy[0] - side * .5)
+        xy_cent[1].append(y + xy[1] - side * .5)
+        # median, std = np.median(crop), np.std(crop)
+        # plt.imshow(crop, cmap='viridis', aspect=1, interpolation='nearest',
+        #            origin='lower', vmin=0., vmax=median + std)
+        # plt.show()
+
+    return xy_cent
+
+
 def make_out_file(landolt_fld, out_data_file, landolt_t, xy_rot):
     """
     Write coordinates of standard stars in the observed frame system.
@@ -456,7 +476,7 @@ def main():
     id_std = landolt_t['ID']
 
     # Coordinates from observed frame.
-    xy_obs, obs_mag = coo_ref_frame(pars)
+    xy_obs, obs_mag, hdu_data = coo_ref_frame(pars)
 
     # Best match triangles, scale, and rotation angle between them.
     scale_range = (float(pars['scale_min']), float(pars['scale_max']))
@@ -469,6 +489,11 @@ def main():
     xy_rot = standard2observed(
         xy_std, std_tr_match, obs_tr_match, scale, rot_angle)
 
+    print("Find better center coordinates.")
+    xy_cent = reCenter(hdu_data, xy_rot)
+    out_data_file = join(out_path, pars['landolt_fld'] + "_obs.coo")
+    make_out_file(pars['landolt_fld'], out_data_file, landolt_t, xy_cent)
+
     if pars['do_plots_C'] == 'y':
         out_plot_file = join(out_path, pars['landolt_fld'] + "_obs.png")
         landolt_field_img = join(
@@ -477,8 +502,6 @@ def main():
             f_name, out_plot_file, xy_obs, obs_mag, std_tr_match,
             obs_tr_match, xy_rot, id_std, landolt_field_img)
 
-    out_data_file = join(out_path, pars['landolt_fld'] + "_obs.coo")
-    make_out_file(pars['landolt_fld'], out_data_file, landolt_t, xy_rot)
     print("\nFinished.")
 
 
