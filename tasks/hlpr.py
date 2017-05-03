@@ -77,15 +77,16 @@ def psf_filter(fwhm_min, ellip_max, psf_data, out_f=2.):
     print("Duplicated stars rejected: {}".format(
         len(fwhm_estim) - len(fwhm_estim_no_dups)))
 
-    fwhm_median = np.median(zip(*fwhm_estim_no_dups)[2])
     fwhm_accptd, fwhm_outl = [], []
-    for st in fwhm_estim_no_dups:
-        if st[2] <= out_f * fwhm_median:
-            fwhm_accptd.append(st)
-        else:
-            fwhm_outl.append(st)
-    print("Outliers with FWHM>{:.2f} rejected: {}".format(
-        out_f * fwhm_median, len(fwhm_outl)))
+    if fwhm_estim_no_dups:
+        fwhm_median = np.median(zip(*fwhm_estim_no_dups)[2])
+        for st in fwhm_estim_no_dups:
+            if st[2] <= out_f * fwhm_median:
+                fwhm_accptd.append(st)
+            else:
+                fwhm_outl.append(st)
+        print("Outliers with FWHM>{:.2f} rejected: {}".format(
+            out_f * fwhm_median, len(fwhm_outl)))
 
     if fwhm_accptd:
         print("\nFinal number of accepted stars: {}".format(len(fwhm_accptd)))
