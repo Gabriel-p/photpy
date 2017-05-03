@@ -8,7 +8,7 @@ gain_key         EGAIN
 rdnoise_key      ENOISE
 filter_key       FILTER
 exposure_key     EXPTIME
-airmass_key     AIRMASS
+airmass_key      AIRMASS
 dmin             a
 dmax             60000.0
 

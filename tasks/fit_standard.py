@@ -171,6 +171,9 @@ def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
         print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
             len(x_accpt), m, c, chi, RMSE))
 
+    if len(x_accpt) == 2:
+        print("  WARNING: only two stars were used in the fit.")
+
     xy_accpt, xy_rjct = [x_accpt, y_accpt], [x_rjct, y_rjct]
     return xy_accpt, xy_rjct, m, c, chi, RMSE
 
