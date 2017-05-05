@@ -1,7 +1,9 @@
 
+import read_pars_file as rpf
+
 import os
 import sys
-from os.path import join, realpath, dirname, isfile
+from os.path import join, isfile
 import numpy as np
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
@@ -20,24 +22,13 @@ from astropy.nddata.utils import Cutout2D
 
 def read_params():
     """
-    Read parameter values.
+    Read and prepare input parameter values.
     """
-    mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
-    if not isfile(pars_f):
-        print("Parameters file is missing. Exit.")
-        sys.exit()
+    pars = rpf.main()
 
-    pars = {}
-    with open(pars_f, 'r') as f:
-        for line in f:
-            if not line.startswith('#') and line != '\n':
-                key, value = line.replace('\n', '').split()
-                pars[key] = value
-
-    folder = pars['in_folder']
+    folder = pars['in_folder_B']
     folder = folder[1:] if folder.startswith('/') else folder
-    in_path = join(mypath.replace('tasks', 'input'), folder)
+    in_path = join(pars['mypath'].replace('tasks', 'input'), folder)
 
     fits_list = []
     if os.path.isdir(in_path):
@@ -61,7 +52,7 @@ def read_params():
     # Create path to output folder
     out_path = in_path.replace('input', 'output')
 
-    return mypath, fits_list, pars, out_path
+    return fits_list, pars, out_path
 
 
 def get_coords_data(imname):
@@ -270,7 +261,7 @@ def make_plots(out_path, hdu, ref_i, fits_list, xy_coo, shifts, overlap,
 def main():
     """
     """
-    mypath, fits_list, pars, out_path = read_params()
+    fits_list, pars, out_path = read_params()
 
     print("Read coordinates from .coo files.")
     xy_coo, hdu, hdr, hw = [], [], [], [[], []]
