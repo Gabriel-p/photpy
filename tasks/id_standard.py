@@ -1,7 +1,9 @@
 
+import read_pars_file as rpf
+
 import landolt_fields
 import os
-from os.path import join, realpath, dirname
+from os.path import join
 import sys
 import itertools
 import math
@@ -21,24 +23,13 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 
-def read_params():
+def in_params():
     """
-    Read parameter values.
+    Read and prepare input parameter values.
     """
-    mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
-    if not os.path.isfile(pars_f):
-        print("Parameters file missing. Exit.")
-        sys.exit()
+    pars = rpf.main()
 
-    pars = {}
-    with open(pars_f, 'r') as f:
-        for line in f:
-            if not line.startswith('#') and line != '\n':
-                key, value = line.replace('\n', '').split()
-                pars[key] = value
-
-    in_path = join(mypath.replace('tasks', 'output/standards'))
+    in_path = join(pars['mypath'].replace('tasks', 'output/standards'))
     ref_id_std = join(in_path, pars['ref_id_std'])
     if not os.path.isfile(ref_id_std):
         print("{}\n Reference frame is not present. Exit.".format(
@@ -50,7 +41,7 @@ def read_params():
     # Create path to output folder
     out_path = in_path.replace('input', 'output')
 
-    return mypath, pars, out_path
+    return pars, out_path
 
 
 def relative_mag(flux):
@@ -452,9 +443,9 @@ def make_out_file(landolt_fld, out_data_file, landolt_t, xy_rot):
     """
     Write coordinates of standard stars in the observed frame system.
     """
-    landolt_t['ID'] = [landolt_fld + '-' + _ for _ in landolt_t['ID']]
+    landolt_f = Table({'Landolt': [landolt_fld for _ in landolt_t['ID']]})
     xy_obs = Table(xy_rot, names=('x_obs', 'y_obs'))
-    tt = hstack([landolt_t, xy_obs])
+    tt = hstack([landolt_f, landolt_t, xy_obs])
 
     ascii.write(tt, out_data_file, format='fixed_width', delimiter='',
                 formats={'x_obs': '%9.3f', 'y_obs': '%9.3f'}, overwrite=True)
@@ -465,8 +456,8 @@ def main():
     This algorithm expects at least three standard stars observed in the
     observed field.
     """
-    mypath, pars, out_path = read_params()
-    f_name = pars['ref_id_std'].replace(mypath.replace(
+    pars, out_path = in_params()
+    f_name = pars['ref_id_std'].replace(pars['mypath'].replace(
         'tasks', 'output/standards/'), '')
     print("Reference frame: {}".format(f_name))
 
@@ -497,7 +488,7 @@ def main():
     if pars['do_plots_C'] == 'y':
         out_plot_file = join(out_path, pars['landolt_fld'] + "_obs.png")
         landolt_field_img = join(
-            mypath, 'landolt', pars['landolt_fld'] + '.gif')
+            pars['mypath'], 'landolt', pars['landolt_fld'] + '.gif')
         make_plot(
             f_name, out_plot_file, xy_obs, obs_mag, std_tr_match,
             obs_tr_match, xy_rot, id_std, landolt_field_img)
