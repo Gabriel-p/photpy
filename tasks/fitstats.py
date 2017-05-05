@@ -1,8 +1,10 @@
 
+import read_pars_file as rpf
+
 import os
-from os.path import exists, join, realpath, dirname, isfile
+from os.path import exists, join, isfile
 import sys
-import gc
+from operator import itemgetter
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
@@ -23,24 +25,13 @@ import psfmeasure
 
 def read_params():
     """
-    Read parameter values.
+    Read and prepare input parameter values.
     """
-    mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
-    if not isfile(pars_f):
-        print("Parameters file is missing. Exit.")
-        sys.exit()
+    pars = rpf.main()
 
-    pars = {}
-    with open(pars_f, 'r') as f:
-        for line in f:
-            if not line.startswith('#') and line != '\n':
-                key, value = line.replace('\n', '').split()
-                pars[key] = value
-
-    folder = pars['in_folder']
+    folder = pars['in_folder_A']
     folder = folder[1:] if folder.startswith('/') else folder
-    in_path = join(mypath.replace('tasks', 'input'), folder)
+    in_path = join(pars['mypath'].replace('tasks', 'input'), folder)
 
     fits_list = []
     if os.path.isdir(in_path):
@@ -56,7 +47,7 @@ def read_params():
     # Create path to output folder
     out_path = in_path.replace('input', 'output')
 
-    return mypath, pars, fits_list, out_path
+    return pars, fits_list, out_path
 
 
 def headerCheck(hdr, gain_key, rdnoise_key, filter_key, exposure_key,
@@ -304,8 +295,6 @@ def make_plots(
     # Close to release memory.
     plt.clf()
     plt.close()
-    # Force the Garbage Collector to release unreferenced memory.
-    gc.collect()
 
 
 def storeCooFile(out_path, imname, fwhm_accptd):
@@ -324,10 +313,12 @@ def storeOutFile(out_path, out_data):
     """
     Write output file.
     """
+    # Sort list by filter names and then by exposure time.
+    data_sort = sorted(out_data, key=itemgetter(1, 3))
     out_data_file = join(out_path, "fitstats.dat")
-    data = Table(zip(*out_data), names=(
-        '# image         ', 'filter', 'exposure', 'Sky_mean', 'Sky_STDDEV',
-        'FWHM_(N_stars)', 'FWHM_(mean)', 'FWHM_(std)'))
+    data = Table(zip(*data_sort), names=(
+        '# image         ', 'filter', 'airmass', 'exposure', 'Sky_mean',
+        'Sky_STDDEV', 'FWHM_(N_stars)', 'FWHM_(mean)', 'FWHM_(std)'))
     ascii.write(
         data, out_data_file, overwrite=True, formats={
             '# image         ': '%-16s', 'FWHM_(N_stars)': '%14.0f',
@@ -341,7 +332,7 @@ def main():
     Get FWHM, sky mean, and sky standard deviation from a single .fits file or
     a folder containing .fits files.
     """
-    mypath, pars, fits_list, out_path = read_params()
+    pars, fits_list, out_path = read_params()
 
     # Generate output dir/subdir if it doesn't exist.
     if not exists(out_path):
@@ -354,7 +345,7 @@ def main():
     # For each .fits image in the root folder.
     for imname in fits_list:
         print("\nFile: {}".format(
-            imname.replace(mypath.replace('tasks', 'input'), "")))
+            imname.replace(pars['mypath'].replace('tasks', 'input'), "")))
 
         # Load .fits file.
         hdulist = fits.open(imname)
@@ -412,8 +403,9 @@ def main():
             # Store data to write to output file.
             im_name = imname.split('/')[-1]
             out_data.append(
-                [im_name, hdr[pars['filter_key']], hdr[pars['exposure_key']],
-                 sky_mean, sky_std, len(fwhm_accptd), fwhm_mean, fwhm_std])
+                [im_name, hdr[pars['filter_key']], hdr[pars['airmass_key']],
+                 hdr[pars['exposure_key']], sky_mean, sky_std,
+                 len(fwhm_accptd), fwhm_mean, fwhm_std])
         else:
             print("  ERROR: no stars returned from 'psfmeasure' task.")
 

@@ -9,7 +9,7 @@ rdnoise_key      ENOISE
 filter_key       FILTER
 exposure_key     EXPTIME
 airmass_key      AIRMASS
-dmin             a
+dmin             a        <-- TODO
 dmax             60000.0
 
 ###############################################################################
@@ -19,24 +19,21 @@ dmax             60000.0
 ###############################################################################
 # Scripts applied on both standard and field frames.
 
-# Working folder (either 'standards' or 'field').
-#
-in_folder        standards
-
-
 # 'fitstats' parameters
 #
+in_folder_A      standards
 ellip_max        0.15
 fwhm_min         1.5
 sky_method       BW
 thresh_level     5.0
 fwhm_init        3.0
 max_stars        100
-do_plots_A       y
+do_plots_A       n
 
 
 # 'align_crop' parameters
 #
+in_folder_B      standards
 ref_align        none
 crop_save        y
 x_init_shift     0.0
@@ -52,12 +49,9 @@ do_plots_B       y
 ###############################################################################
 # Standard stars identification, photometry, and transformations.
 
-# Shared parameter
-#
-landolt_fld      pg1323
-
 # 'id_standards' parameters
 #
+landolt_fld      pg1323
 ref_id_std       stk_2127_crop.fits
 scale_min        0.1
 scale_max        10.0
@@ -68,10 +62,15 @@ do_plots_C       y
 
 # 'fit_standards' parameters
 #
+stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
+stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
+stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
 aperture         15
 annulus_in       20
 annulus_out      25
-extin_coeffs     U,.49;B,.27;V,.12;I,.02
+R^2_min          0.98
+RMSE_max         0.05
+extin_coeffs     U, .49; B, .27; V, .12; I, .02
 do_plots_D       y
 
 ###############################################################################

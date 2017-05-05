@@ -1,6 +1,8 @@
 
+import read_pars_file as rpf
+
 import os
-from os.path import join, realpath, dirname, isfile
+from os.path import join, isfile
 import sys
 import numpy as np
 from scipy.stats import linregress
@@ -18,39 +20,27 @@ from photutils import CircularAnnulus
 from photutils import aperture_photometry
 
 
-def read_params():
+def in_params():
     """
-    Read parameter values.
+    Read and prepare input parameter values.
     """
-    mypath = realpath(join(os.getcwd(), dirname(__file__)))
-    pars_f = join(mypath.replace('tasks', ''), 'params_input.dat')
-    if not isfile(pars_f):
-        print("Parameters file is missing. Exit.")
-        sys.exit()
+    pars = rpf.main()
 
-    pars = {}
-    with open(pars_f, 'r') as f:
-        for line in f:
-            if not line.startswith('#') and line != '\n':
-                key, value = line.replace('\n', '').split()
-                pars[key] = value
-
-    in_out_path = mypath.replace('tasks', 'output/standards')
+    in_out_path = pars['mypath'].replace('tasks', 'output/standards')
 
     fits_list = []
-    if os.path.isdir(in_out_path):
-        for file in os.listdir(in_out_path):
-            f = join(in_out_path, file)
-            if isfile(f):
-                if f.endswith('_crop.fits'):
-                    fits_list.append(f)
+    for file in os.listdir(in_out_path):
+        f = join(in_out_path, file)
+        if isfile(f):
+            if f.endswith('_crop.fits'):
+                fits_list.append(f)
 
     if not fits_list:
         print("No '*_crop.fits' files found in 'output/standards' folder."
               " Exit.")
         sys.exit()
 
-    return mypath, pars, fits_list, in_out_path
+    return pars, fits_list, in_out_path
 
 
 def read_standard_coo(in_out_path, landolt_fld):
@@ -93,14 +83,12 @@ def calibrate_magnitudes(tab, itime=1., zmag=25.):
     return tab
 
 
-def instrumMags(landolt_fl, hdu_data, exp_time, pars):
+def instrumMags(landolt_fl, hdu_data, exp_time, aper_rad, annulus_in,
+                annulus_out):
     """
     Perform aperture photometry for all 'landolt_fl' standard stars observed in
     the 'hdu_data' file.
     """
-    aper_rad, annulus_in, annulus_out = float(pars['aperture']),\
-        float(pars['annulus_in']), float(pars['annulus_out'])
-
     # Coordinates from observed frame.
     positions = zip(*[landolt_fl['x_obs'], landolt_fl['y_obs']])
     apertures = CircularAperture(positions, r=aper_rad)
@@ -133,6 +121,27 @@ def rmse(targets, predictions):
     return np.sqrt(((predictions - targets) ** 2).mean())
 
 
+def redchisqg(ydata, ymod, deg=2, sd=.05):
+    """
+    Returns the reduced chi-square error statistic for an arbitrary model,
+    chisq/nu, where nu is the number of degrees of freedom. If individual
+    standard deviations (array sd) are supplied, then the chi-square error
+    statistic is computed as the sum of squared errors divided by the standard
+    deviations. See http://en.wikipedia.org/wiki/Goodness_of_fit for reference.
+    ydata : data
+    ymod : model evaluated at the same x points as ydata
+    """
+    print((ydata - ymod) / sd) ** 2
+    chisq = np.sum(((ydata - ymod) / sd) ** 2)
+    print("  chisq: ", chisq)
+
+    # Number of degrees of freedom assuming 2 free parameters
+    nu = len(ydata) - 1. - deg
+    print("  nu:", nu)
+
+    return chisq / nu
+
+
 def distPoint2Line(m, c, x, y):
     """
     Distance from (x, y) point, to line with equation:
@@ -150,9 +159,13 @@ def distPoint2Line(m, c, x, y):
 
 def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
     """
+    Perform a linear regression fit, rejecting outliers until the conditions
+    of abs(1 - red_chi)<chi_min_delta and RMSE<RMSE_max are met.
     """
     m, c, r_value, p_value, std_err = linregress(x, y)
     predictions = m * np.array(x) + c
+    red_chisq = redchisqg(y, predictions)
+    print("Red Chi^2: {:.3f}".format(red_chisq))
     chi, RMSE = r_value**2, rmse(y, predictions)
     print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
         len(x), m, c, chi, RMSE))
@@ -166,6 +179,8 @@ def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
 
         m, c, r_value, p_value, std_err = linregress(x_accpt, y_accpt)
         predictions = m * np.array(x_accpt) + c
+        red_chisq = redchisqg(y_accpt, predictions)
+        print("Red Chi^2: {:.3f}".format(red_chisq))
         # STD = np.std(y - predictions)
         chi, RMSE = r_value**2, rmse(y_accpt, predictions)
         print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
@@ -175,103 +190,17 @@ def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
         print("  WARNING: only two stars were used in the fit.")
 
     xy_accpt, xy_rjct = [x_accpt, y_accpt], [x_rjct, y_rjct]
+    print(x_accpt)
+    print(y_accpt)
+    import pdb; pdb.set_trace()  # breakpoint 95bfd6e0 //
+
     return xy_accpt, xy_rjct, m, c, chi, RMSE
 
 
-def make_plot(mypath, filt_col_data):
+def fitTransfEquations(filters):
     """
+    Solve transformation equation to the Landolt system.
     """
-    print("\nPlotting.")
-    # print(plt.style.available)
-    plt.style.use('seaborn-darkgrid')
-    fig = plt.figure(figsize=(15, 30))
-    gs = gridspec.GridSpec(6, 3)
-
-    i = 0
-    xlbl = [r'$(B-V)_L$', r'$(B-V)_L$', r'$(U-B)_L$', r'$(V-I)_L$',
-            r'$(V-R)_L$']
-    ylbl = [r'$(V_L-V^{0A}_{I})$', r'$(B-V)^{0A}_{I}$', r'$(U-B)^{0A}_{I}$',
-            r'$(V-I)^{0A}_{I}$', r'$(V-R)^{0A}_{I}$']
-    for data in filt_col_data:
-        if data[0]:
-            X_accpt, X_rjct, m, c, chi, RMSE = data
-            x_accpt, y_accpt = X_accpt
-            x_rjct, y_rjct = X_rjct
-
-            x_r = np.arange(min(x_accpt), max(x_accpt) * 1.1, .01)
-            predictions = m * x_r + c
-
-            ax = fig.add_subplot(gs[0 + i * 3])
-            sign = '+' if c >= 0. else '-'
-            ax.set_title("{} = {:.3f} {} {} {:.3f}".format(
-                ylbl[i], m, xlbl[i], sign, abs(c)), fontsize=9)
-            plt.xlabel(xlbl[i])
-            plt.ylabel(ylbl[i])
-            ax.plot(x_r, predictions, 'b-', zorder=1)
-            plt.scatter(x_accpt, y_accpt, c='g', zorder=4)
-            plt.scatter(x_rjct, y_rjct, c='r', marker='x', zorder=4)
-
-            # t1 = "m, c: {:.3f}, {:.3f}\n".format(m, c)
-            t1 = r"$R^{{2}}={:.3f}$".format(chi) + "\n"
-            t2 = r"$RMSE={:.3f}$".format(RMSE)
-            loc = 2 if i != 0 else 3
-            txt = AnchoredText(t1 + t2, loc=loc, prop=dict(size=9))
-            txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
-            ax.add_artist(txt)
-
-            ax = fig.add_subplot(gs[1 + i * 3])
-            plt.xlabel(xlbl[i])
-            plt.ylabel(r"$\Delta(P-L)$")
-            resid_accpt = (m * np.asarray(x_accpt) + c) - y_accpt
-            plt.scatter(x_accpt, resid_accpt, c='g', zorder=4)
-            # resid_rjct = (m * np.asarray(x_rjct) + c) - y_rjct
-            # plt.scatter(x_rjct, resid_rjct, c='r', marker='x')
-            ax.axhline(0., linestyle=':', color='b', zorder=1)
-            t1 = r"$\sigma={:.3f}$".format(np.std(resid_accpt))
-            txt = AnchoredText(t1, loc=2, prop=dict(size=9))
-            txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
-            ax.add_artist(txt)
-
-            # ax = fig.add_subplot(gs[2 + i * 3])
-
-        i += 1
-
-    fig.tight_layout()
-    fn = join(mypath.replace('tasks', 'output/standards'), 'fitstand.png')
-    plt.savefig(fn, dpi=150, bbox_inches='tight')
-    # Close to release memory.
-    plt.clf()
-    plt.close()
-    # Force the Garbage Collector to release unreferenced memory.
-    gc.collect()
-
-
-def main():
-    """
-    """
-    mypath, pars, fits_list, in_out_path = read_params()
-    landolt_fl = read_standard_coo(in_out_path, pars['landolt_fld'])
-
-    filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
-    # For each _crop.fits observed (aligned and cropped) standard file.
-    for imname in fits_list:
-        fname = imname.replace(mypath.replace('tasks', 'output'), '')
-        print("Aperture photometry on: {}".format(fname))
-
-        # Load .fits file.
-        hdulist = fits.open(imname)
-        # Extract header and data.
-        hdr, hdu_data = hdulist[0].header, hdulist[0].data
-        filt, exp_time, airmass = hdr[pars['filter_key']],\
-            hdr[pars['exposure_key']], hdr[pars['airmass_key']]
-
-        stand_mag, stand_col = standardMagnitude(landolt_fl, filt)
-        photu = instrumMags(landolt_fl, hdu_data, exp_time, pars)
-        photu = zeroAirmass(photu, pars['extin_coeffs'], filt, airmass)
-
-        # Group frames by filter.
-        filters[filt] = [stand_mag, stand_col, photu['instZA'].value]
-
     # Remove not observed filters from dictionary.
     filters = {k: v for k, v in filters.iteritems() if v}
 
@@ -320,7 +249,112 @@ def main():
         [UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE],
         [VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE],
         [VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE]]
-    make_plot(mypath, filt_col_data)
+
+    return filt_col_data
+
+
+def writeTransfCoeffs(filt_col_data):
+    """
+    """
+    ascii.write()
+
+
+def make_plot(mypath, filt_col_data):
+    """
+    """
+    print("\nPlotting.")
+    # print(plt.style.available)
+    plt.style.use('seaborn-darkgrid')
+    fig = plt.figure(figsize=(10, 25))
+    gs = gridspec.GridSpec(5, 2)
+
+    i = 0
+    xlbl = [r'$(B-V)_L$', r'$(B-V)_L$', r'$(U-B)_L$', r'$(V-I)_L$',
+            r'$(V-R)_L$']
+    ylbl = [r'$(V_L-V^{0A}_{I})$', r'$(B-V)^{0A}_{I}$', r'$(U-B)^{0A}_{I}$',
+            r'$(V-I)^{0A}_{I}$', r'$(V-R)^{0A}_{I}$']
+    for data in filt_col_data:
+        if data[0]:
+            X_accpt, X_rjct, m, c, chi, RMSE = data
+            x_accpt, y_accpt = X_accpt
+            x_rjct, y_rjct = X_rjct
+
+            x_r = np.arange(min(x_accpt), max(x_accpt) * 1.1, .01)
+            predictions = m * x_r + c
+
+            ax = fig.add_subplot(gs[0 + i * 3])
+            sign = '+' if c >= 0. else '-'
+            ax.set_title("{} = {:.3f} {} {} {:.3f}".format(
+                ylbl[i], m, xlbl[i], sign, abs(c)), fontsize=9)
+            plt.xlabel(xlbl[i])
+            plt.ylabel(ylbl[i])
+            ax.plot(x_r, predictions, 'b-', zorder=1)
+            plt.scatter(x_accpt, y_accpt, c='g', zorder=4)
+            plt.scatter(x_rjct, y_rjct, c='r', marker='x', zorder=4)
+
+            # t1 = "m, c: {:.3f}, {:.3f}\n".format(m, c)
+            t1 = r"$R^{{2}}={:.3f}$".format(chi) + "\n"
+            t2 = r"$RMSE={:.3f}$".format(RMSE)
+            loc = 2 if i != 0 else 3
+            txt = AnchoredText(t1 + t2, loc=loc, prop=dict(size=9))
+            txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
+            ax.add_artist(txt)
+
+            ax = fig.add_subplot(gs[1 + i * 3])
+            plt.xlabel(xlbl[i])
+            plt.ylabel("residuals (obs - pred)")
+            resid_accpt = y_accpt - (m * np.asarray(x_accpt) + c)
+            plt.scatter(x_accpt, resid_accpt, c='g', zorder=4)
+            ax.axhline(0., linestyle=':', color='b', zorder=1)
+            t1 = r"$\sigma={:.3f}$".format(np.std(resid_accpt))
+            txt = AnchoredText(t1, loc=2, prop=dict(size=9))
+            txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
+            ax.add_artist(txt)
+
+        i += 1
+
+    fig.tight_layout()
+    fn = join(mypath.replace('tasks', 'output/standards'), 'fitstand.png')
+    plt.savefig(fn, dpi=150, bbox_inches='tight')
+    # Close to release memory.
+    plt.clf()
+    plt.close()
+    # Force the Garbage Collector to release unreferenced memory.
+    gc.collect()
+
+
+def main():
+    """
+    """
+    pars, fits_list, in_out_path = in_params()
+    landolt_fl = read_standard_coo(in_out_path, pars['landolt_fld'])
+
+    filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
+    # For each _crop.fits observed (aligned and cropped) standard file.
+    for imname in fits_list:
+        fname = imname.replace(pars['mypath'].replace('tasks', 'output'), '')
+
+        # Load .fits file.
+        hdulist = fits.open(imname)
+        # Extract header and data.
+        hdr, hdu_data = hdulist[0].header, hdulist[0].data
+        filt, exp_time, airmass = hdr[pars['filter_key']],\
+            hdr[pars['exposure_key']], hdr[pars['airmass_key']]
+
+        stand_mag, stand_col = standardMagnitude(landolt_fl, filt)
+        print("Aperture photometry on: {}".format(fname))
+        photu = instrumMags(landolt_fl, hdu_data, exp_time, pars)
+        photu = zeroAirmass(photu, pars['extin_coeffs'], filt, airmass)
+
+        # Group frames by filter.
+        filters[filt] = [stand_mag, stand_col, photu['instZA'].value]
+
+    filt_col_data = fitTransfEquations(filters)
+
+    writeTransfCoeffs(filt_col_data)
+
+    if pars['do_plots_D'] == 'y':
+        make_plot(pars['mypath'], filt_col_data)
 
     print("\nFinished.")
 

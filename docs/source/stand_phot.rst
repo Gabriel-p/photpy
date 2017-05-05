@@ -57,14 +57,16 @@ well as their ``x,y`` coordinates in the observed system.
  pg1323-86B  158.1  128.0  13.406  0.761   0.265   0.426   0.407   0.833   1489.735   1626.427
 
 
-Aperture photometry on standard stars
--------------------------------------
+
+Define and solve the transformation equations
+---------------------------------------------
 
 .. todo::
    Not finished.
 
-**We assume that you will work with a single aperture radius value for the
-standards from all the nights for all the filters.**
+.. warning::
+  We assume that you will work with a single aperture radius value for the
+  standards from all the nights for all the filters.
 
 The aperture value should be large enough to contain as much light from
 your observed standards as possible, but at the same time small enough to
@@ -73,25 +75,25 @@ The default convention is to use an aperture radius that is ``~4.5*FWHM`` of a
 stellar image. This is, for a ``FWHM=3 px`` you'll use an aperture around
 ``14-15 px``.
 
-Assuming you've already run the ``getdata`` script, these values are stored in
-the ``fwhm_final.dat`` file for each of the observed filters. You can quickly
-obtain an average estimate by running the ``data_avrg`` script on the parent
-folder that contains the filter sub-folders.
+Assuming you've already run the ``fitstats`` script, the median FWHM values for
+your standard frames are stored in the ``fitstats.dat`` file. 
 
+.. warning::
+  If you have more than one exposure per filter for your standard frame, at this
+  point you need to select only one. An ideal frame should allow the detection
+  of all the standard stars in it. This means no over-exposed saturated stars,
+  and no   under-exposed undetectable stars.
 
-
-Define and solve the transformation equations
----------------------------------------------
-
-.. todo::
-   Not finished.
-
-
-
-The previous step generated instrumental magnitudes for all the observed
+This script will obtain instrumental magnitudes for all the observed
 standard stars, for each selected frame. The transformation equations are used
 to put these magnitudes on the standard system.
 
+
+.. warning::
+  The extinction coefficients for your observed filters are assumed to be known.
+
+.. warning::
+  The V filter is assumed to be present among your observed filters.
 
 
 
