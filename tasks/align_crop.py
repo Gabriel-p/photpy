@@ -20,7 +20,7 @@ from astropy.wcs import WCS
 from astropy.nddata.utils import Cutout2D
 
 
-def read_params():
+def in_params():
     """
     Read and prepare input parameter values.
     """
@@ -261,7 +261,7 @@ def make_plots(out_path, hdu, ref_i, fits_list, xy_coo, shifts, overlap,
 def main():
     """
     """
-    fits_list, pars, out_path = read_params()
+    fits_list, pars, out_path = in_params()
 
     print("Read coordinates from .coo files.")
     xy_coo, hdu, hdr, hw = [], [], [], [[], []]
