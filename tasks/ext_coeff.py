@@ -1,24 +1,16 @@
 
 import read_pars_file as rpf
-from fit_standard import read_standard_coo, instrumMags
+from fit_standard import instrumMags
+from hlpr import st_fwhm_select
 
 import os
 from os.path import join, isfile
-import sys
 import numpy as np
 from scipy.stats import linregress
-import gc
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from matplotlib.offsetbox import AnchoredText
 
-import astropy.units as u
-from astropy.io import ascii, fits
-from astropy.table import Table, Column
-
-from photutils import CircularAperture
-from photutils import CircularAnnulus
-from photutils import aperture_photometry
+from astropy.io import fits
+from astropy.table import Table
 
 
 def in_params():
@@ -41,11 +33,24 @@ def in_params():
 
 def main():
     """
+    Rough sketch of script to determine extinction coefficients.
     """
     pars, fits_list, in_out_path = in_params()
     f_key, exp_key, air_key = pars['filter_key'], pars['exposure_key'],\
         pars['airmass_key']
-    landolt_fl = read_standard_coo(in_out_path, pars['landolt_fld'])
+
+    # Perform a Daofind on a selected .fits frame.
+    hdulist = fits.open(join(in_out_path, 'stk_2083_crop.fits'))
+    hdu_data = hdulist[0].data
+    psf_select = st_fwhm_select(
+        float(pars['dmax']), int(pars['max_stars']),
+        float(pars['thresh_level']), float(pars['fwhm_init']), 35.,
+        hdu_data)[0]
+    psf_select['ID'], psf_select['x_obs'], psf_select['y_obs'] =\
+        psf_select['id'], psf_select['xcentroid'], psf_select['ycentroid']
+    # This table holds the IDs and coordinates of all stars detected.
+    landolt_fl = Table([
+        psf_select['ID'], psf_select['x_obs'], psf_select['y_obs']])
 
     filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
     for imname in fits_list:
@@ -72,29 +77,32 @@ def main():
     for filt, fdata in filters.iteritems():
         if fdata:
             print("Filter {}".format(filt))
-            cc = [zip(*_) for _ in fdata]
-            airm_mag = [[[], [], []] for _ in fdata[0]]
-            for a in cc:
-                aa = zip(*a)
-                for i, st in enumerate(aa):
-                    airm_mag[i][0].append(st[0])
-                    airm_mag[i][1].append(st[1])
-                    airm_mag[i][2].append(st[2])
+            # Transform list into into:
+            # airm_mag = [st1, st2, st3, ...]
+            # stX = [airmass, instrum_magnitudes]
+            airm_mag = [[y for y in zip(*x)] for x in zip(*fdata)]
 
-            yl = []
+            plt.style.use('seaborn-darkgrid')
+            slopes = []
             for st in airm_mag:
-                plt.scatter(st[0], st[1])
+                # plt.scatter(st[0], st[1])
                 m, c, r_value, p_value, std_err = linregress(st[0], st[1])
-                print("Star {}, m={:.3f}".format(st[2][0], m))
-                yl.append(max(st[1]))
-                yl.append(min(st[1]))
-            plt.ylim(max(yl) + .05, min(yl) - .05)
-            plt.show()
+                slopes.append(m)
+                print("  Star {}, K={:.3f}".format(st[2][0], m))
 
-    import pdb; pdb.set_trace()  # breakpoint 1aa181a1 //
+            # Obtain median of extinction coefficients for this filter.
+            median_K = np.nanmedian(slopes)
+            print("Median K: {:.3f}".format(median_K))
+            # Plot histogram of coefficients.
+            plt.xlim(0., 2 * median_K)
+            slopes = np.array(slopes)
+            plt.hist(slopes[~np.isnan(slopes)], bins=50)
+            plt.show()
 
 
 if __name__ == '__main__':
     main()
 
 # https://arxiv.org/PS_cache/arxiv/pdf/0906/0906.3014v1.pdf
+
+# v3 = +0.16, b3 = +0.25, i3 = +0.08, u3 = +0.45

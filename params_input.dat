@@ -1,9 +1,7 @@
 
 ###############################################################################
-# Parameters that affect multiple scripts.
+# General observed data parameters.
 
-# General data parameters 
-#
 gain_key         EGAIN
 rdnoise_key      ENOISE
 filter_key       FILTER
@@ -28,7 +26,7 @@ sky_method       BW
 thresh_level     5.0
 fwhm_init        3.0
 max_stars        100
-do_plots_A       n
+do_plots_A       y
 
 
 # 'align_crop' parameters
@@ -63,14 +61,35 @@ do_plots_C       y
 # 'fit_standards' parameters
 #
 stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
-stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
-stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
 aperture         15
 annulus_in       20
 annulus_out      25
 R^2_min          0.98
 RMSE_max         0.05
-extin_coeffs     U, .49; B, .27; V, .12; I, .02
+extin_coeffs     U .45, B .25, V .16, I .08
 do_plots_D       y
+
+###############################################################################
+
+
+
+###############################################################################
+# PSF photometry, exposure matching, and transformation of instrumental
+# magnitudes into standard magnitudes.
+
+# 'psf_phot' parameters
+#
+aaa              aaa
+bbb              bbb
+ccc              ccc
+do_plots_E       y
+
+
+# 'match_transf' parameters
+#
+ddd              ddd
+eee              eee
+fff              fff
+do_plots_F       y
 
 ###############################################################################

@@ -19,7 +19,7 @@ def main():
         for line in f:
             if not line.startswith('#') and line != '\n':
                 lin = line.replace('\n', '').split()
-                key = lin[0].replace(',', '')
+                key = lin[0]
                 value = [_.replace(',', '') for _ in lin[1:]]
                 if len(value) > 1:
                     pars[key] = value

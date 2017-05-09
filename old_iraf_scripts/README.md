@@ -382,7 +382,7 @@ keep
       * The codes 'daomaster_auto', 'daomaster_semi' and 'daomaster_manual',
       MUST be compiled prior to running this script and they need to be located
       in the '/home/IRAF/custom/' folder. If they are NOT located in
-      this folder then the 'loginuser.cl' (showed at the beginning of this
+      this folder then the 'loginuser.cl' (shown at the beginning of this
       manual) must be modified accordingly, if used.
           
       * It needs the files: 'list', the '*.als.1' (or '*.als.2') or '*.mag.1' 

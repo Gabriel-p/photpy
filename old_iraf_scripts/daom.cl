@@ -305,7 +305,7 @@ begin
 
 
 # ---------------------------------------------------------------------------------------------
-# Create .txt file to feed DAOMASTER's First run and identificate longest exposures and filters
+# Create .txt file to feed DAOMASTER's First run and identify longest exposures and filters
 # ---------------------------------------------------------------------------------------------
 
       u = 1

@@ -6,7 +6,6 @@ from os.path import join, isfile
 import sys
 import numpy as np
 from scipy.stats import linregress
-import gc
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.offsetbox import AnchoredText
@@ -33,7 +32,8 @@ def in_params():
         f = join(in_out_path, file)
         if isfile(f):
             if f.endswith('_crop.fits'):
-                fits_list.append(f)
+                if f.split('/')[-1] in pars['stnd_obs_fields'][1:]:
+                    fits_list.append(f)
 
     if not fits_list:
         print("No '*_crop.fits' files found in 'output/standards' folder."
@@ -109,9 +109,8 @@ def zeroAirmass(phot_table, extin_coeffs, filt, airmass):
     """
     Correct for airmass, i.e. instrumental. magnitude at zero airmass.
     """
-    fe = [_.split(',') for _ in extin_coeffs.split(';')]
-    f_idx = zip(*fe)[0].index(filt)
-    ext = map(float, zip(*fe)[1])[f_idx]
+    f_idx = extin_coeffs.index(filt) + 1
+    ext = float(extin_coeffs[f_idx])
     phot_table['instZA'] = phot_table['cal_mags'] - (ext * airmass) * u.mag
 
     return phot_table
@@ -190,9 +189,6 @@ def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
         print("  WARNING: only two stars were used in the fit.")
 
     xy_accpt, xy_rjct = [x_accpt, y_accpt], [x_rjct, y_rjct]
-    print(x_accpt)
-    print(y_accpt)
-    import pdb; pdb.set_trace()  # breakpoint 95bfd6e0 //
 
     return xy_accpt, xy_rjct, m, c, chi, RMSE
 
@@ -210,53 +206,68 @@ def fitTransfEquations(filters):
     # Find slope and/or intersection of linear regression.
     V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE = regressRjctOutliers(x_fit, y_fit)
     print("V: {:.2f}, {:.2f}".format(Vm, Vc))
+    filt_col_data = [["V", V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE]]
 
-    BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE = [], [], [], [], 0., 1.
     if 'B' in filters.keys():
         stand_B, stand_BV, instZA_B = filters['B']
-        x_fit, y_fit = stand_BV, instZA_B - instZA_V
+        x_fit, y_fit = (instZA_B - instZA_V), stand_BV
         BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE = regressRjctOutliers(
             x_fit, y_fit)
         print("BV: {:.2f}, {:.2f}".format(BVm, BVc))
+        filt_col_data.append(
+            ["BV", BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE])
 
-        UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE = [], [], [], [], 0., 1.
         if 'U' in filters.keys():
             stand_U, stand_UB, instZA_U = filters['U']
-            x_fit, y_fit = stand_UB, instZA_U - instZA_B
+            x_fit, y_fit = (instZA_U - instZA_B), stand_UB
             UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE = regressRjctOutliers(
                 x_fit, y_fit)
             print("UB: {:.2f}, {:.2f}".format(UBm, UBc))
+            filt_col_data.append(
+                ["UB", UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE])
 
-    VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE = [], [], [], [], 0., 1.
     if 'I' in filters.keys():
         stand_I, stand_VI, instZA_I = filters['I']
-        x_fit, y_fit = stand_VI, instZA_V - instZA_I
+        x_fit, y_fit = (instZA_V - instZA_I), stand_VI
         VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE = regressRjctOutliers(
             x_fit, y_fit)
         print("VI: {:.2f}, {:.2f}".format(VIm, VIc))
+        filt_col_data.append(
+            ["VI", VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE])
 
-    VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE = [], [], [], [], 0., 1.
     if 'R' in filters.keys():
         stand_R, stand_VR, instZA_R = filters['R']
-        x_fit, y_fit = stand_VR, instZA_V - instZA_R
+        x_fit, y_fit = (instZA_V - instZA_R), stand_VR
         VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE = regressRjctOutliers(
             x_fit, y_fit)
         print("VR: {:.2f}, {:.2f}".format(VRm, VRc))
-
-    filt_col_data = [
-        [V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE],
-        [BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE],
-        [UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE],
-        [VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE],
-        [VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE]]
+        filt_col_data.append(
+            ["VR", VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE])
 
     return filt_col_data
 
 
-def writeTransfCoeffs(filt_col_data):
+def writeTransfCoeffs(mypath, filt_col_data):
     """
     """
-    ascii.write()
+    f_path = join(
+        mypath.replace('tasks', 'output/standards'), 'fit_coeffs.dat')
+    with open(f_path, 'w') as f:
+        hdr = """#\n# Instrumental zero airmass magnitude.\n# F_I^(0A) =""" +\
+            """ F_I  - K * X  ; X: airmass, K: extinction coefficient\n""" +\
+            """#\n# Standard color.\n# (F_1 - F_2)_L = c_1 """ +\
+            """(F_1 - F_2)_I^(0A) + c_2\n#\n# Standard magnitude.\n""" +\
+            """# V_L = V_I^(0A) + c_1 * (B - V)_L + c_2\n#\n# ID  N_a""" +\
+            """   N_r       c_1      c_2  red_Chi     RMSE\n"""
+        f.write(hdr)
+
+    with open(f_path, 'a') as f:
+        for fc in filt_col_data:
+            ln = "{:2}      {}     {}".format(
+                fc[0], len(fc[1][0]), len(fc[2][0]))
+            ln += "    {:6.3f}   {:6.3f}   {:6.3f}   {:6.3f}\n".format(
+                *map(float, fc[3:]))
+            f.write(ln)
 
 
 def make_plot(mypath, filt_col_data):
@@ -269,47 +280,53 @@ def make_plot(mypath, filt_col_data):
     gs = gridspec.GridSpec(5, 2)
 
     i = 0
-    xlbl = [r'$(B-V)_L$', r'$(B-V)_L$', r'$(U-B)_L$', r'$(V-I)_L$',
-            r'$(V-R)_L$']
-    ylbl = [r'$(V_L-V^{0A}_{I})$', r'$(B-V)^{0A}_{I}$', r'$(U-B)^{0A}_{I}$',
-            r'$(V-I)^{0A}_{I}$', r'$(V-R)^{0A}_{I}$']
     for data in filt_col_data:
-        if data[0]:
-            X_accpt, X_rjct, m, c, chi, RMSE = data
-            x_accpt, y_accpt = X_accpt
-            x_rjct, y_rjct = X_rjct
+        if data[0] == "V":
+            xlbl, ylbl = r'$(B-V)_L$', r'$(V_L-V^{0A}_{I})$'
+        elif data[0] == "BV":
+            xlbl, ylbl = r'$(B-V)^{0A}_{I}$', r'$(B-V)_L$'
+        elif data[0] == "UB":
+            xlbl, ylbl = r'$(U-B)^{0A}_{I}$', r'$(U-B)_L$'
+        elif data[0] == "VI":
+            xlbl, ylbl = r'$(V-I)^{0A}_{I}$', r'$(V-I)_L$'
+        elif data[0] == "VR":
+            xlbl, ylbl = r'$(V-R)^{0A}_{I}$', r'$(V-R)_L$'
 
-            x_r = np.arange(min(x_accpt), max(x_accpt) * 1.1, .01)
-            predictions = m * x_r + c
+        X_accpt, X_rjct, m, c, chi, RMSE = data[1:]
+        x_accpt, y_accpt = X_accpt
+        x_rjct, y_rjct = X_rjct
 
-            ax = fig.add_subplot(gs[0 + i * 3])
-            sign = '+' if c >= 0. else '-'
-            ax.set_title("{} = {:.3f} {} {} {:.3f}".format(
-                ylbl[i], m, xlbl[i], sign, abs(c)), fontsize=9)
-            plt.xlabel(xlbl[i])
-            plt.ylabel(ylbl[i])
-            ax.plot(x_r, predictions, 'b-', zorder=1)
-            plt.scatter(x_accpt, y_accpt, c='g', zorder=4)
-            plt.scatter(x_rjct, y_rjct, c='r', marker='x', zorder=4)
+        x_r = np.arange(min(x_accpt), max(x_accpt) * 1.1, .01)
+        predictions = m * x_r + c
 
-            # t1 = "m, c: {:.3f}, {:.3f}\n".format(m, c)
-            t1 = r"$R^{{2}}={:.3f}$".format(chi) + "\n"
-            t2 = r"$RMSE={:.3f}$".format(RMSE)
-            loc = 2 if i != 0 else 3
-            txt = AnchoredText(t1 + t2, loc=loc, prop=dict(size=9))
-            txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
-            ax.add_artist(txt)
+        ax = fig.add_subplot(gs[0 + i * 2])
+        sign = '+' if c >= 0. else '-'
+        ax.set_title("{} = {:.3f} {} {} {:.3f}".format(
+            ylbl, m, xlbl, sign, abs(c)), fontsize=9)
+        plt.xlabel(xlbl)
+        plt.ylabel(ylbl)
+        ax.plot(x_r, predictions, 'b-', zorder=1)
+        plt.scatter(x_accpt, y_accpt, c='g', zorder=4)
+        plt.scatter(x_rjct, y_rjct, c='r', marker='x', zorder=4)
 
-            ax = fig.add_subplot(gs[1 + i * 3])
-            plt.xlabel(xlbl[i])
-            plt.ylabel("residuals (obs - pred)")
-            resid_accpt = y_accpt - (m * np.asarray(x_accpt) + c)
-            plt.scatter(x_accpt, resid_accpt, c='g', zorder=4)
-            ax.axhline(0., linestyle=':', color='b', zorder=1)
-            t1 = r"$\sigma={:.3f}$".format(np.std(resid_accpt))
-            txt = AnchoredText(t1, loc=2, prop=dict(size=9))
-            txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
-            ax.add_artist(txt)
+        # t1 = "m, c: {:.3f}, {:.3f}\n".format(m, c)
+        t1 = r"$R^{{2}}={:.3f}$".format(chi) + "\n"
+        t2 = r"$RMSE={:.3f}$".format(RMSE)
+        loc = 2 if i != 0 else 3
+        txt = AnchoredText(t1 + t2, loc=loc, prop=dict(size=9))
+        txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
+        ax.add_artist(txt)
+
+        ax = fig.add_subplot(gs[1 + i * 2])
+        plt.xlabel(ylbl)
+        plt.ylabel("residuals (Landolt - pred)")
+        resid_accpt = y_accpt - (m * np.asarray(x_accpt) + c)
+        plt.scatter(y_accpt, resid_accpt, c='g', zorder=4)
+        ax.axhline(0., linestyle=':', color='b', zorder=1)
+        t1 = r"$\sigma={:.3f}$".format(np.std(resid_accpt))
+        txt = AnchoredText(t1, loc=2, prop=dict(size=9))
+        txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
+        ax.add_artist(txt)
 
         i += 1
 
@@ -319,15 +336,13 @@ def make_plot(mypath, filt_col_data):
     # Close to release memory.
     plt.clf()
     plt.close()
-    # Force the Garbage Collector to release unreferenced memory.
-    gc.collect()
 
 
 def main():
     """
     """
     pars, fits_list, in_out_path = in_params()
-    landolt_fl = read_standard_coo(in_out_path, pars['landolt_fld'])
+    landolt_fl = read_standard_coo(in_out_path, pars['stnd_obs_fields'][0])
 
     filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
     # For each _crop.fits observed (aligned and cropped) standard file.
@@ -343,7 +358,9 @@ def main():
 
         stand_mag, stand_col = standardMagnitude(landolt_fl, filt)
         print("Aperture photometry on: {}".format(fname))
-        photu = instrumMags(landolt_fl, hdu_data, exp_time, pars)
+        photu = instrumMags(
+            landolt_fl, hdu_data, exp_time, float(pars['aperture']),
+            float(pars['annulus_in']), float(pars['annulus_out']))
         photu = zeroAirmass(photu, pars['extin_coeffs'], filt, airmass)
 
         # Group frames by filter.
@@ -351,7 +368,7 @@ def main():
 
     filt_col_data = fitTransfEquations(filters)
 
-    writeTransfCoeffs(filt_col_data)
+    writeTransfCoeffs(pars['mypath'], filt_col_data)
 
     if pars['do_plots_D'] == 'y':
         make_plot(pars['mypath'], filt_col_data)
