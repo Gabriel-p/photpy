@@ -61,6 +61,9 @@ do_plots_C       y
 # 'fit_standards' parameters
 #
 stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
+#stnd_obs_fields  pg1323, stk_2149_crop.fits, stk_2142_crop.fits, stk_2153_crop.fits, stk_2146_crop.fits
+#stnd_obs_fields  pg1323, stk_2150_crop.fits, stk_2126_crop.fits, stk_2128_crop.fits, stk_2130_crop.fits
+#stnd_obs_fields  pg1323, stk_2081_crop.fits, stk_2083_crop.fits, stk_2084_crop.fits, stk_2148_crop.fits
 aperture         15
 annulus_in       20
 annulus_out      25

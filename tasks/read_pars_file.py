@@ -22,8 +22,16 @@ def main():
                 key = lin[0]
                 value = [_.replace(',', '') for _ in lin[1:]]
                 if len(value) > 1:
-                    pars[key] = value
+                    # If the key exists, append instead of re-writing.
+                    if key in pars:
+                        pars[key].append(value)
+                    else:
+                        pars[key] = [value]
                 else:
                     pars[key] = value[0]
 
     return pars
+
+
+if __name__ == '__main__':
+    main()

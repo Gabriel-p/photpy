@@ -12,7 +12,6 @@ from matplotlib.offsetbox import AnchoredText
 
 import astropy.units as u
 from astropy.io import ascii, fits
-from astropy.table import Table, Column
 
 from photutils import CircularAperture
 from photutils import CircularAnnulus
@@ -32,15 +31,14 @@ def in_params():
         f = join(in_out_path, file)
         if isfile(f):
             if f.endswith('_crop.fits'):
-                if f.split('/')[-1] in pars['stnd_obs_fields'][1:]:
-                    fits_list.append(f)
+                fits_list.append(f)
 
     if not fits_list:
         print("No '*_crop.fits' files found in 'output/standards' folder."
               " Exit.")
         sys.exit()
 
-    return pars, fits_list, in_out_path
+    return pars, in_out_path
 
 
 def read_standard_coo(in_out_path, landolt_fld):
@@ -75,7 +73,7 @@ def standardMagnitude(landolt_fl, filt):
         standard_mag = landolt_fl['V'] - landolt_fl['VI']
         standard_col = landolt_fl['VI']
 
-    return np.asarray(standard_mag), np.asarray(standard_col)
+    return list(standard_mag), list(standard_col)
 
 
 def calibrate_magnitudes(tab, itime=1., zmag=25.):
@@ -120,7 +118,7 @@ def rmse(targets, predictions):
     return np.sqrt(((predictions - targets) ** 2).mean())
 
 
-def redchisqg(ydata, ymod, deg=2, sd=.05):
+def redchisqg(ydata, ymod, deg=2, sd=.01):
     """
     Returns the reduced chi-square error statistic for an arbitrary model,
     chisq/nu, where nu is the number of degrees of freedom. If individual
@@ -130,13 +128,10 @@ def redchisqg(ydata, ymod, deg=2, sd=.05):
     ydata : data
     ymod : model evaluated at the same x points as ydata
     """
-    print((ydata - ymod) / sd) ** 2
     chisq = np.sum(((ydata - ymod) / sd) ** 2)
-    print("  chisq: ", chisq)
 
     # Number of degrees of freedom assuming 2 free parameters
-    nu = len(ydata) - 1. - deg
-    print("  nu:", nu)
+    nu = len(ydata) - deg
 
     return chisq / nu
 
@@ -161,13 +156,18 @@ def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
     Perform a linear regression fit, rejecting outliers until the conditions
     of abs(1 - red_chi)<chi_min_delta and RMSE<RMSE_max are met.
     """
+
+    # TODO: read chi_min and RMSE_max
+    # TODO: finish reduced chi function
+    # TODO: errors for fit coefficients?
+
     m, c, r_value, p_value, std_err = linregress(x, y)
     predictions = m * np.array(x) + c
     red_chisq = redchisqg(y, predictions)
-    print("Red Chi^2: {:.3f}".format(red_chisq))
+    # print("Red Chi^2: {:.3f}".format(red_chisq))
     chi, RMSE = r_value**2, rmse(y, predictions)
-    print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
-        len(x), m, c, chi, RMSE))
+    # print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
+    #     len(x), m, c, chi, RMSE))
 
     x_accpt, y_accpt, x_rjct, y_rjct = x[:], y[:], [], []
     while chi < chi_min or RMSE > RMSE_max:
@@ -179,11 +179,12 @@ def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
         m, c, r_value, p_value, std_err = linregress(x_accpt, y_accpt)
         predictions = m * np.array(x_accpt) + c
         red_chisq = redchisqg(y_accpt, predictions)
-        print("Red Chi^2: {:.3f}".format(red_chisq))
         # STD = np.std(y - predictions)
         chi, RMSE = r_value**2, rmse(y_accpt, predictions)
-        print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
-            len(x_accpt), m, c, chi, RMSE))
+
+    print("Red Chi^2: {:.3f}".format(red_chisq))
+    print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
+        len(x_accpt), m, c, chi, RMSE))
 
     if len(x_accpt) == 2:
         print("  WARNING: only two stars were used in the fit.")
@@ -197,50 +198,49 @@ def fitTransfEquations(filters):
     """
     Solve transformation equation to the Landolt system.
     """
-    # Remove not observed filters from dictionary.
-    filters = {k: v for k, v in filters.iteritems() if v}
-
     # Assume that the 'V' filter was used.
-    stand_V, stand_BV, instZA_V = filters['V']
+    stand_V, stand_BV, instZA_V = np.array(filters['V']).transpose(1, 2, 0)
     x_fit, y_fit = stand_BV, (stand_V - instZA_V)
     # Find slope and/or intersection of linear regression.
-    V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE = regressRjctOutliers(x_fit, y_fit)
-    print("V: {:.2f}, {:.2f}".format(Vm, Vc))
+    V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE = regressRjctOutliers(
+        x_fit.flatten(), y_fit.flatten())
+    # print("V: {:.2f}, {:.2f}".format(Vm, Vc))
     filt_col_data = [["V", V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE]]
 
     if 'B' in filters.keys():
-        stand_B, stand_BV, instZA_B = filters['B']
+        stand_B, stand_BV, instZA_B = np.array(filters['B']).transpose(1, 2, 0)
         x_fit, y_fit = (instZA_B - instZA_V), stand_BV
         BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE = regressRjctOutliers(
-            x_fit, y_fit)
-        print("BV: {:.2f}, {:.2f}".format(BVm, BVc))
+            x_fit.flatten(), y_fit.flatten())
+        # print("BV: {:.2f}, {:.2f}".format(BVm, BVc))
         filt_col_data.append(
             ["BV", BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE])
 
         if 'U' in filters.keys():
-            stand_U, stand_UB, instZA_U = filters['U']
+            stand_U, stand_UB, instZA_U = np.array(
+                filters['U']).transpose(1, 2, 0)
             x_fit, y_fit = (instZA_U - instZA_B), stand_UB
             UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE = regressRjctOutliers(
-                x_fit, y_fit)
-            print("UB: {:.2f}, {:.2f}".format(UBm, UBc))
+                x_fit.flatten(), y_fit.flatten())
+            # print("UB: {:.2f}, {:.2f}".format(UBm, UBc))
             filt_col_data.append(
                 ["UB", UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE])
 
     if 'I' in filters.keys():
-        stand_I, stand_VI, instZA_I = filters['I']
+        stand_I, stand_VI, instZA_I = np.array(filters['I']).transpose(1, 2, 0)
         x_fit, y_fit = (instZA_V - instZA_I), stand_VI
         VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE = regressRjctOutliers(
-            x_fit, y_fit)
-        print("VI: {:.2f}, {:.2f}".format(VIm, VIc))
+            x_fit.flatten(), y_fit.flatten())
+        # print("VI: {:.2f}, {:.2f}".format(VIm, VIc))
         filt_col_data.append(
             ["VI", VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE])
 
     if 'R' in filters.keys():
-        stand_R, stand_VR, instZA_R = filters['R']
+        stand_R, stand_VR, instZA_R = np.array(filters['R']).transpose(1, 2, 0)
         x_fit, y_fit = (instZA_V - instZA_R), stand_VR
         VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE = regressRjctOutliers(
-            x_fit, y_fit)
-        print("VR: {:.2f}, {:.2f}".format(VRm, VRc))
+            x_fit.flatten(), y_fit.flatten())
+        # print("VR: {:.2f}, {:.2f}".format(VRm, VRc))
         filt_col_data.append(
             ["VR", VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE])
 
@@ -258,10 +258,8 @@ def writeTransfCoeffs(mypath, filt_col_data):
             """#\n# Standard color.\n# (F_1 - F_2)_L = c_1 """ +\
             """(F_1 - F_2)_I^(0A) + c_2\n#\n# Standard magnitude.\n""" +\
             """# V_L = V_I^(0A) + c_1 * (B - V)_L + c_2\n#\n# ID  N_a""" +\
-            """   N_r       c_1      c_2  red_Chi     RMSE\n"""
+            """   N_r       c_1      c_2  R^2     RMSE\n"""
         f.write(hdr)
-
-    with open(f_path, 'a') as f:
         for fc in filt_col_data:
             ln = "{:2}      {}     {}".format(
                 fc[0], len(fc[1][0]), len(fc[2][0]))
@@ -341,31 +339,51 @@ def make_plot(mypath, filt_col_data):
 def main():
     """
     """
-    pars, fits_list, in_out_path = in_params()
-    landolt_fl = read_standard_coo(in_out_path, pars['stnd_obs_fields'][0])
+    pars, in_out_path = in_params()
 
     filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
-    # For each _crop.fits observed (aligned and cropped) standard file.
-    for imname in fits_list:
-        fname = imname.replace(pars['mypath'].replace('tasks', 'output'), '')
+    for stnd_fl in pars['stnd_obs_fields']:
+        stnd_f_name, fits_list = stnd_fl[0], stnd_fl[1:]
+        print("Perform aperture photometry and resolve transformation\n"
+              "equations for standard field {}".format(stnd_f_name))
 
-        # Load .fits file.
-        hdulist = fits.open(imname)
-        # Extract header and data.
-        hdr, hdu_data = hdulist[0].header, hdulist[0].data
-        filt, exp_time, airmass = hdr[pars['filter_key']],\
-            hdr[pars['exposure_key']], hdr[pars['airmass_key']]
+        # Data for this Landolt field.
+        landolt_fl = read_standard_coo(in_out_path, stnd_f_name)
 
-        stand_mag, stand_col = standardMagnitude(landolt_fl, filt)
-        print("Aperture photometry on: {}".format(fname))
-        photu = instrumMags(
-            landolt_fl, hdu_data, exp_time, float(pars['aperture']),
-            float(pars['annulus_in']), float(pars['annulus_out']))
-        photu = zeroAirmass(photu, pars['extin_coeffs'], filt, airmass)
+        # For each _crop.fits observed (aligned and cropped) standard file.
+        for imname in fits_list:
+            # Load .fits file.
+            hdulist = fits.open(join(in_out_path, imname))
+            # Extract header and data.
+            hdr, hdu_data = hdulist[0].header, hdulist[0].data
+            filt, exp_time, airmass = hdr[pars['filter_key']],\
+                hdr[pars['exposure_key']], hdr[pars['airmass_key']]
+            print("  {}, Filter {}, Exp {}".format(imname, filt, exp_time))
 
-        # Group frames by filter.
-        filters[filt] = [stand_mag, stand_col, photu['instZA'].value]
+            # Extract data for this filter.
+            stand_mag, stand_col = standardMagnitude(landolt_fl, filt)
+            # Obtain instrumental magnitudes for the standard stars in the
+            # defined Landolt field, in this observed frame.
+            photu = instrumMags(
+                landolt_fl, hdu_data, exp_time, float(pars['aperture']),
+                float(pars['annulus_in']), float(pars['annulus_out']))
+            # Correct instrumental magnitudes for zero airmass.
+            photu = zeroAirmass(photu, pars['extin_coeffs'][0], filt, airmass)
 
+            # Group frames by filter.
+            filters[filt].append(
+                [stand_mag, stand_col, list(photu['instZA'].value)])
+
+    # Remove not observed filters from dictionary.
+    filters = {k: v for k, v in filters.iteritems() if v}
+    if 'V' not in filters.keys():
+        print("Filter V is missing.")
+        sys.exit()
+        if 'B' not in filters.keys():
+            print("Filter B is missing.")
+            sys.exit()
+
+    # Obtain transformation coefficients.
     filt_col_data = fitTransfEquations(filters)
 
     writeTransfCoeffs(pars['mypath'], filt_col_data)
