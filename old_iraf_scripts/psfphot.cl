@@ -385,7 +385,7 @@ begin
 # ------------------------------------------------------------------------------------
 
       psfrad = 4*fitrad+1  # According to 'A Reference Guide to the IRAF-DAOPHOT Package'
-      aperture = fitrad    # by L. Davis (page 31)
+      aperture = fitrad    # by L. Davis (page 30)
       if (inter) {
 	  print ('\n Accept radius of bigger PSF star in the frame')
 	  print (' (\'psfrad\') value as: '//psfrad//' (4xFWHM + 1)')
@@ -1018,7 +1018,7 @@ begin
       }
 		            
 # ------------------------------------------------------------------------------
-# End of 'Parameters input, Daofind and Phot tasks'
+# End of 'Parameters input, Daofind and Phot tasks
 # ------------------------------------------------------------------------------
 
 
@@ -1695,54 +1695,54 @@ begin
                       better_psf=yes
 		              
 	              if (var2==1) {
-                          better_psf2=yes
-                          first_nstarsubstar = no # Stays inside the 'first_nstarsubstar' 'while'
-                          del (imname // '.nst.1')
-                          del (imname // '.nrj.1')
-                          del (imname // '.sub.1.fits') 
+                      better_psf2=yes
+                      first_nstarsubstar = no # Stays inside the 'first_nstarsubstar' 'while'
+                      del (imname // '.nst.1')
+                      del (imname // '.nrj.1')
+                      del (imname // '.sub.1.fits') 
 	              }
 	              else {
 	                  if (var2==2) {
 	                      better_psf2=no
-                             first_nstarsubstar = yes # Leaves the 'first_nstarsubstar' 'while', but stays
+                          first_nstarsubstar = yes # Leaves the 'first_nstarsubstar' 'while', but stays
                                                        # inside the 'core_psf' 'while'                              
-                              rem_psf=yes
-                              while (rem_psf==yes) {
-		                              print ('\n Input the number of the PSF star you wish to remove:')
-		                              print (' (you can remove more after this)')
-		                              scan (psfnumber)
-		                              # Remotion process ----------------------
-                                  expression = "ID != "//psfnumber
+                          rem_psf=yes
+                          while (rem_psf==yes) {
+                              print ('\n Input the number of the PSF star you wish to remove:')
+                              print (' (you can remove more after this)')
+                              scan (psfnumber)
+                              # Remotion process ----------------------
+                              expression = "ID != "//psfnumber
 
-		      print ('\n Expression: '//expression)
+                		      print ('\n Expression: '//expression)
 
-		      rename.field = 'all'
-		      rename (imname//'.pstselect', imname//'_pstoriginal')
+                		      rename.field = 'all'
+                		      rename (imname//'.pstselect', imname//'_pstoriginal')
 
-		      pselect.infiles = imname//'_pstoriginal'
-		      pselect.outfiles = imname//'.pstselect'
-		      pselect.expr = expression
-		      pselect.mode = "hl"
-		      pselect
-		      delete (imname//'_pstoriginal')
-		                              # Remotion process ----------------------		                              
-		                              print ('\n Remove another one (else continue)? (y/n)')
-		                              print (' default = yes')
-		                              check=yes
-		                              scan (check)
-		                              if (check) {
-		                              }
-		                              else {
-                                      rem_psf=no
-                          del (imname // '.psf.1.fits')
-                          del (imname // '.grp.1')
-                          del (imname // '.psg.1')
-                          del (imname // '.pst.1')
-                          del (imname // '.nst.1')
-                          del (imname // '.nrj.1')
-                          del (imname // '.sub.1.fits')                                      
-		                              }
+                		      pselect.infiles = imname//'_pstoriginal'
+                		      pselect.outfiles = imname//'.pstselect'
+                		      pselect.expr = expression
+                		      pselect.mode = "hl"
+                		      pselect
+                		      delete (imname//'_pstoriginal')
+                              # Remotion process ----------------------		                              
+                              print ('\n Remove another one (else continue)? (y/n)')
+                              print (' default = yes')
+                              check=yes
+                              scan (check)
+                              if (check) {
                               }
+                              else {
+                              rem_psf=no
+                              del (imname // '.psf.1.fits')
+                              del (imname // '.grp.1')
+                              del (imname // '.psg.1')
+                              del (imname // '.pst.1')
+                              del (imname // '.nst.1')
+                              del (imname // '.nrj.1')
+                              del (imname // '.sub.1.fits')                                      
+	                          }
+                          }
 	                  }
 	                  else {
 	                      if (var2==3) {
@@ -1930,19 +1930,19 @@ begin
       print (' PSF radius = '//psfrad)
       if (no_neighbours==no) {
           if (inter) {
-		          print ('\n Accept PSF radius "psfrad"; should be the same one you used when')
-	      print (' the PSF selection was made, according to Massey (else input new one)? (y/n)')
-	      print (' default = yes')
-	      check = yes
-		          scan (check)
-		          if (check) { # Do nothing
-		          }
-		          else {
-		              print ('\n Input new "psfrad" value')
-		              scan (psfrad)
-		              daopars.psfrad = psfrad
-		              print ('New Daopars.psfrad (Second Nstar run) = ', psfrad, >> (imname//'.parameters'))
-		          }
+    		  print ('\n Accept PSF radius "psfrad"; should be the same one you used when')
+    	      print (' the PSF selection was made, according to Massey (else input new one)? (y/n)')
+    	      print (' default = yes')
+    	      check = yes
+              scan (check)
+              if (check) { # Do nothing
+              }
+              else {
+                  print ('\n Input new "psfrad" value')
+                  scan (psfrad)
+                  daopars.psfrad = psfrad
+                  print ('New Daopars.psfrad (Second Nstar run) = ', psfrad, >> (imname//'.parameters'))
+              }
           }
       }
 
@@ -2091,77 +2091,76 @@ begin
       }                           # the script won't start from the beginning
 
       if (dopsf==yes) { # This means the PSF photometry will be made (ie: 'allstar' task will be used).
+	      sannulu = 2*fitrad
+	      daopars.sannulu = sannulu
+	      print ('\n --------------------------------')
+	      print ('\n Next step: \'Allstar\' task')
+	      print ('\n Daopars.sannulu = '//sannulu)
+	      if (inter) {
+    	      print ('\n Accept daopars.sannulu value (else input new one)? (y/n)')
+    	      print (' default = yes')
+    	      check = yes
+    	      scan (check)
+    	      if (check) { # Do nothing
+    	      }
+    	      else {
+    	          print (' Input new daopars.sannulu value')
+    	          scan (sannulu)
+    	          daopars.sannulu = sannulu
+    	          print ('New Daopars.sannulu (Second PSF run) = ', psfrad, >> (imname//'.parameters'))
+    	      }
+		  }
+		      
+	      print ('\n ----------------------------------------------------- ')
+	      print (' Allstar task                                          ')
+	      print (' PSF photometry                                        ')
+	      print (' ----------------------------------------------------- ')
+	      allstar.verif = no
+	      allstar ((imname), "default", (imname // '.sub.2.fits.psf.1.fits'), "default", "default", "default")
+	      l = 1 # This number is used to know whether only one or two 'allstar' runs were performed
 
-		      sannulu = 2*fitrad
-		      daopars.sannulu = sannulu
-		      print ('\n --------------------------------')
-		      print ('\n Next step: \'Allstar\' task')
-		      print ('\n Daopars.sannulu = '//sannulu)
-		      if (inter) {
-	      print ('\n Accept daopars.sannulu value (else input new one)? (y/n)')
+	      print ('')
+	      print ('')
+	      print ('\n -----------------------------------------------------------')
+	      print (' Display task                                               ')
+	      print (' Compare the two frames to see if the stars are cleanly gone')
+	      print (' -----------------------------------------------------------')
+	      display ((imname // '.fit'), 1)
+	      display ((imname // '.sub.3.fits'), 2)
+
+	      print ('\n Is the substraction right (else star over from PSF selection)? (y/n) ')
 	      print (' default = yes')
-	      check = yes
-	      scan (check)
-	      if (check) { # Do nothing
+	      right_sustraction=yes
+	      scan (right_sustraction)
+
+	      if (right_sustraction == yes) { # Do nothing
 	      }
 	      else {
-	          print (' Input new daopars.sannulu value')
-	          scan (sannulu)
-	          daopars.sannulu = sannulu
-	          print ('New Daopars.sannulu (Second PSF run) = ', psfrad, >> (imname//'.parameters'))
-	      }
-		      }
-		      
-		      print ('\n ----------------------------------------------------- ')
-		      print (' Allstar task                                          ')
-		      print (' PSF photometry                                        ')
-		      print (' ----------------------------------------------------- ')
-		      allstar.verif = no
-		      allstar ((imname), "default", (imname // '.sub.2.fits.psf.1.fits'), "default", "default", "default")
-		      l = 1 # This number is used to know whether only one or two 'allstar' runs were performed
-
-		      print ('')
-		      print ('')
-		      print ('\n -----------------------------------------------------------')
-		      print (' Display task                                               ')
-		      print (' Compare the two frames to see if the stars are cleanly gone')
-		      print (' -----------------------------------------------------------')
-		      display ((imname // '.fit'), 1)
-		      display ((imname // '.sub.3.fits'), 2)
-
-		      print ('\n Is the substraction right (else star over from PSF selection)? (y/n) ')
-		      print (' default = yes')
-		      right_sustraction=yes
-		      scan (right_sustraction)
-    
-		      if (right_sustraction == yes) { # Do nothing
-		      }
-		      else {
-		          del (imname // '.psf.1.fits')
-		          del (imname // '.grp.1')
-		          del (imname // '.psg.1')
-		          del (imname // '.pst.1')
-		          del (imname // '.nst.1')
-		          del (imname // '.nrj.1')
-		          del (imname // '.sub.1.fits')
-		          del (imname // '.sub.2.fits')
-		          del (imname // '.sub.2.fits.psf.1.fits')
-		          del (imname // '.sub.2.fits.psg.1')
-		          del (imname // '.sub.2.fits.pst.1')
-		          del (imname // '.psf1')                 
-		          del ((imname) // '.als.1')
-		          del ((imname) // '.arj.1')        
-		          del ((imname) // '.sub.3.fits')
+	          del (imname // '.psf.1.fits')
+	          del (imname // '.grp.1')
+	          del (imname // '.psg.1')
+	          del (imname // '.pst.1')
+	          del (imname // '.nst.1')
+	          del (imname // '.nrj.1')
+	          del (imname // '.sub.1.fits')
+	          del (imname // '.sub.2.fits')
+	          del (imname // '.sub.2.fits.psf.1.fits')
+	          del (imname // '.sub.2.fits.psg.1')
+	          del (imname // '.sub.2.fits.pst.1')
+	          del (imname // '.psf1')                 
+	          del ((imname) // '.als.1')
+	          del ((imname) // '.arj.1')        
+	          del ((imname) // '.sub.3.fits')
 #		          del ((imname) // '.pstselect')
-		          delete (imname//'.sub.4.fits.pst.1',verify=no,>>&"/dev/null")
-		          delete (imname//'.sub.4.fits.psf.1.fits',verify=no,>>&"/dev/null")
-		          delete (imname//'.sub.4.fits.psg.1',verify=no,>>&"/dev/null")                    
-		      }
+	          delete (imname//'.sub.4.fits.pst.1',verify=no,>>&"/dev/null")
+	          delete (imname//'.sub.4.fits.psf.1.fits',verify=no,>>&"/dev/null")
+	          delete (imname//'.sub.4.fits.psg.1',verify=no,>>&"/dev/null")                    
+	      }
 
-		      print ('', >> (imname//'.parameters'))
-		      print ('End of Core PSF Reduction', >> (imname//'.parameters')) 
-		      print ('************************************************', >> (imname//'.parameters'))
-		      print ('', >> (imname//'.parameters'))
+	      print ('', >> (imname//'.parameters'))
+	      print ('End of Core PSF Reduction', >> (imname//'.parameters')) 
+	      print ('************************************************', >> (imname//'.parameters'))
+	      print ('', >> (imname//'.parameters'))
       }
 
   } # This last bracket closes the 'right_sustraction' while
@@ -2373,94 +2372,93 @@ begin
 # -----------------------------------------------------------------------------
 
       if (dopsf==yes) {
-      
-		      if (l==1) { # l = 1 means NO 'Second stars search' was performed.
-		          if (inter) {
-	          print ('\n ----------------------------------------------------- ')
-	          print (' Display task                                          ')
-	          print (' Display .als.1 (Frame1) and .coo.1 (Frame2) files')
-	          print (' ----------------------------------------------------- ')
-	          display ((imname // '.fit'), 1)
-	          display ((imname // '.fit'), 2)
+            
+        if (l==1) { # l = 1 means NO 'Second stars search' was performed.
+		  if (inter) {
+              print ('\n ----------------------------------------------------- ')
+              print (' Display task                                          ')
+              print (' Display .als.1 (Frame1) and .coo.1 (Frame2) files')
+              print (' ----------------------------------------------------- ')
+              display ((imname // '.fit'), 1)
+              display ((imname // '.fit'), 2)
 
-	          print ('\n ----------------------------------------------------- ')
-	          print (' Tvmark                                                ')
-	          print ('   - Frame1: detected stars by "allstar"               ')
-	          print ('   - Frame2: detected stars by "daofind"               ')
-	          print (' ----------------------------------------------------- ')
-	          txdump.textfile = (imname // '.als.1')
-	          txdump.headers = no
-	          txdump.fields = 'xcenter, ycenter'
-	          txdump.expr = 'yes'
-	          txdump > auxiliar1 
+              print ('\n ----------------------------------------------------- ')
+              print (' Tvmark                                                ')
+              print ('   - Frame1: detected stars by "allstar"               ')
+              print ('   - Frame2: detected stars by "daofind"               ')
+              print (' ----------------------------------------------------- ')
+              txdump.textfile = (imname // '.als.1')
+              txdump.headers = no
+              txdump.fields = 'xcenter, ycenter'
+              txdump.expr = 'yes'
+              txdump > auxiliar1 
 
-	          tvmark.interactive = no
-	          tvmark.mark = 'point'
-	          tvmark.font = "raster"
-	          tvmark.color = 204
-	          tvmark.number = no
-	          tvmark.label = no
-	          tvmark.toleran = 3.5
-	          tvmark (1, 'auxiliar1')
-	          
-	          tvmark.interac = no 
-	          tvmark.mark = 'point'
-	          tvmark.font = "raster"
-	          tvmark.color = 204
-	          tvmark.number = no      
-	          tvmark.label = no
-	          tvmark.toleran = 3.5
-	          tvmark (2, imname // '.coo.1')
-	          del ('auxiliar1')
-		          }
+              tvmark.interactive = no
+              tvmark.mark = 'point'
+              tvmark.font = "raster"
+              tvmark.color = 204
+              tvmark.number = no
+              tvmark.label = no
+              tvmark.toleran = 3.5
+              tvmark (1, 'auxiliar1')
+              
+              tvmark.interac = no 
+              tvmark.mark = 'point'
+              tvmark.font = "raster"
+              tvmark.color = 204
+              tvmark.number = no      
+              tvmark.label = no
+              tvmark.toleran = 3.5
+              tvmark (2, imname // '.coo.1')
+              del ('auxiliar1')
+		  }
 
-		          check=no
-		          while (check == no) {
+          check=no
+          while (check == no) {
+            if (inter) {
+              print ('\n What do you want to do now?:')
+              print ('     [1]: keep \'.als.1\' file and continue,')
+              print ('     [2]: Start over from \'Daofind\' search')
+              print ('          (the very beginning!!)')
 
-                  if (inter) {
-          print ('\n What do you want to do now?:')
-          print ('     [1]: keep \'.als.1\' file and continue,')
-          print ('     [2]: Start over from \'Daofind\' search')
-          print ('          (the very beginning!!)')
-
-	              scan (var1)
-		              }
-		              else {
-		                  var1 = 1
-		              }
-		              if (var1==1) {
-		                  check=yes
-		                  psf_done=yes
-		              }
-		              else {
-		                  if (var1==2) { # DELETE ALL FILES AND START FROM THE BEGINNING
-		                      print ('\n Are you sure you want to delete all files')
-		                      print (' and start over from the beginning? (y/n)')
-		                      print (' default = no')
-		                      check=no
-		                      scan (check)
-		                      if (check) { 
-	                      check=yes
-	                      del (imname // '.psf.1.fits')
-	                      del (imname // '.grp.1')
-	                      del (imname // '.psg.1')
-	                      del (imname // '.pst.2')
-	                      del (imname // '.nst.1')
-	                      del (imname // '.nrj.1')
-	                      del (imname // '.psf1')
-	                      del (imname // '.sub.1.fits')
-	                      del (imname // '.sub.2.fits')
-	                      del (imname // '.sub.2.fits.psf.1.fits')
-	                      del (imname // '.sub.2.fits.psg.1')
-	                      del (imname // '.sub.2.fits.pst.1')
-	                      del (imname // '.sub.2.fits.pst.2')        
-	                      del (imname // '.als.1')
-	                      del (imname // '.arj.1')        
-	                      del (imname // '.sub.3.fits')
-	                      del (imname // '.coo.1')
-	                      del (imname // '.mag.1')
-	                      del (imname // '.pst.1')
-	                      del (imname // '.pstselect')
+              scan (var1)
+            }
+              else {
+                  var1 = 1
+              }
+              if (var1==1) {
+                  check=yes
+                  psf_done=yes
+              }
+              else {
+                  if (var1==2) { # DELETE ALL FILES AND START FROM THE BEGINNING
+                      print ('\n Are you sure you want to delete all files')
+                      print (' and start over from the beginning? (y/n)')
+                      print (' default = no')
+                      check=no
+                      scan (check)
+                      if (check) { 
+                  check=yes
+                  del (imname // '.psf.1.fits')
+                  del (imname // '.grp.1')
+                  del (imname // '.psg.1')
+                  del (imname // '.pst.2')
+                  del (imname // '.nst.1')
+                  del (imname // '.nrj.1')
+                  del (imname // '.psf1')
+                  del (imname // '.sub.1.fits')
+                  del (imname // '.sub.2.fits')
+                  del (imname // '.sub.2.fits.psf.1.fits')
+                  del (imname // '.sub.2.fits.psg.1')
+                  del (imname // '.sub.2.fits.pst.1')
+                  del (imname // '.sub.2.fits.pst.2')        
+                  del (imname // '.als.1')
+                  del (imname // '.arj.1')        
+                  del (imname // '.sub.3.fits')
+                  del (imname // '.coo.1')
+                  del (imname // '.mag.1')
+                  del (imname // '.pst.1')
+                  del (imname // '.pstselect')
       del (imname // '.sub.3.fits.coo.1',verify=no,>>&"/dev/null")
 	                      print ('', >> (imname//'.parameters'))
 	                      print ('Re-do Daofind', >> (imname//'.parameters')) 
@@ -2683,7 +2681,7 @@ begin
       apert_null=yes
       while (apert_null==yes) {
 
-          print ('')
+        print ('')
 		print ('------------------------------------------------', >> (imname//'.parameters')) 
 		print ('Aperture correction', >> (imname//'.parameters'))
 		print ('', >> (imname//'.parameters'))
