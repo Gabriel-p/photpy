@@ -136,7 +136,7 @@ def redchisqg(ydata, ymod, deg=2, sd=.01):
     return chisq / nu
 
 
-def distPoint2Line(m, c, x, y):
+def distPoint2Line(m, c, x, y, z):
     """
     Distance from (x, y) point, to line with equation:
 
@@ -145,13 +145,13 @@ def distPoint2Line(m, c, x, y):
     http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
     """
     d = abs(m * np.array(x) + c - np.array(y)) / np.sqrt(m ** 2 + 1.)
-    d_sort = sorted(zip(d, x, y))
-    d, x, y = zip(*d_sort)[:3]
+    d_sort = sorted(zip(d, x, y, z))
+    x, y, z = zip(*d_sort)[1:]
 
-    return x, y
+    return x, y, z
 
 
-def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
+def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     """
     Perform a linear regression fit, rejecting outliers until the conditions
     of abs(1 - red_chi)<chi_min_delta and RMSE<RMSE_max are met.
@@ -164,34 +164,37 @@ def regressRjctOutliers(x, y, chi_min=.95, RMSE_max=.05):
     m, c, r_value, p_value, std_err = linregress(x, y)
     predictions = m * np.array(x) + c
     red_chisq = redchisqg(y, predictions)
-    # print("Red Chi^2: {:.3f}".format(red_chisq))
-    chi, RMSE = r_value**2, rmse(y, predictions)
-    # print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
-    #     len(x), m, c, chi, RMSE))
+    R2, RMSE = r_value**2, rmse(y, predictions)
 
-    x_accpt, y_accpt, x_rjct, y_rjct = x[:], y[:], [], []
-    while chi < chi_min or RMSE > RMSE_max:
-        x_dsort, y_dsort = distPoint2Line(m, c, x_accpt, y_accpt)
-        x_accpt, y_accpt = x_dsort[:-1], y_dsort[:-1]
+    x_accpt, y_accpt, z_accpt, x_rjct, y_rjct, z_rjct =\
+        x[:], y[:], z[:], [], [], []
+    while R2 < R2_min or RMSE > RMSE_max:
+        x_dsort, y_dsort, z_dsort = distPoint2Line(
+            m, c, x_accpt, y_accpt, z_accpt)
+        x_accpt, y_accpt, z_accpt = x_dsort[:-1], y_dsort[:-1], z_dsort[:-1]
         x_rjct.append(x_dsort[-1])
         y_rjct.append(y_dsort[-1])
+        z_rjct.append(z_dsort[-1])
+        print("   Rjct: {}, ({:.3f}, {:.3f})".format(
+            z_dsort[-1], x_dsort[-1], y_dsort[-1]))
 
         m, c, r_value, p_value, std_err = linregress(x_accpt, y_accpt)
         predictions = m * np.array(x_accpt) + c
         red_chisq = redchisqg(y_accpt, predictions)
         # STD = np.std(y - predictions)
-        chi, RMSE = r_value**2, rmse(y_accpt, predictions)
+        R2, RMSE = r_value**2, rmse(y_accpt, predictions)
 
-    print("Red Chi^2: {:.3f}".format(red_chisq))
-    print("N, m, c, R^2, RMSE: {}, {:.3f}, {:.3f}, {:.3f}, {:.3f}".format(
-        len(x_accpt), m, c, chi, RMSE))
+    print("  N, m, c: {}, {:.3f}, {:.3f}".format(len(x_accpt), m, c))
+    print("  Red_Chi^2: {:.3f}".format(red_chisq))
+    print("  R^2: {:.3f}".format(R2))
+    print("  RMSE: {:.3f}".format(RMSE))
 
     if len(x_accpt) == 2:
         print("  WARNING: only two stars were used in the fit.")
 
     xy_accpt, xy_rjct = [x_accpt, y_accpt], [x_rjct, y_rjct]
 
-    return xy_accpt, xy_rjct, m, c, chi, RMSE
+    return xy_accpt, xy_rjct, m, c, R2, RMSE
 
 
 def fitTransfEquations(filters):
@@ -199,48 +202,57 @@ def fitTransfEquations(filters):
     Solve transformation equation to the Landolt system.
     """
     # Assume that the 'V' filter was used.
-    stand_V, stand_BV, instZA_V = np.array(filters['V']).transpose(1, 2, 0)
+    stand_V, stand_BV, instZA_V = np.array(filters['V'][0]).transpose(1, 2, 0)
+    # Flatten extra data used to identify rejected stars
+    z = [_ for subl in zip(*filters['V'][1]) for _ in subl]
     x_fit, y_fit = stand_BV, (stand_V - instZA_V)
     # Find slope and/or intersection of linear regression.
+    print("Filter V")
     V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE = regressRjctOutliers(
-        x_fit.flatten(), y_fit.flatten())
-    # print("V: {:.2f}, {:.2f}".format(Vm, Vc))
+        x_fit.flatten(), y_fit.flatten(), z)
     filt_col_data = [["V", V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE]]
 
     if 'B' in filters.keys():
-        stand_B, stand_BV, instZA_B = np.array(filters['B']).transpose(1, 2, 0)
+        stand_B, stand_BV, instZA_B =\
+            np.array(filters['B'][0]).transpose(1, 2, 0)
+        z = [_ for subl in zip(*filters['B'][1]) for _ in subl]
         x_fit, y_fit = (instZA_B - instZA_V), stand_BV
+        print("Filter B")
         BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE = regressRjctOutliers(
-            x_fit.flatten(), y_fit.flatten())
-        # print("BV: {:.2f}, {:.2f}".format(BVm, BVc))
+            x_fit.flatten(), y_fit.flatten(), z)
         filt_col_data.append(
             ["BV", BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE])
 
         if 'U' in filters.keys():
             stand_U, stand_UB, instZA_U = np.array(
-                filters['U']).transpose(1, 2, 0)
+                filters['U'][0]).transpose(1, 2, 0)
+            z = [_ for subl in zip(*filters['U'][1]) for _ in subl]
             x_fit, y_fit = (instZA_U - instZA_B), stand_UB
+            print("Filter U")
             UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE = regressRjctOutliers(
-                x_fit.flatten(), y_fit.flatten())
-            # print("UB: {:.2f}, {:.2f}".format(UBm, UBc))
+                x_fit.flatten(), y_fit.flatten(), z)
             filt_col_data.append(
                 ["UB", UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE])
 
     if 'I' in filters.keys():
-        stand_I, stand_VI, instZA_I = np.array(filters['I']).transpose(1, 2, 0)
+        stand_I, stand_VI, instZA_I =\
+            np.array(filters['I'][0]).transpose(1, 2, 0)
+        z = [_ for subl in zip(*filters['U'][1]) for _ in subl]
         x_fit, y_fit = (instZA_V - instZA_I), stand_VI
+        print("Filter I")
         VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE = regressRjctOutliers(
-            x_fit.flatten(), y_fit.flatten())
-        # print("VI: {:.2f}, {:.2f}".format(VIm, VIc))
+            x_fit.flatten(), y_fit.flatten(), z)
         filt_col_data.append(
             ["VI", VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE])
 
     if 'R' in filters.keys():
-        stand_R, stand_VR, instZA_R = np.array(filters['R']).transpose(1, 2, 0)
+        stand_R, stand_VR, instZA_R =\
+            np.array(filters['R'][0]).transpose(1, 2, 0)
+        z = [_ for subl in zip(*filters['R'][1]) for _ in subl]
         x_fit, y_fit = (instZA_V - instZA_R), stand_VR
+        print("Filter R")
         VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE = regressRjctOutliers(
-            x_fit.flatten(), y_fit.flatten())
-        # print("VR: {:.2f}, {:.2f}".format(VRm, VRc))
+            x_fit.flatten(), y_fit.flatten(), z)
         filt_col_data.append(
             ["VR", VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE])
 
@@ -316,10 +328,14 @@ def make_plot(mypath, filt_col_data):
         ax.add_artist(txt)
 
         ax = fig.add_subplot(gs[1 + i * 2])
-        plt.xlabel(ylbl)
+        if data[0] == "V":
+            xlbl, x_scatter = ylbl, y_accpt
+        else:
+            x_scatter = x_accpt
+        plt.xlabel(xlbl)
         plt.ylabel("residuals (Landolt - pred)")
         resid_accpt = y_accpt - (m * np.asarray(x_accpt) + c)
-        plt.scatter(y_accpt, resid_accpt, c='g', zorder=4)
+        plt.scatter(x_scatter, resid_accpt, c='g', zorder=4)
         ax.axhline(0., linestyle=':', color='b', zorder=1)
         t1 = r"$\sigma={:.3f}$".format(np.std(resid_accpt))
         txt = AnchoredText(t1, loc=2, prop=dict(size=9))
@@ -341,7 +357,8 @@ def main():
     """
     pars, in_out_path = in_params()
 
-    filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
+    filters = {'U': [[], []], 'B': [[], []], 'V': [[], []],
+               'R': [[], []], 'I': [[], []]}
     for stnd_fl in pars['stnd_obs_fields']:
         stnd_f_name, fits_list = stnd_fl[0], stnd_fl[1:]
         print("Perform aperture photometry and resolve transformation\n"
@@ -371,11 +388,15 @@ def main():
             photu = zeroAirmass(photu, pars['extin_coeffs'][0], filt, airmass)
 
             # Group frames by filter.
-            filters[filt].append(
+            filters[filt][0].append(
                 [stand_mag, stand_col, list(photu['instZA'].value)])
+            # Store these data to identify stars rejected in the linear fit.
+            filters[filt][1].append(
+                [imname + ' ' + '(' + str(exp_time) + ')' + ' ' +
+                 stnd_f_name + '-' + _ for _ in landolt_fl['ID']])
 
     # Remove not observed filters from dictionary.
-    filters = {k: v for k, v in filters.iteritems() if v}
+    filters = {k: v for k, v in filters.iteritems() if v[0]}
     if 'V' not in filters.keys():
         print("Filter V is missing.")
         sys.exit()
