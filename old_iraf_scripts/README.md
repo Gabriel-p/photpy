@@ -416,6 +416,7 @@ keep
       'night_obs.out.VI' file. The difference with this second file is that, to
       obtain it, only the equations for 'V' and 'I' filters (in the 'noche.cfg'
       file) were used.
+
       3- FILES CREATED, COPIED, MOVED OR DELETED
       
       * "noche.cfg" - If this file doesn't exist already, it can be created by
@@ -430,7 +431,7 @@ keep
       * Creates the FINAL OUTPUT FILES 'night_obs.out.BV' and 'night_obs.out.VI'
       (created by 'invertfit')
       * Creates the 'shift_entrada.BV' file to feed the 'shift' code
-      * Creates one 'shift_entrada.BV' file (this is the the 'night_obs.out.BV'
+      * Creates one 'shift_entrada.BV' file (this is the 'night_obs.out.BV'
       file converted to the format needed to feed the 'shift' code; stars with
       INDEFS in any magnitude are not present in this file)
       * Creates one 'exptime.found' file, which stores the longest exposures

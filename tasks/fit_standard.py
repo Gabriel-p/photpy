@@ -5,7 +5,7 @@ import os
 from os.path import join, isfile
 import sys
 import numpy as np
-from scipy.stats import linregress
+from scipy.optimize import leastsq, least_squares, curve_fit
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.offsetbox import AnchoredText
@@ -136,6 +136,14 @@ def redchisqg(ydata, ymod, deg=2, sd=.01):
     return chisq / nu
 
 
+def f(x, a, b):
+    return a * x + b
+
+
+def residual(p, x, y):
+    return y - f(x, *p)
+
+
 def distPoint2Line(m, c, x, y, z):
     """
     Distance from (x, y) point, to line with equation:
@@ -161,7 +169,18 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     # TODO: finish reduced chi function
     # TODO: errors for fit coefficients?
 
+    coeff0 = [1., 0.]
+    coeff, cov, infodict, mesg, ier = leastsq(
+        residual, coeff0, args=(x, y), full_output=True)
+
+    sol = least_squares(residual, coeff0, args=(x, y))
+
+    popt, pcov = curve_fit(f, x, y, coeff0)
+
+    from scipy.stats import linregress
     m, c, r_value, p_value, std_err = linregress(x, y)
+    import pdb; pdb.set_trace()  # breakpoint a1aa645c //
+    
     predictions = m * np.array(x) + c
     red_chisq = redchisqg(y, predictions)
     R2, RMSE = r_value**2, rmse(y, predictions)
