@@ -3,6 +3,8 @@ import operator
 import numpy as np
 import random
 from scipy.spatial.distance import cdist
+from astropy.io import ascii
+from astropy.table import Table
 
 import timeit
 import matplotlib.pyplot as plt
@@ -15,9 +17,9 @@ def genData():
     random.seed(9001)
     np.random.seed(117)
     frames = {'U': {'60': [], '100': [], '250': []},
-              'B': {'30': [], '70': [], '200': []},
-              'V': {'30': [], '70': [], '100': []},
-              'I': {'30': [], '50': [], '100': []}}
+              'B': {'30': [], '70': [], '200': []},}
+              # 'V': {'30': [], '70': [], '100': []},
+              # 'I': {'30': [], '50': [], '100': []}}
     # Initial positions
     x = np.random.uniform(0., 4000., 50000)
     y = np.random.uniform(0., 4000., 50000)
@@ -256,6 +258,26 @@ def UpdtRefFrame(refFrameInfo, refFrame, frame, match_fr1_ids_all,
 
     Parameters
     ----------
+    refFrameInfo : list
+        Contains one sub-ilst per processed frame with its filter name,
+        exposure time, and number of stars not matched to the original refFrame
+        that where added to the end of the list.
+    refFrame : list
+        Reference frame: This list collects all the cross-matched photometry.
+    frame : list
+        Processed frame that was compared to refFrame.
+    match_fr1_ids_all : list
+        Indexes of stars in refFrame that were matched to a star in frame.
+    match_fr2_ids_all : list
+        Indexes of stars in frame that were matched to a star in refFrame.
+
+    Returns
+    -------
+    refFrameInfo : list
+        Updated list.
+    refFrame : list
+        Updated list.
+
     """
     # Extract processed frame data.
     fr_filt, fr_expTime = frame[:2]
@@ -267,7 +289,7 @@ def UpdtRefFrame(refFrameInfo, refFrame, frame, match_fr1_ids_all,
         # Check if this reference star was uniquely associated with a
         # processed star.
         if ref_id in match_fr1_ids_all:
-            # Index of the associated processed star.
+            # Index of the associated processed 'frame' star.
             j = match_fr1_ids_all.index(ref_id)
             fr_id = match_fr2_ids_all[j]
             #
@@ -310,6 +332,74 @@ def UpdtRefFrame(refFrameInfo, refFrame, frame, match_fr1_ids_all,
     return refFrameInfo, refFrame
 
 
+def groupFilters(refFrameInfo, refFrame):
+    """
+    Group obseved frames according to filters and exposure times.
+    Also write to file, one per filter, all the cross-matched stars.
+
+    Parameters
+    ----------
+    refFrameInfo : list
+        See UpdtRefFrame()
+    refFrame : list
+        See UpdtRefFrame()
+
+    Returns
+    -------
+    group_phot : dict
+        Dictionary of astropy Tables(), one per observed filter with columns
+        ordered as 'x_XXX  y_XXX  mag_XXX  emag_XXX', where 'XXX' represents
+        the exposure time.
+
+    """
+
+    filters = {'U': {}, 'B': {}, 'V': {}, 'R': {}, 'I': {}}
+
+    # Store data in 'filters' dict, grouped by exposure time.
+    x, y, mag, e_mag = [list(zip(*_)) for _ in list(zip(*refFrame))]
+    for i, (f, exp, N) in enumerate(refFrameInfo):
+        filters[f].update({exp: {'x': x[i], 'y': y[i], 'mag': mag[i],
+                                 'e_mag': e_mag[i]}})
+
+    print("Wrinting to filter_X.mag files")
+    group_phot = {}
+    # Order columns, add exposure time to col names, and write to file.
+    for f, fdata in filters.iteritems():
+        tab = Table()
+        for expT, col_data in fdata.iteritems():
+            t = Table(col_data, names=col_data.keys())
+            t_order = t['x', 'y', 'mag', 'e_mag']
+            t = Table(t_order,
+                      names=[_ + expT for _ in ['x_', 'y_', 'mag_', 'emag_']])
+            tab.add_columns(t.columns.values())
+
+        # Remove rows with all 'nan' values.
+        if len(tab) > 0:
+            # Append to grouped dictionary.
+            group_phot.update({f: tab})
+            # Convert to pandas dataframe.
+            tab_df = tab.to_pandas()
+            # Find rows with *all* nan values (~ means 'not').
+            nan_idx = ~tab_df.isnull().all(1)
+            # Filter out all nan rows and transform back to Table.
+            tab = Table.from_pandas(tab_df[nan_idx])
+        # Write to file.
+        if len(tab) > 0:
+            ascii.write(
+                tab, 'filter_' + f + '.mag', format='fixed_width',
+                delimiter=' ', formats={_: '%10.4f' for _ in tab.keys()},
+                fill_values=[(ascii.masked, 'nan')], overwrite=True)
+
+    return group_phot
+
+
+def avrgMags(group_phot):
+    """
+    """
+
+    return
+
+
 def main():
     """
     """
@@ -348,12 +438,9 @@ def main():
         counter = 1
         while fr1_ids:
 
-            start_time = timeit.default_timer()
             # Find closest stars between reference and processed frame.
             fr2_ids_dup, fr1fr2_d2d = closestStar(x_ref, y_ref, x_fr, y_fr)
-            print("A", timeit.default_timer() - start_time)
 
-            start_time = timeit.default_timer()
             # Match reference and processed frame.
             fr1_ids, match_fr1_ids, match_fr2_ids, match_d =\
                 starMatch(fr1_ids, fr2_ids_dup, fr1fr2_d2d, maxrad)
@@ -361,7 +448,6 @@ def main():
             match_fr1_ids_all += match_fr1_ids
             match_fr2_ids_all += match_fr2_ids
             match_d_all += match_d
-            print("B", timeit.default_timer() - start_time)
 
             print("{}.".format(counter))
             counter += 1
@@ -397,6 +483,15 @@ def main():
         np.sum(zip(*refFrameInfo)[2])))
     for _ in refFrameInfo:
         print("{}, {} (N={})".format(*_))
+
+    # Group by filters and order by exposure time and data type (x, y, mag,
+    # e_mag).
+    group_phot = groupFilters(refFrameInfo, refFrame)
+
+    avrgMags(group_phot)
+    import pdb; pdb.set_trace()  # breakpoint be57828f //
+
+    standardCalib()
 
 
 if __name__ == '__main__':
