@@ -5,6 +5,7 @@ import random
 from scipy.spatial.distance import cdist
 from astropy.io import ascii
 from astropy.table import Table
+from astropy.table import Column
 
 import timeit
 import matplotlib.pyplot as plt
@@ -332,6 +333,33 @@ def UpdtRefFrame(refFrameInfo, refFrame, frame, match_fr1_ids_all,
     return refFrameInfo, refFrame
 
 
+def rmNaNrows(tab):
+    """
+    Remove from 'tab' all those rows that contain only NaN values.
+
+    Parameters
+    ----------
+    tab : class astropy.table
+        All cross-matched stars for a given filter.
+
+    Returns
+    -------
+    tab : class astropy.table
+        Same table minus rows with all NaN values.
+
+    """
+    # Convert to pandas dataframe.
+    tab_df = tab.to_pandas()
+    # Find rows with *all* nan values (~ means 'not'). Leave out the 'ID'
+    # column (hence the 'tab.keys()[1:]') else all rows contain at least one
+    # non-NaN value.
+    nan_idx = ~tab_df[tab.keys()[1:]].isnull().all(1)
+    # Filter out all nan rows and transform back to Table.
+    tab = Table.from_pandas(tab_df[nan_idx])
+
+    return tab
+
+
 def groupFilters(refFrameInfo, refFrame):
     """
     Group obseved frames according to filters and exposure times.
@@ -361,7 +389,7 @@ def groupFilters(refFrameInfo, refFrame):
         filters[f].update({exp: {'x': x[i], 'y': y[i], 'mag': mag[i],
                                  'e_mag': e_mag[i]}})
 
-    print("Wrinting to filter_X.mag files")
+    print("\nWriting to 'filter_X.mag' files")
     group_phot = {}
     # Order columns, add exposure time to col names, and write to file.
     for f, fdata in filters.iteritems():
@@ -373,21 +401,20 @@ def groupFilters(refFrameInfo, refFrame):
                       names=[_ + expT for _ in ['x_', 'y_', 'mag_', 'emag_']])
             tab.add_columns(t.columns.values())
 
-        # Remove rows with all 'nan' values.
         if len(tab) > 0:
+            # Add IDs.
+            ids = Column(np.arange(len(tab)), name='#ID')
+            tab.add_column(ids, index=0)
             # Append to grouped dictionary.
             group_phot.update({f: tab})
-            # Convert to pandas dataframe.
-            tab_df = tab.to_pandas()
-            # Find rows with *all* nan values (~ means 'not').
-            nan_idx = ~tab_df.isnull().all(1)
-            # Filter out all nan rows and transform back to Table.
-            tab = Table.from_pandas(tab_df[nan_idx])
+            # Remove rows with all 'nan' values before writing to file.
+            tab = rmNaNrows(tab)
         # Write to file.
         if len(tab) > 0:
             ascii.write(
                 tab, 'filter_' + f + '.mag', format='fixed_width',
-                delimiter=' ', formats={_: '%10.4f' for _ in tab.keys()},
+                delimiter=' ',
+                formats={_: '%10.4f' for _ in tab.keys()[1:]},
                 fill_values=[(ascii.masked, 'nan')], overwrite=True)
 
     return group_phot
@@ -406,9 +433,11 @@ def main():
     maxrad = 5.
 
     frames = genData()
-    # Read data in the correct order.
+    # Select the 'reference' frame as the one with the largest number of stars,
+    # and store the remaining data in the correct order.
     refFrameInfo, refFrame, framesOrdered = framesOrder(frames)
 
+    # Compare the reference frame to all the other frames.
     for frame in framesOrdered:
         print("\n--------------------------------------")
         print("Reference frame (N={}), composed of:".format(
