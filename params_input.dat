@@ -90,9 +90,10 @@ do_plots_E       y
 
 # 'match_transf' parameters
 #
-ddd              ddd
-eee              eee
-fff              fff
+match_folder     field
+ref_frame        none
+maxrad           5.
+method           mean
 do_plots_F       y
 
 ###############################################################################

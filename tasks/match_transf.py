@@ -1,4 +1,9 @@
 
+import read_pars_file as rpf
+import os
+from os.path import join, isfile
+import sys
+
 import operator
 import numpy as np
 import random
@@ -18,9 +23,9 @@ def genData():
     random.seed(9001)
     np.random.seed(117)
     frames = {'U': {'60': [], '100': [], '250': []},
-              'B': {'30': [], '70': [], '200': []},}
-              # 'V': {'30': [], '70': [], '100': []},
-              # 'I': {'30': [], '50': [], '100': []}}
+              'B': {'30': [], '70': [], '200': []},
+              'V': {'30': [], '70': [], '100': []},
+              'I': {'30': [], '50': [], '100': []}}
     # Initial positions
     x = np.random.uniform(0., 4000., 50000)
     y = np.random.uniform(0., 4000., 50000)
@@ -29,7 +34,7 @@ def genData():
     for filt, expDict in frames.iteritems():
         for exps in expDict.keys():
             N = 10 * int(float(exps) * np.random.randint(4, fact[filt][0]) *
-                    fact[filt][1])
+                         fact[filt][1])
             # Sigma and mu for normal distribution
             sigma, mu = 1., 1.
             # Generate normally distributed noise.
@@ -49,6 +54,31 @@ def genData():
             expDict[exps] = [x_n, y_n, mag, e_mag]
 
     return frames
+
+
+def in_params():
+    """
+    Read and prepare input parameter values.
+    """
+    pars = rpf.main()
+
+    in_out_path = pars['mypath'].replace(
+        'tasks', 'output/' + pars['match_folder'])
+
+    fits_list = []
+    for file in os.listdir(in_out_path):
+        f = join(in_out_path, file)
+        if isfile(f):
+            if f.endswith('_phot.mag'):
+                fits_list.append(f)
+
+    # if not fits_list:
+    #     print("No '*_phot.mag' files found in {} folder.".format(
+    #         pars['match_folder']))
+    #     print("Exit.")
+    #     sys.exit()
+
+    return pars, in_out_path
 
 
 def framesOrder(frames):
@@ -333,31 +363,72 @@ def UpdtRefFrame(refFrameInfo, refFrame, frame, match_fr1_ids_all,
     return refFrameInfo, refFrame
 
 
-def rmNaNrows(tab):
+def frameMatch(refFrameInfo, refFrame, frame, maxrad):
     """
-    Remove from 'tab' all those rows that contain only NaN values.
-
-    Parameters
-    ----------
-    tab : class astropy.table
-        All cross-matched stars for a given filter.
-
-    Returns
-    -------
-    tab : class astropy.table
-        Same table minus rows with all NaN values.
-
     """
-    # Convert to pandas dataframe.
-    tab_df = tab.to_pandas()
-    # Find rows with *all* nan values (~ means 'not'). Leave out the 'ID'
-    # column (hence the 'tab.keys()[1:]') else all rows contain at least one
-    # non-NaN value.
-    nan_idx = ~tab_df[tab.keys()[1:]].isnull().all(1)
-    # Filter out all nan rows and transform back to Table.
-    tab = Table.from_pandas(tab_df[nan_idx])
+    # Extract (x,y) coordinates, averaging the values assigned to the
+    # same star.
+    x_ref, y_ref = [], []
+    for st in refFrame:
+        x_ref.append(np.mean(st[0]))
+        y_ref.append(np.mean(st[1]))
 
-    return tab
+    # Extract filter name and exposure time of the processed frame.
+    fr_filt, fr_expTime = frame[:2]
+    x_fr, y_fr = frame[2][:2]
+    print('\nProcessing frame: {}, {} (N={})'.format(
+        fr_filt, fr_expTime, len(x_fr)))
+
+    # Initial full list of IDs for the reference and processed frame.
+    fr1_ids = np.arange(len(refFrame)).tolist()
+    fr2_ids = np.arange(len(x_fr)).tolist()
+
+    match_fr1_ids_all, match_fr2_ids_all, match_d_all = [], [], []
+    # Continue until no more duplicate matches exist.
+    counter = 1
+    while fr1_ids:
+
+        # Find closest stars between reference and processed frame.
+        fr2_ids_dup, fr1fr2_d2d = closestStar(x_ref, y_ref, x_fr, y_fr)
+
+        # Match reference and processed frame.
+        fr1_ids, match_fr1_ids, match_fr2_ids, match_d =\
+            starMatch(fr1_ids, fr2_ids_dup, fr1fr2_d2d, maxrad)
+        # Store unique matches and distances.
+        match_fr1_ids_all += match_fr1_ids
+        match_fr2_ids_all += match_fr2_ids
+        match_d_all += match_d
+
+        print("{}.".format(counter))
+        counter += 1
+
+        print("Matched reference stars: {}".format(len(match_fr1_ids)))
+        if match_fr1_ids:
+            print("(Mean match dist: {:.2f} px)".format(
+                np.mean(match_d_all)))
+        print("Reference stars w/ no match within maxrad: {}".format(
+            len(refFrame) - len(match_fr1_ids_all) - len(fr1_ids)))
+
+        # If there are any stars from the reference frame that had
+        # duplicated matches and were stored for re-matching.
+        if fr1_ids:
+            print("Reference stars for re-match: {}".format(
+                len(fr1_ids)))
+            print("Frame stars for re-match: {}".format(
+                len(fr2_ids) - len(match_fr2_ids_all)))
+            # Update coordinates of matched stars in processed frame.
+            x_fr, y_fr = frameCoordsUpdt(x_fr, y_fr, match_fr2_ids)
+        else:
+            print("Processed stars w/ no match within maxrad: {}".format(
+                len(fr2_ids) - len(match_fr2_ids_all)))
+
+    # Update reference frame associating all the matches found in the
+    # processed frame to a given reference star. Also append those stars
+    # from the processed frame with no match to the end of the list.
+    refFrameInfo, refFrame = UpdtRefFrame(
+        refFrameInfo, refFrame, frame, match_fr1_ids_all, match_fr2_ids_all)
+
+    return refFrameInfo, refFrame
 
 
 def groupFilters(refFrameInfo, refFrame):
@@ -389,7 +460,6 @@ def groupFilters(refFrameInfo, refFrame):
         filters[f].update({exp: {'x': x[i], 'y': y[i], 'mag': mag[i],
                                  'e_mag': e_mag[i]}})
 
-    print("\nWriting to 'filter_X.mag' files")
     group_phot = {}
     # Order columns, add exposure time to col names, and write to file.
     for f, fdata in filters.iteritems():
@@ -407,120 +477,157 @@ def groupFilters(refFrameInfo, refFrame):
             tab.add_column(ids, index=0)
             # Append to grouped dictionary.
             group_phot.update({f: tab})
-            # Remove rows with all 'nan' values before writing to file.
-            tab = rmNaNrows(tab)
-        # Write to file.
-        if len(tab) > 0:
-            ascii.write(
-                tab, 'filter_' + f + '.mag', format='fixed_width',
-                delimiter=' ',
-                formats={_: '%10.4f' for _ in tab.keys()[1:]},
-                fill_values=[(ascii.masked, 'nan')], overwrite=True)
 
     return group_phot
 
 
-def avrgMags(group_phot):
+def mag2flux():
     """
     """
 
     return
 
 
+def flux2mag():
+    """
+    """
+
+    return
+
+
+def avrgMags(group_phot, method):
+    """
+    Combine magnitudes for all cross-matched stars in all frames. Available
+    methods are:
+    """
+    for f, fvals in group_phot.iteritems():
+        print('Filter {}'.format(f))
+        xcen, ycen, mags, emags = [], [], [], []
+        for col in fvals.itercols():
+            if col.name.startswith('x_'):
+                xcen.append(col)
+            elif col.name.startswith('y_'):
+                ycen.append(col)
+            elif col.name.startswith('mag_'):
+                mags.append(col)
+            elif col.name.startswith('emag_'):
+                emags.append(col)
+
+        flux, eflux = mag2flux(mags), mag2flux(emags)
+        if method == 'mean':
+            flux_mean = np.nanmean(zip(*flux), axis=1)
+            flux_vari = np.array(eflux) ** 2
+            eflux_mean = np.sqrt(
+                (1. / len(emags)) *
+                np.nanmean(zip(*variance_all), axis=1))
+        import pdb; pdb.set_trace()  # breakpoint a8b5368c //
+
+
+    return
+
+
+def rmNaNrows(tab):
+    """
+    Remove from 'tab' all those rows that contain only NaN values.
+
+    Parameters
+    ----------
+    tab : class astropy.table
+        All cross-matched stars for a given filter.
+
+    Returns
+    -------
+    tab : class astropy.table
+        Same table minus rows with all NaN values.
+
+    """
+    # Convert to pandas dataframe.
+    tab_df = tab.to_pandas()
+    # Find rows with *all* nan values (~ means 'not'). Leave out the 'ID'
+    # column (hence the 'tab.keys()[1:]') else all rows contain at least one
+    # non-NaN value.
+    nan_idx = ~tab_df[tab.keys()[1:]].isnull().all(1)
+    # Filter out all nan rows and transform back to Table.
+    tab = Table.from_pandas(tab_df[nan_idx])
+
+    return tab
+
+
+def standardCalib(avrg_phot):
+    """
+    """
+
+    return
+
+
+def writeToFile(in_out_path, group_phot):
+    """
+    """
+
+    print("\nWriting to 'filter_X.mag' files.")
+    for f, tab in group_phot.iteritems():
+        # Remove rows with all 'nan' values before writing to file.
+        tab = rmNaNrows(tab)
+        # Write to file.
+        if len(tab) > 0:
+            ascii.write(
+                tab, in_out_path + '/filter_' + f + '.mag',
+                format='fixed_width', delimiter=' ',
+                formats={_: '%10.4f' for _ in tab.keys()[1:]},
+                fill_values=[(ascii.masked, 'nan')], overwrite=True)
+
+
+def make_plots(in_out_path):
+    """
+    """
+
+
 def main():
     """
     """
-    maxrad = 5.
+    pars, in_out_path = in_params()
 
-    frames = genData()
-    # Select the 'reference' frame as the one with the largest number of stars,
-    # and store the remaining data in the correct order.
-    refFrameInfo, refFrame, framesOrdered = framesOrder(frames)
+    # frames = genData()
+    # # Select the 'reference' frame as the one with the largest number of stars,
+    # # and store the remaining data in the correct order.
+    # refFrameInfo, refFrame, framesOrdered = framesOrder(frames)
 
-    # Compare the reference frame to all the other frames.
-    for frame in framesOrdered:
-        print("\n--------------------------------------")
-        print("Reference frame (N={}), composed of:".format(
-            np.sum(zip(*refFrameInfo)[2])))
-        for _ in refFrameInfo:
-            print("{}, {} (N={})".format(*_))
+    # # Compare the reference frame to all the other frames.
+    # for frame in framesOrdered:
+    #     print("\n--------------------------------------")
+    #     print("Reference frame (N={}), composed of:".format(
+    #         np.sum(zip(*refFrameInfo)[2])))
+    #     for _ in refFrameInfo:
+    #         print("{}, {} (N={})".format(*_))
 
-        # Extract (x,y) coordinates, averaging the values assigned to the
-        # same star.
-        x_ref, y_ref = [], []
-        for st in refFrame:
-            x_ref.append(np.mean(st[0]))
-            y_ref.append(np.mean(st[1]))
+    #     refFrameInfo, refFrame = frameMatch(
+    #         refFrameInfo, refFrame, frame, float(pars['maxrad']))
 
-        # Extract filter name and exposure time of the processed frame.
-        fr_filt, fr_expTime = frame[:2]
-        x_fr, y_fr = frame[2][:2]
-        print('\nProcessing frame: {}, {} (N={})'.format(
-            fr_filt, fr_expTime, len(x_fr)))
+    # print("\nFinal combined reference frame (N={})".format(
+    #     np.sum(zip(*refFrameInfo)[2])))
+    # for _ in refFrameInfo:
+    #     print("{}, {} (N={})".format(*_))
 
-        # Initial full list of IDs for the reference and processed frame.
-        fr1_ids = np.arange(len(refFrame)).tolist()
-        fr2_ids = np.arange(len(x_fr)).tolist()
+    # # Group by filters and order by exposure time and data type (x, y, mag,
+    # # e_mag).
+    # group_phot = groupFilters(refFrameInfo, refFrame)
 
-        match_fr1_ids_all, match_fr2_ids_all, match_d_all = [], [], []
-        # Continue until no more duplicate matches exist.
-        counter = 1
-        while fr1_ids:
+    import pickle
+    # with open('temp.pickle', 'wb') as f:
+    #     pickle.dump(group_phot, f)
+    with open('temp.pickle', 'rb') as f:
+        group_phot = pickle.load(f)
 
-            # Find closest stars between reference and processed frame.
-            fr2_ids_dup, fr1fr2_d2d = closestStar(x_ref, y_ref, x_fr, y_fr)
+    # Combine magnitudes for each filter, for each exposure time.
+    avrg_phot = avrgMags(group_phot, pars['method'])
 
-            # Match reference and processed frame.
-            fr1_ids, match_fr1_ids, match_fr2_ids, match_d =\
-                starMatch(fr1_ids, fr2_ids_dup, fr1fr2_d2d, maxrad)
-            # Store unique matches and distances.
-            match_fr1_ids_all += match_fr1_ids
-            match_fr2_ids_all += match_fr2_ids
-            match_d_all += match_d
+    # Transform combined magnitudes into the standard system.
+    stand_phot = standardCalib(avrg_phot)
 
-            print("{}.".format(counter))
-            counter += 1
-
-            print("Matched reference stars: {}".format(len(match_fr1_ids)))
-            if match_fr1_ids:
-                print("(Mean match dist: {:.2f} px)".format(
-                    np.mean(match_d_all)))
-            print("Reference stars w/ no match within maxrad: {}".format(
-                len(refFrame) - len(match_fr1_ids_all) - len(fr1_ids)))
-
-            # If there are any stars from the reference frame that had
-            # duplicated matches and were stored for re-matching.
-            if fr1_ids:
-                print("Reference stars for re-match: {}".format(
-                    len(fr1_ids)))
-                print("Frame stars for re-match: {}".format(
-                    len(fr2_ids) - len(match_fr2_ids_all)))
-                # Update coordinates of matched stars in processed frame.
-                x_fr, y_fr = frameCoordsUpdt(x_fr, y_fr, match_fr2_ids)
-            else:
-                print("Processed stars w/ no match within maxrad: {}".format(
-                    len(fr2_ids) - len(match_fr2_ids_all)))
-
-        # Update reference frame associating all the matches found in the
-        # processed frame to a given reference star. Also append those stars
-        # from the processed frame with no match to the end of the list.
-        refFrameInfo, refFrame = UpdtRefFrame(
-            refFrameInfo, refFrame, frame, match_fr1_ids_all,
-            match_fr2_ids_all)
-
-    print("\nFinal combined reference frame (N={})".format(
-        np.sum(zip(*refFrameInfo)[2])))
-    for _ in refFrameInfo:
-        print("{}, {} (N={})".format(*_))
-
-    # Group by filters and order by exposure time and data type (x, y, mag,
-    # e_mag).
-    group_phot = groupFilters(refFrameInfo, refFrame)
-
-    avrgMags(group_phot)
-    import pdb; pdb.set_trace()  # breakpoint be57828f //
-
-    standardCalib()
+    # Create all output files and make final plot.
+    writeToFile(in_out_path, group_phot, stand_phot)
+    if pars['do_plots_F'] == 'y':
+        make_plots(in_out_path)
 
 
 if __name__ == '__main__':
