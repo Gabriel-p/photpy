@@ -494,7 +494,7 @@ def groupFilters(refFrameInfo, refFrame):
 
         if len(tab) > 0:
             # Add IDs.
-            ids = Column(np.arange(len(tab)), name='#ID')
+            ids = Column(np.arange(len(tab)), name='ID')
             tab.add_column(ids, index=0)
             # Append to grouped dictionary.
             group_phot.update({f: tab})
@@ -609,9 +609,11 @@ def avrgMags(group_phot, method):
     -------
     avrg_phot : dictionary
         Combined magnitudes for each filter, using the selected method.
+    id_coords : dictionary
+        IDs and averaged coordinates for each filter.
 
     """
-    avrg_phot = {}
+    id_coords, avrg_phot = {}, {}
     for f, fvals in group_phot.iteritems():
         xcen, ycen, mags, emags = [], [], [], []
         for col in fvals.itercols():
@@ -651,10 +653,103 @@ def avrgMags(group_phot, method):
             # Back to magnitudes.
             emag_mean = eflux2emag(eflux_mean, flux_mean)
 
-        # Add data for this filter.
-        avrg_phot.update({f: [xmedian, ymedian, mag_mean, emag_mean]})
+        # Add photometric data for this filter.
+        avrg_phot.update({f: [mag_mean, emag_mean]})
+        # Add IDs and averaged coordinate data for this filter.
+        id_coords.update({f: [fvals['ID'], xmedian, ymedian]})
 
-    return avrg_phot
+    return avrg_phot, id_coords
+
+
+def inst2cal(avrg_phot, ab_coeffs, col):
+    """
+    Transform instrumental magnitudes and standard deviations into the
+    calibrated system, using the coefficients obteined previously.
+
+    Parameters
+    ----------
+    avrg_phot : dictionary
+        See avrgMags().
+    ab_coeffs : dictionary
+        See standardCalib().
+    col : string
+        Identifies the color to process.
+
+    Returns
+    -------
+    cal_mag : array
+        Calibrated magnitudes for the processed color.
+    cal_sig : array
+        Standard deviation in the calibrated system for the processed color.
+
+    """
+    f1, f2 = col
+
+    # Instrumental magnitudes.
+    f1_inst, f2_inst = avrg_phot[f1][0], avrg_phot[f2][0]
+    # Instrumental magnitudes color.
+    f12_inst = f1_inst - f2_inst
+    # To calibrated standard system.
+    cal_mag = ab_coeffs['a'][col] * f12_inst + ab_coeffs['b'][col]
+
+    # Instrumental magnitude sigmas.
+    ef1_inst, ef2_inst = avrg_phot[f1][1], avrg_phot[f2][1]
+    # Instrumental color sigma.
+    ef12_inst = ef1_inst + ef2_inst
+    # Calibrated color sigma.
+    cal_sig = ab_coeffs['a'][col] * ef12_inst
+
+    return cal_mag, cal_sig
+
+
+def standardCalib(avrg_phot, id_coords, ab_coeffs={}):
+    """
+    Transform instrumental (zero airmass) magnitudes into the standard V
+    magnitude and standard colors.
+
+    Assumes that the V and B filters are present.
+
+    Parameters
+    ----------
+    avrg_phot : dictionary
+        See avrgMags().
+    id_coords : dictionary
+        See avrgMags().
+    ab_coeffs : dictionary
+        TODO
+
+    Returns
+    -------
+    stand_phot : dictionary
+        Calibrated standard V magnitude and colors, and their standard
+        deviations.
+
+    """
+    ab_coeffs = {'a': {'V': -0.066, 'BV': 1.22, 'UB': 0.98, 'VI': 0.9},
+                 'b': {'V': -1.574, 'BV': -0.109, 'UB': -1.993, 'VI': 0.081}}
+
+    BV_cal, BV_sig = inst2cal(avrg_phot, ab_coeffs, 'BV')
+    stand_phot = {'BV': BV_cal, 'eBV': BV_sig}
+    # For the V magnitude.
+    V_cal = avrg_phot['V'][0] + ab_coeffs['a']['V'] * BV_cal +\
+        ab_coeffs['b']['V']
+    V_sig = np.sqrt(
+        avrg_phot['V'][1] ** 2 + (ab_coeffs['a']['V'] * BV_sig) ** 2)
+    stand_phot.update({'V': V_cal, 'eV': V_sig})
+
+    if 'U' in avrg_phot.keys():
+        UB_cal, UB_sig = inst2cal(avrg_phot, ab_coeffs, 'UB')
+        stand_phot.update({'UB': UB_cal, 'eUB': UB_sig})
+    if 'I' in avrg_phot.keys():
+        VI_cal, VI_sig = inst2cal(avrg_phot, ab_coeffs, 'VI')
+        stand_phot.update({'VI': VI_cal, 'eVI': VI_sig})
+    if 'R' in avrg_phot.keys():
+        VR_cal, VR_sig = inst2cal(avrg_phot, ab_coeffs, 'VR')
+        stand_phot.update({'VR': VR_cal, 'eVR': VR_sig})
+
+    import pdb; pdb.set_trace()  # breakpoint fd15bf3f //
+
+    return stand_phot
 
 
 def rmNaNrows(tab):
@@ -682,13 +777,6 @@ def rmNaNrows(tab):
     tab = Table.from_pandas(tab_df[nan_idx])
 
     return tab
-
-
-def standardCalib(avrg_phot):
-    """
-    """
-
-    return
 
 
 def writeToFile(in_out_path, group_phot):
@@ -750,10 +838,10 @@ def main():
         group_phot = pickle.load(f)
 
     # Combine magnitudes for each filter, for each exposure time.
-    avrg_phot = avrgMags(group_phot, pars['method'])
+    avrg_phot, id_coords = avrgMags(group_phot, pars['method'])
 
-    # Transform combined magnitudes into the standard system.
-    stand_phot = standardCalib(avrg_phot)
+    # Transform combined magnitudes to the standard system.
+    stand_phot = standardCalib(avrg_phot, id_coords)
 
     # Create all output files and make final plot.
     writeToFile(in_out_path, group_phot, stand_phot)
