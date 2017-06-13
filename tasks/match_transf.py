@@ -194,7 +194,7 @@ def starMatch(c1_ids, c2_ids, d2d, maxrad):
         Distances between each star in the reference frame, and the closest
         star in the processed frame.
     maxrad : float
-        Maximum allowed distance (radius) for a match to be valid.
+        see frameMatch().
 
     Returns
     -------
@@ -276,8 +276,8 @@ def frameCoordsUpdt(x_fr, y_fr, match_fr2_ids):
     return x_fr_updt, y_fr_updt
 
 
-def UpdtRefFrame(refFrameInfo, refFrame, frame, match_fr1_ids_all,
-                 match_fr2_ids_all):
+def UpdtRefFrame(
+        refFrameInfo, refFrame, frame, match_fr1_ids_all, match_fr2_ids_all):
     """
     Update the reference frame adding the stars in the processed frame that
     were assigned as matches to each reference star. If a reference star was
@@ -290,13 +290,11 @@ def UpdtRefFrame(refFrameInfo, refFrame, frame, match_fr1_ids_all,
     Parameters
     ----------
     refFrameInfo : list
-        Contains one sub-ilst per processed frame with its filter name,
-        exposure time, and number of stars not matched to the original refFrame
-        that where added to the end of the list.
+        see frameMatch().
     refFrame : list
-        Reference frame: This list collects all the cross-matched photometry.
+        see frameMatch().
     frame : list
-        Processed frame that was compared to refFrame.
+        see frameMatch().
     match_fr1_ids_all : list
         Indexes of stars in refFrame that were matched to a star in frame.
     match_fr2_ids_all : list
@@ -365,7 +363,32 @@ def UpdtRefFrame(refFrameInfo, refFrame, frame, match_fr1_ids_all,
 
 def frameMatch(refFrameInfo, refFrame, frame, maxrad):
     """
+    Combine 'refFrame' and 'frame' into a new updated 'refFrame'.
+
+    Parameters
+    ----------
+    refFrameInfo : list
+        Contains one sub-list per processed frame with its filter name,
+        exposure time, and number of stars not matched to the original refFrame
+        that where added to the end of the list. Will be updated before this
+        function ends.
+    refFrame : list
+        Collects all the cross-matched photometry into this single reference
+        frame.
+    frame : list
+        Processed frame to be compared to refFrame.
+    maxrad : float
+        Maximum allowed distance (radius) for a match to be valid.
+
+    Returns
+    -------
+    refFrameInfo : list
+        Updated list.
+    refFrame : list
+        Updated list.
+
     """
+
     # Extract (x,y) coordinates, averaging the values assigned to the
     # same star.
     x_ref, y_ref = [], []
@@ -422,9 +445,7 @@ def frameMatch(refFrameInfo, refFrame, frame, maxrad):
             print("Processed stars w/ no match within maxrad: {}".format(
                 len(fr2_ids) - len(match_fr2_ids_all)))
 
-    # Update reference frame associating all the matches found in the
-    # processed frame to a given reference star. Also append those stars
-    # from the processed frame with no match to the end of the list.
+    # Update reference frame.
     refFrameInfo, refFrame = UpdtRefFrame(
         refFrameInfo, refFrame, frame, match_fr1_ids_all, match_fr2_ids_all)
 
@@ -439,9 +460,9 @@ def groupFilters(refFrameInfo, refFrame):
     Parameters
     ----------
     refFrameInfo : list
-        See UpdtRefFrame()
+        See frameMatch()
     refFrame : list
-        See UpdtRefFrame()
+        See frameMatch()
 
     Returns
     -------
@@ -481,27 +502,117 @@ def groupFilters(refFrameInfo, refFrame):
     return group_phot
 
 
-def mag2flux():
+def mag2flux(mag, zmag=15.):
     """
+    Convert magnitudes to flux.
+
+    Parameters
+    ----------
+    mag : array
+        Magnitude values.
+    zmag : float
+        Arbitray (fixed) constant.
+
+    Returns
+    -------
+    array
+        Fluxes.
+
     """
+    return 10 ** ((zmag - mag) / 2.5)
 
-    return
 
-
-def flux2mag():
+def emag2eflux(emags, flux):
     """
-    """
+    Convert magnitude sigmas into flux sigmas.
 
-    return
+    Parameters
+    ----------
+    emags : array
+        Magnitude sigma values.
+    flux : array
+        Flux values.
+
+    Returns
+    -------
+    array
+        Flux sigmas.
+
+    Notes
+    -----
+    The float used is:
+        1.1788231 = (2.5 * log(e)) ** 2
+
+    """
+    return emags * (flux ** 2 / 1.1788231)
+
+
+def flux2mag(flux, zmag=15.):
+    """
+    Convert fluxes into flux magnitudes.
+
+    Parameters
+    ----------
+    flux : array
+        Flux values.
+    zmag : float
+        Arbitray (fixed) constant.
+
+    Returns
+    -------
+    array
+        Magnitudes.
+
+    """
+    return -2.5 * np.log10(flux) + zmag
+
+
+def eflux2emag(eflux, flux_mean):
+    """
+    Convert magnitude sigmas into flux sigmas.
+
+    Parameters
+    ----------
+    eflux : array
+        Flux sigmas.
+    flux_mean : array
+        Flux mean values.
+
+    Returns
+    -------
+    array
+        Magnitude sigmas.
+
+    Notes
+    -----
+    The float used is:
+        1.0857362 = 2.5 * log10(e)
+
+    """
+    return eflux * 1.0857362 / flux_mean
 
 
 def avrgMags(group_phot, method):
     """
     Combine magnitudes for all cross-matched stars in all frames. Available
     methods are:
+
+    Parameters
+    ----------
+    group_phot : dictionary
+        See groupFilters().
+    method : string
+        Selected method to obtain the final magnitudes and sigmas for each
+        observed filter.
+
+    Returns
+    -------
+    avrg_phot : dictionary
+        Combined magnitudes for each filter, using the selected method.
+
     """
+    avrg_phot = {}
     for f, fvals in group_phot.iteritems():
-        print('Filter {}'.format(f))
         xcen, ycen, mags, emags = [], [], [], []
         for col in fvals.itercols():
             if col.name.startswith('x_'):
@@ -513,17 +624,37 @@ def avrgMags(group_phot, method):
             elif col.name.startswith('emag_'):
                 emags.append(col)
 
-        flux, eflux = mag2flux(mags), mag2flux(emags)
+        # Median for (x, y) coordinates.
+        xmedian = np.nanmedian(zip(*xcen), axis=1)
+        ymedian = np.nanmedian(zip(*ycen), axis=1)
+        # Convert magnitudes and their sigmas to flux.
+        flux = mag2flux(np.array(mags))
+        eflux = emag2eflux(emags, flux)
+
         if method == 'mean':
+            # Convert to flux, average, and back to magnitudes.
             flux_mean = np.nanmean(zip(*flux), axis=1)
-            flux_vari = np.array(eflux) ** 2
+            mag_mean = flux2mag(flux_mean)
+
+            # Idem for errors (sigmas)
+            # Obtain variances.
+            flux_vari = np.array(zip(*np.array(eflux) ** 2))
+            # Count non-nan values
+            non_nans = (~np.isnan(flux_vari)).sum(1)
+            # Replace 0 count with np.nan
+            non_nans = np.where(non_nans == 0, np.nan, non_nans)
+            # Sigma for the flux mean, obtained as:
+            # e_f = sqrt(sum(var ** 2)) / N =
+            #     = sqrt(mean(var) / N)
             eflux_mean = np.sqrt(
-                (1. / len(emags)) *
-                np.nanmean(zip(*variance_all), axis=1))
-        import pdb; pdb.set_trace()  # breakpoint a8b5368c //
+                (1. / non_nans) * np.nanmean(flux_vari, axis=1))
+            # Back to magnitudes.
+            emag_mean = eflux2emag(eflux_mean, flux_mean)
 
+        # Add data for this filter.
+        avrg_phot.update({f: [xmedian, ymedian, mag_mean, emag_mean]})
 
-    return
+    return avrg_phot
 
 
 def rmNaNrows(tab):
