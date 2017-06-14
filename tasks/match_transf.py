@@ -3,17 +3,25 @@ import read_pars_file as rpf
 import os
 from os.path import join, isfile
 import sys
+import warnings
 
 import operator
 import numpy as np
 import random
 from scipy.spatial.distance import cdist
 from astropy.io import ascii
-from astropy.table import Table
+from astropy.table import Table, hstack
 from astropy.table import Column
 
-import timeit
 import matplotlib.pyplot as plt
+
+from scipy.stats import truncnorm
+import timeit
+
+
+def get_truncated_normal(mean=0, sd=1, low=0, upp=10):
+    return truncnorm(
+        (low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
 
 
 def genData():
@@ -27,32 +35,42 @@ def genData():
               'V': {'30': [], '70': [], '100': []},
               'I': {'30': [], '50': [], '100': []}}
     # Initial positions
-    x = np.random.uniform(0., 4000., 50000)
-    y = np.random.uniform(0., 4000., 50000)
+    N_max = 5000
+    x = np.random.uniform(0., 4000., N_max)
+    y = np.random.uniform(0., 4000., N_max)
     # Factor that determines the number of stars per filter.
     fact = {'U': [5, .5], 'B': [7, .7], 'V': [8, .8], 'I': [10, 1.]}
     for filt, expDict in frames.iteritems():
         for exps in expDict.keys():
             N = 10 * int(float(exps) * np.random.randint(4, fact[filt][0]) *
                          fact[filt][1])
+            N = min(N, N_max)
+            print(filt, exps, N)
             # Sigma and mu for normal distribution
             sigma, mu = 1., 1.
             # Generate normally distributed noise.
             noise = sigma * np.random.randn(len(x)) + mu
             x_n, y_n = x + noise, y + noise
-            x_n, y_n = x_n[:N], y_n[:N]
-            xy_n = list(zip(*[x_n, y_n]))
-            random.shuffle(xy_n)
-            x_n, y_n = np.asarray(zip(*xy_n))
-            mag = np.random.uniform(10., 24., N)
-            e_mag = np.random.uniform(.01, .2, N)
-            # plt.scatter(x, y)
-            # plt.scatter(x_n, y_n)
+
+            max_mag = np.random.uniform(20., 23.)
+            # https://stackoverflow.com/a/44308018/1391441
+            trunc_norm = get_truncated_normal(mean=2, sd=3, low=0., upp=15.)
+            mag = max_mag - trunc_norm.rvs(N_max)
+            mag.sort()
+            e_mag = np.array(
+                sorted(abs(np.random.normal(0., .1, N_max)) + .01))
+
+            idx = random.sample(range(0, N_max), N)
+            # plt.scatter(mag, e_mag)
+            # plt.hist(mag, bins=50)
             # plt.show()
 
             # This is the information stored for each star.
-            expDict[exps] = [x_n, y_n, mag, e_mag]
+            expDict[exps] = [x_n[idx], y_n[idx], mag[idx], e_mag[idx]]
 
+    # plt.scatter(frames['B']['30'][2], frames['B']['30'][3])
+    # plt.scatter(frames['V']['30'][2], frames['V']['30'][3])
+    # plt.show()
     return frames
 
 
@@ -194,7 +212,7 @@ def starMatch(c1_ids, c2_ids, d2d, maxrad):
         Distances between each star in the reference frame, and the closest
         star in the processed frame.
     maxrad : float
-        see frameMatch().
+        see frameMatch()
 
     Returns
     -------
@@ -290,11 +308,11 @@ def UpdtRefFrame(
     Parameters
     ----------
     refFrameInfo : list
-        see frameMatch().
+        see frameMatch()
     refFrame : list
-        see frameMatch().
+        see frameMatch()
     frame : list
-        see frameMatch().
+        see frameMatch()
     match_fr1_ids_all : list
         Indexes of stars in refFrame that were matched to a star in frame.
     match_fr2_ids_all : list
@@ -511,7 +529,7 @@ def mag2flux(mag, zmag=15.):
     mag : array
         Magnitude values.
     zmag : float
-        Arbitray (fixed) constant.
+        Arbitrary (fixed) constant.
 
     Returns
     -------
@@ -556,7 +574,7 @@ def flux2mag(flux, zmag=15.):
     flux : array
         Flux values.
     zmag : float
-        Arbitray (fixed) constant.
+        Arbitrary (fixed) constant.
 
     Returns
     -------
@@ -600,7 +618,7 @@ def avrgMags(group_phot, method):
     Parameters
     ----------
     group_phot : dictionary
-        See groupFilters().
+        See groupFilters()
     method : string
         Selected method to obtain the final magnitudes and sigmas for each
         observed filter.
@@ -613,50 +631,57 @@ def avrgMags(group_phot, method):
         IDs and averaged coordinates for each filter.
 
     """
-    id_coords, avrg_phot = {}, {}
+    avrg_phot, xcen_all, ycen_all = {}, [], []
     for f, fvals in group_phot.iteritems():
-        xcen, ycen, mags, emags = [], [], [], []
+        mags, emags = [], []
         for col in fvals.itercols():
             if col.name.startswith('x_'):
-                xcen.append(col)
+                xcen_all.append(col)
             elif col.name.startswith('y_'):
-                ycen.append(col)
+                ycen_all.append(col)
             elif col.name.startswith('mag_'):
                 mags.append(col)
             elif col.name.startswith('emag_'):
                 emags.append(col)
 
-        # Median for (x, y) coordinates.
-        xmedian = np.nanmedian(zip(*xcen), axis=1)
-        ymedian = np.nanmedian(zip(*ycen), axis=1)
         # Convert magnitudes and their sigmas to flux.
         flux = mag2flux(np.array(mags))
         eflux = emag2eflux(emags, flux)
 
-        if method == 'mean':
-            # Convert to flux, average, and back to magnitudes.
-            flux_mean = np.nanmean(zip(*flux), axis=1)
-            mag_mean = flux2mag(flux_mean)
+        # We expect some RuntimeWarnings in this block, so suppress them.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
 
-            # Idem for errors (sigmas)
-            # Obtain variances.
-            flux_vari = np.array(zip(*np.array(eflux) ** 2))
-            # Count non-nan values
-            non_nans = (~np.isnan(flux_vari)).sum(1)
-            # Replace 0 count with np.nan
-            non_nans = np.where(non_nans == 0, np.nan, non_nans)
-            # Sigma for the flux mean, obtained as:
-            # e_f = sqrt(sum(var ** 2)) / N =
-            #     = sqrt(mean(var) / N)
-            eflux_mean = np.sqrt(
-                (1. / non_nans) * np.nanmean(flux_vari, axis=1))
-            # Back to magnitudes.
-            emag_mean = eflux2emag(eflux_mean, flux_mean)
+            if method == 'mean':
+                # Convert to flux, average, and back to magnitudes.
+                flux_mean = np.nanmean(zip(*flux), axis=1)
+                mag_mean = flux2mag(flux_mean)
+
+                # Idem for errors (sigmas)
+                # Obtain variances.
+                flux_vari = np.array(zip(*np.array(eflux) ** 2))
+                # Count non-nan values
+                non_nans = (~np.isnan(flux_vari)).sum(1)
+                # Replace 0 count with np.nan
+                non_nans = np.where(non_nans == 0, np.nan, non_nans)
+                # Sigma for the flux mean, obtained as:
+                # e_f = sqrt(sum(var ** 2)) / N =
+                #     = sqrt(mean(var) / N)
+                eflux_mean = np.sqrt(
+                    (1. / non_nans) * np.nanmean(flux_vari, axis=1))
+                # Back to magnitudes.
+                emag_mean = eflux2emag(eflux_mean, flux_mean)
 
         # Add photometric data for this filter.
         avrg_phot.update({f: [mag_mean, emag_mean]})
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        # Median for (x, y) coordinates.
+        xmedian = np.nanmedian(zip(*xcen_all), axis=1)
+        ymedian = np.nanmedian(zip(*ycen_all), axis=1)
         # Add IDs and averaged coordinate data for this filter.
-        id_coords.update({f: [fvals['ID'], xmedian, ymedian]})
+        id_coords = [group_phot['V']['ID'], xmedian, ymedian]
 
     return avrg_phot, id_coords
 
@@ -669,9 +694,9 @@ def inst2cal(avrg_phot, ab_coeffs, col):
     Parameters
     ----------
     avrg_phot : dictionary
-        See avrgMags().
+        See avrgMags()
     ab_coeffs : dictionary
-        See standardCalib().
+        See standardCalib()
     col : string
         Identifies the color to process.
 
@@ -697,12 +722,29 @@ def inst2cal(avrg_phot, ab_coeffs, col):
     # Instrumental color sigma.
     ef12_inst = ef1_inst + ef2_inst
     # Calibrated color sigma.
-    cal_sig = ab_coeffs['a'][col] * ef12_inst
+    cal_sig = np.sqrt(
+        (ab_coeffs['sa'][col] * cal_mag) ** 2 +
+        (ab_coeffs['a'][col] * ef12_inst) ** 2 +
+        ab_coeffs['sb'][col] ** 2)
 
     return cal_mag, cal_sig
 
 
-def standardCalib(avrg_phot, id_coords, ab_coeffs={}):
+def inst2calMag(avrg_phot, ab_coeffs, col_cal, col_sig, mag):
+    """
+    TODO
+    """
+    cal_mag = avrg_phot[mag][0] + ab_coeffs['a'][mag] * col_cal +\
+        ab_coeffs['b'][mag]
+    # Use the  calibrated standard deviation for the selected color.
+    cal_sig = np.sqrt(
+        avrg_phot[mag][1] ** 2 + (ab_coeffs['a'][mag] * col_sig) ** 2 +
+        (ab_coeffs['sa'][mag] * col_cal) ** 2 + ab_coeffs['sb'][mag] ** 2)
+
+    return cal_mag, cal_sig
+
+
+def standardCalib(avrg_phot, ab_coeffs={}):
     """
     Transform instrumental (zero airmass) magnitudes into the standard V
     magnitude and standard colors.
@@ -712,9 +754,7 @@ def standardCalib(avrg_phot, id_coords, ab_coeffs={}):
     Parameters
     ----------
     avrg_phot : dictionary
-        See avrgMags().
-    id_coords : dictionary
-        See avrgMags().
+        See avrgMags()
     ab_coeffs : dictionary
         TODO
 
@@ -725,18 +765,23 @@ def standardCalib(avrg_phot, id_coords, ab_coeffs={}):
         deviations.
 
     """
-    ab_coeffs = {'a': {'V': -0.066, 'BV': 1.22, 'UB': 0.98, 'VI': 0.9},
-                 'b': {'V': -1.574, 'BV': -0.109, 'UB': -1.993, 'VI': 0.081}}
+    ab_coeffs = {
+        'a': {'V': -0.066, 'BV': 1.22, 'UB': 0.98, 'VI': 0.9},
+        'sa': {'V': 0.03, 'BV': 0.01, 'UB': 0.01, 'VI': 0.01},
+        'b': {'V': -1.574, 'BV': -0.109, 'UB': -1.993, 'VI': 0.081},
+        'sb': {'V': 0.03, 'BV': 0.01, 'UB': 0.01, 'VI': 0.01}
+    }
 
+    # Obtain the calibrated BV color and its standard deviation.
     BV_cal, BV_sig = inst2cal(avrg_phot, ab_coeffs, 'BV')
+    # Add to dictionary.
     stand_phot = {'BV': BV_cal, 'eBV': BV_sig}
-    # For the V magnitude.
-    V_cal = avrg_phot['V'][0] + ab_coeffs['a']['V'] * BV_cal +\
-        ab_coeffs['b']['V']
-    V_sig = np.sqrt(
-        avrg_phot['V'][1] ** 2 + (ab_coeffs['a']['V'] * BV_sig) ** 2)
+
+    # For the V magnitude use the obtained calibrated BV color.
+    V_cal, V_sig = inst2calMag(avrg_phot, ab_coeffs, BV_cal, BV_sig, 'V')
     stand_phot.update({'V': V_cal, 'eV': V_sig})
 
+    # Transform the rest of the filters, if they are available.
     if 'U' in avrg_phot.keys():
         UB_cal, UB_sig = inst2cal(avrg_phot, ab_coeffs, 'UB')
         stand_phot.update({'UB': UB_cal, 'eUB': UB_sig})
@@ -747,12 +792,10 @@ def standardCalib(avrg_phot, id_coords, ab_coeffs={}):
         VR_cal, VR_sig = inst2cal(avrg_phot, ab_coeffs, 'VR')
         stand_phot.update({'VR': VR_cal, 'eVR': VR_sig})
 
-    import pdb; pdb.set_trace()  # breakpoint fd15bf3f //
-
     return stand_phot
 
 
-def rmNaNrows(tab):
+def rmNaNrows(tab, not_cols):
     """
     Remove from 'tab' all those rows that contain only NaN values.
 
@@ -760,6 +803,10 @@ def rmNaNrows(tab):
     ----------
     tab : class astropy.table
         All cross-matched stars for a given filter.
+    not_cols : int
+        Leave out this many columns when searching for all NaN values in a row.
+        This is used because otherwise the 'ID' column (for example) would
+        count towards that row containing one non-NaN value.
 
     Returns
     -------
@@ -769,31 +816,41 @@ def rmNaNrows(tab):
     """
     # Convert to pandas dataframe.
     tab_df = tab.to_pandas()
-    # Find rows with *all* nan values (~ means 'not'). Leave out the 'ID'
-    # column (hence the 'tab.keys()[1:]') else all rows contain at least one
-    # non-NaN value.
-    nan_idx = ~tab_df[tab.keys()[1:]].isnull().all(1)
+    # Find rows with *all* nan values (~ means 'not').
+    nan_idx = ~tab_df[tab.keys()[not_cols:]].isnull().all(1)
     # Filter out all nan rows and transform back to Table.
     tab = Table.from_pandas(tab_df[nan_idx])
 
     return tab
 
 
-def writeToFile(in_out_path, group_phot):
+def writeToFile(in_out_path, group_phot, stand_phot, id_coords):
     """
+    TODO
     """
 
-    print("\nWriting to 'filter_X.mag' files.")
-    for f, tab in group_phot.iteritems():
-        # Remove rows with all 'nan' values before writing to file.
-        tab = rmNaNrows(tab)
-        # Write to file.
-        if len(tab) > 0:
-            ascii.write(
-                tab, in_out_path + '/filter_' + f + '.mag',
-                format='fixed_width', delimiter=' ',
-                formats={_: '%10.4f' for _ in tab.keys()[1:]},
-                fill_values=[(ascii.masked, 'nan')], overwrite=True)
+    # for f, tab in group_phot.iteritems():
+    #     print("\nWriting 'filter_{}.mag' file.".format(f))
+    #     # Remove rows with all 'nan' values before writing to file.
+    #     tab = rmNaNrows(tab, 1)
+    #     # Write to file.
+    #     if len(tab) > 0:
+    #         ascii.write(
+    #             tab, in_out_path + '/filter_' + f + '.mag',
+    #             format='fixed_width', delimiter=' ',
+    #             formats={_: '%10.4f' for _ in tab.keys()[1:]},
+    #             fill_values=[(ascii.masked, 'nan')], overwrite=True)
+
+    print("\nWriting 'final_phot.dat' file.")
+    t1 = Table(id_coords, names=('ID', 'xmedian', 'ymedian'))
+    t2 = Table(stand_phot)
+    t3 = hstack([t1, t2])
+    tab = rmNaNrows(t3, 3)
+    ascii.write(
+        tab, in_out_path + '/final_phot.dat',
+        format='fixed_width', delimiter=' ',
+        formats={_: '%10.4f' for _ in tab.keys()[1:]},
+        fill_values=[(ascii.masked, 'nan')], overwrite=True)
 
 
 def make_plots(in_out_path):
@@ -841,10 +898,10 @@ def main():
     avrg_phot, id_coords = avrgMags(group_phot, pars['method'])
 
     # Transform combined magnitudes to the standard system.
-    stand_phot = standardCalib(avrg_phot, id_coords)
+    stand_phot = standardCalib(avrg_phot)
 
     # Create all output files and make final plot.
-    writeToFile(in_out_path, group_phot, stand_phot)
+    writeToFile(in_out_path, group_phot, stand_phot, id_coords)
     if pars['do_plots_F'] == 'y':
         make_plots(in_out_path)
 
