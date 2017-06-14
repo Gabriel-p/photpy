@@ -26,7 +26,7 @@ def get_truncated_normal(mean=0, sd=1, low=0, upp=10):
 
 def genData():
     """
-    Generate random (x,y) coordinates
+    Generate synthetic photometric data.
     """
     random.seed(9001)
     np.random.seed(117)
@@ -71,6 +71,14 @@ def genData():
     # plt.scatter(frames['B']['30'][2], frames['B']['30'][3])
     # plt.scatter(frames['V']['30'][2], frames['V']['30'][3])
     # plt.show()
+    return frames
+
+
+def loadAllstar():
+    """
+    Load Allstar task output .als files.
+    """
+
     return frames
 
 
