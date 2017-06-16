@@ -92,8 +92,8 @@ do_plots_E       y
 # 'match_transf' parameters
 #
 match_folder     field
-#load_format      allstar, list
-load_format      default
+load_format      allstar, list
+#load_format      default
 ref_frame        none
 maxrad           5.
 method           mean

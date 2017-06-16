@@ -98,8 +98,6 @@ def loadFrames(in_out_path, load_format, extCoeffs):
     else:
         l_format = load_format
 
-    print(load_format)
-
     if l_format == 'allstar':
         als_files = ascii.read(in_out_path + '/' + list_name)
 
@@ -753,8 +751,8 @@ def avrgMags(group_phot, method):
 
 def inst2cal(avrg_phot, ab_coeffs, col):
     """
-    Transform instrumental magnitudes and standard deviations into the
-    calibrated system, using the coefficients obteined previously.
+    Transform instrumental (zero airmass) magnitudes and standard deviations
+    into the calibrated system, using the coefficients obtained previously.
 
     Parameters
     ----------
@@ -775,7 +773,7 @@ def inst2cal(avrg_phot, ab_coeffs, col):
     """
     f1, f2 = col
 
-    # Instrumental magnitudes.
+    # Instrumental (zero airmass) magnitudes.
     f1_inst, f2_inst = avrg_phot[f1][0], avrg_phot[f2][0]
     # Instrumental magnitudes color.
     f12_inst = f1_inst - f2_inst
@@ -830,16 +828,32 @@ def standardCalib(avrg_phot, ab_coeffs={}):
         deviations.
 
     """
+    # ab_coeffs = {
+    #     'a': {'V': -0.066, 'BV': 1.22, 'UB': 0.98, 'VI': 0.9},
+    #     'sa': {'V': 0.03, 'BV': 0.01, 'UB': 0.01, 'VI': 0.01},
+    #     'b': {'V': -1.574, 'BV': -0.109, 'UB': -1.993, 'VI': 0.081},
+    #     'sb': {'V': 0.03, 'BV': 0.01, 'UB': 0.01, 'VI': 0.01}
+    # }
+
+    # Values for the .als files used for testing.
+    u1, u3 = 3.964132, -0.135271
+    b1, b3 = 2.086563, 0.01751888
+    v1, v3 = 1.445104, -0.02613502
+    i1, i3 = 1.823921, 0.09020784
+    aV, bV = -v3, -v1
+    aBV, bBV = 1. / (1. - v3 + b3), (v1 - b1) / (1. - v3 + b3)
+    aUB, bUB = 1. / (1. - b3 + u3), (b1 - u1) / (1. - b3 + u3)
+    aVI, bVI = 1. / (1. - i3 + v3), (i1 - v1) / (1. - i3 + v3)
     ab_coeffs = {
-        'a': {'V': -0.066, 'BV': 1.22, 'UB': 0.98, 'VI': 0.9},
+        'a': {'V': aV, 'BV': aBV, 'UB': aUB, 'VI': aVI},
         'sa': {'V': 0.03, 'BV': 0.01, 'UB': 0.01, 'VI': 0.01},
-        'b': {'V': -1.574, 'BV': -0.109, 'UB': -1.993, 'VI': 0.081},
+        'b': {'V': bV, 'BV': bBV, 'UB': bUB, 'VI': bVI},
         'sb': {'V': 0.03, 'BV': 0.01, 'UB': 0.01, 'VI': 0.01}
     }
 
     # Obtain the calibrated BV color and its standard deviation.
     BV_cal, BV_sig = inst2cal(avrg_phot, ab_coeffs, 'BV')
-    # Add to dictionary.
+    # Add to dictionary.º
     stand_phot = {'BV': BV_cal, 'eBV': BV_sig}
 
     # For the V magnitude use the obtained calibrated BV color.
