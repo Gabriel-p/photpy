@@ -68,7 +68,7 @@ import matplotlib.pyplot as plt
 #     return frames
 
 
-def loadFrames(in_out_path, load_format, extCoeffs):
+def loadFrames(in_out_path, load_format, als_files, extCoeffs):
     """
     Load photometric lists of stars.
 
@@ -92,16 +92,10 @@ def loadFrames(in_out_path, load_format, extCoeffs):
 
     frames = {'U': {}, 'B': {}, 'V': {}, 'I': {}, 'R': {}}
 
-    # Identify type of files to load,
-    if type(load_format[0]) is list:
-        l_format, list_name = load_format[0]
-    else:
-        l_format = load_format
+    if load_format == 'allstar':
+        files_data = ascii.read(als_files)
 
-    if l_format == 'allstar':
-        als_files = ascii.read(in_out_path + '/' + list_name)
-
-        for fname, filt, expT, K in als_files:
+        for fname, filt, expT, K in files_data:
             als = ascii.read(in_out_path + '/' + fname, format='daophot')
             print(fname, filt, expT, len(als))
 
@@ -132,7 +126,7 @@ def loadFrames(in_out_path, load_format, extCoeffs):
             # DELETE
             # frames[filt].update(
             #     {str(expT): [als['XCENTER'], als['YCENTER'], zAmag, als['MERR']]})
-    elif l_format == 'default':
+    elif load_format == 'default':
         pass
         import pdb; pdb.set_trace()  # breakpoint f019852a //
 
@@ -143,26 +137,38 @@ def loadFrames(in_out_path, load_format, extCoeffs):
 def in_params():
     """
     Read and prepare input parameter values.
+
+    TODO
+    Returns
+    -------
+    pars : dictionary
+        All parameters.
     """
     pars = rpf.main()
 
-    in_out_path = pars['mypath'].replace(
+    pars['in_out_path'] = pars['mypath'].replace(
         'tasks', 'output/' + pars['match_folder'])
 
-    fits_list = []
-    for file in os.listdir(in_out_path):
-        f = join(in_out_path, file)
+    # Format parameters appropriately.
+    if pars['load_format'][0][0] == 'allstar':
+        f = join(pars['in_out_path'], pars['load_format'][0][1])
         if isfile(f):
-            if f.endswith('_phot.mag'):
-                fits_list.append(f)
+            pars['load_format'] = 'allstar'
+            pars['als_files'] = f
 
-    # if not fits_list:
-    #     print("No '*_phot.mag' files found in {} folder.".format(
-    #         pars['match_folder']))
-    #     print("Exit.")
-    #     sys.exit()
+            # Check that all .als files exist.
+            for file in ascii.read(f).columns[0]:
+                f = join(pars['in_out_path'], file)
+                if not isfile(f):
+                    print("{}\n file does not exist. Exit.".format(f))
+                    sys.exit()
+        else:
+            print("{}\n file does not exist. Exit.".format(f))
+            sys.exit()
+    else:
+        pars['load_format'], pars['als_files'] = 'default', ''
 
-    return pars, in_out_path
+    return pars
 
 
 def framesOrder(frames):
@@ -361,7 +367,7 @@ def frameCoordsUpdt(x_fr, y_fr, match_fr2_ids):
 
 
 def UpdtRefFrame(
-        refFrameInfo, refFrame, frame, match_fr1_ids_all, match_fr2_ids_all):
+    refFrameInfo, refFrame, frame, match_fr1_ids_all, match_fr2_ids_all):
     """
     Update the reference frame adding the stars in the processed frame that
     were assigned as matches to each reference star. If a reference star was
@@ -622,10 +628,10 @@ def emag2eflux(emags, flux):
     Notes
     -----
     The float used is:
-        1.1788231 = (2.5 * log(e)) ** 2
+        1.0857362 = 2.5 * log10(e)
 
     """
-    return emags * (flux ** 2 / 1.1788231)
+    return emags * flux * 1.0857362
 
 
 def flux2mag(flux, zmag=15.):
@@ -650,7 +656,7 @@ def flux2mag(flux, zmag=15.):
 
 def eflux2emag(eflux, flux_mean):
     """
-    Convert magnitude sigmas into flux sigmas.
+    Convert flux sigmas into magnitude sigmas.
 
     Parameters
     ----------
@@ -751,8 +757,8 @@ def avrgMags(group_phot, method):
 
 def inst2cal(avrg_phot, ab_coeffs, col):
     """
-    Transform instrumental (zero airmass) magnitudes and standard deviations
-    into the calibrated system, using the coefficients obtained previously.
+    Transform an instrumental (zero airmass) color and its standard deviation
+    to the calibrated system, using coefficients previously obtained.
 
     Parameters
     ----------
@@ -766,9 +772,9 @@ def inst2cal(avrg_phot, ab_coeffs, col):
     Returns
     -------
     cal_mag : array
-        Calibrated magnitudes for the processed color.
+        Calibrated color.
     cal_sig : array
-        Standard deviation in the calibrated system for the processed color.
+        Calibrated standard deviation for the processed color.
 
     """
     f1, f2 = col
@@ -795,7 +801,29 @@ def inst2cal(avrg_phot, ab_coeffs, col):
 
 def inst2calMag(avrg_phot, ab_coeffs, col_cal, col_sig, mag):
     """
-    TODO
+    Transform an instrumental (zero airmass) magnitude and its standard
+    deviation to the calibrated system, using coefficients previously obtained.
+
+    Parameters
+    ----------
+    avrg_phot : dictionary
+        See avrgMags()
+    ab_coeffs : dictionary
+        See standardCalib()
+    col_cal : array
+        Calibrated color (color term in transformation equation)
+    col_sig : array
+        Calibrated standard deviation for the color.
+    mag : string
+        Identifies the magnitude to process.
+
+    Returns
+    -------
+    cal_mag : array
+        Calibrated magnitude.
+    cal_sig : array
+        Calibrated standard deviation for the processed magnitude.
+
     """
     cal_mag = avrg_phot[mag][0] + ab_coeffs['a'][mag] * col_cal +\
         ab_coeffs['b'][mag]
@@ -853,7 +881,7 @@ def standardCalib(avrg_phot, ab_coeffs={}):
 
     # Obtain the calibrated BV color and its standard deviation.
     BV_cal, BV_sig = inst2cal(avrg_phot, ab_coeffs, 'BV')
-    # Add to dictionary.º
+    # Add to dictionary.
     stand_phot = {'BV': BV_cal, 'eBV': BV_sig}
 
     # For the V magnitude use the obtained calibrated BV color.
@@ -934,17 +962,20 @@ def writeToFile(in_out_path, group_phot, stand_phot, id_coords):
 
 def make_plots(in_out_path):
     """
+    TODO
     """
 
 
 def main():
     """
+    TODO
     """
-    pars, in_out_path = in_params()
+    pars = in_params()
 
-    # frames = genData()
+    # frames = genData()  # DELETE
     frames = loadFrames(
-        in_out_path, pars['load_format'], pars['extin_coeffs'][0])
+        pars['in_out_path'], pars['load_format'], pars['als_files'],
+        pars['extin_coeffs'][0])
 
     # Select the 'reference' frame as the one with the largest number of stars,
     # and store the remaining data in the correct order.
@@ -970,6 +1001,7 @@ def main():
     # e_mag).
     group_phot = groupFilters(refFrameInfo, refFrame)
 
+    # DELETE
     # import pickle
     # # with open('temp.pickle', 'wb') as f:
     # #     pickle.dump(group_phot, f)
@@ -983,9 +1015,9 @@ def main():
     stand_phot = standardCalib(avrg_phot)
 
     # Create all output files and make final plot.
-    writeToFile(in_out_path, group_phot, stand_phot, id_coords)
+    writeToFile(pars['in_out_path'], group_phot, stand_phot, id_coords)
     if pars['do_plots_F'] == 'y':
-        make_plots(in_out_path)
+        make_plots(pars['in_out_path'])
 
 
 if __name__ == '__main__':
