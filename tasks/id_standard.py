@@ -482,6 +482,8 @@ def main():
 
     print("Find better center coordinates.")
     xy_cent = reCenter(hdu_data, xy_rot)
+
+    print("Write {}_obs.coo file.".format(pars['landolt_fld']))
     out_data_file = join(out_path, pars['landolt_fld'] + "_obs.coo")
     make_out_file(pars['landolt_fld'], out_data_file, landolt_t, xy_cent)
 

@@ -10,12 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.offsetbox import AnchoredText
 
-import astropy.units as u
-from astropy.io import ascii, fits
-
-from photutils import CircularAperture
-from photutils import CircularAnnulus
-from photutils import aperture_photometry
+from astropy.io import ascii
 
 
 def in_params():
@@ -39,79 +34,6 @@ def in_params():
         sys.exit()
 
     return pars, in_out_path
-
-
-def read_standard_coo(in_out_path, landolt_fld):
-    """
-    Read .coo file with standard stars coordinates in the system of the
-    observed frame.
-    """
-    f = join(in_out_path, landolt_fld + '_obs.coo')
-    landolt_fl = ascii.read(f)
-
-    return landolt_fl
-
-
-def standardMagnitude(landolt_fl, filt):
-    """
-    Separate into individual filters. Return single filter, and color term
-    used in the fitting process for that filter.
-    """
-    if filt == 'U':
-        standard_mag = landolt_fl['UB'] + landolt_fl['BV'] + landolt_fl['V']
-        standard_col = landolt_fl['UB']
-    elif filt == 'B':
-        standard_mag = landolt_fl['BV'] + landolt_fl['V']
-        standard_col = landolt_fl['BV']
-    elif filt == 'V':
-        standard_mag = landolt_fl['V']
-        standard_col = landolt_fl['BV']
-    elif filt == 'R':
-        standard_mag = landolt_fl['V'] - landolt_fl['VR']
-        standard_col = landolt_fl['VR']
-    elif filt == 'I':
-        standard_mag = landolt_fl['V'] - landolt_fl['VI']
-        standard_col = landolt_fl['VI']
-
-    return list(standard_mag), list(standard_col)
-
-
-def calibrate_magnitudes(tab, itime=1., zmag=25.):
-    tab['cal_mags'] = (zmag - 2.5 * np.log10(tab['flux_fit'] / itime)) * u.mag
-    return tab
-
-
-def instrumMags(landolt_fl, hdu_data, exp_time, aper_rad, annulus_in,
-                annulus_out):
-    """
-    Perform aperture photometry for all 'landolt_fl' standard stars observed in
-    the 'hdu_data' file.
-    """
-    # Coordinates from observed frame.
-    positions = zip(*[landolt_fl['x_obs'], landolt_fl['y_obs']])
-    apertures = CircularAperture(positions, r=aper_rad)
-    annulus_apertures = CircularAnnulus(
-        positions, r_in=annulus_in, r_out=annulus_out)
-
-    apers = [apertures, annulus_apertures]
-    phot_table = aperture_photometry(hdu_data, apers)
-    bkg_mean = phot_table['aperture_sum_1'] / annulus_apertures.area()
-    bkg_sum = bkg_mean * apertures.area()
-    phot_table['flux_fit'] = phot_table['aperture_sum_0'] - bkg_sum
-    phot_table = calibrate_magnitudes(phot_table, itime=exp_time)
-
-    return phot_table
-
-
-def zeroAirmass(phot_table, extin_coeffs, filt, airmass):
-    """
-    Correct for airmass, i.e. instrumental. magnitude at zero airmass.
-    """
-    f_idx = extin_coeffs.index(filt) + 1
-    ext = float(extin_coeffs[f_idx])
-    phot_table['instZA'] = phot_table['cal_mags'] - (ext * airmass) * u.mag
-
-    return phot_table
 
 
 def rmse(targets, predictions):
@@ -232,7 +154,7 @@ def fitTransfEquations(filters):
     filt_col_data = [["V", V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE]]
 
     if 'B' in filters.keys():
-        stand_B, stand_BV, instZA_B =\
+        stand_BV, instZA_B =\
             np.array(filters['B'][0]).transpose(1, 2, 0)
         z = [_ for subl in zip(*filters['B'][1]) for _ in subl]
         x_fit, y_fit = (instZA_B - instZA_V), stand_BV
@@ -243,7 +165,7 @@ def fitTransfEquations(filters):
             ["BV", BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE])
 
         if 'U' in filters.keys():
-            stand_U, stand_UB, instZA_U = np.array(
+            stand_UB, instZA_U = np.array(
                 filters['U'][0]).transpose(1, 2, 0)
             z = [_ for subl in zip(*filters['U'][1]) for _ in subl]
             x_fit, y_fit = (instZA_U - instZA_B), stand_UB
@@ -254,7 +176,7 @@ def fitTransfEquations(filters):
                 ["UB", UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE])
 
     if 'I' in filters.keys():
-        stand_I, stand_VI, instZA_I =\
+        stand_VI, instZA_I =\
             np.array(filters['I'][0]).transpose(1, 2, 0)
         z = [_ for subl in zip(*filters['U'][1]) for _ in subl]
         x_fit, y_fit = (instZA_V - instZA_I), stand_VI
@@ -265,7 +187,7 @@ def fitTransfEquations(filters):
             ["VI", VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE])
 
     if 'R' in filters.keys():
-        stand_R, stand_VR, instZA_R =\
+        stand_VR, instZA_R =\
             np.array(filters['R'][0]).transpose(1, 2, 0)
         z = [_ for subl in zip(*filters['R'][1]) for _ in subl]
         x_fit, y_fit = (instZA_V - instZA_R), stand_VR
@@ -373,49 +295,12 @@ def make_plot(mypath, filt_col_data):
 
 def main():
     """
+
+    !!! --> Assumes that the V and B filters are present. <-- !!!
+
     """
     pars, in_out_path = in_params()
 
-    filters = {'U': [[], []], 'B': [[], []], 'V': [[], []],
-               'R': [[], []], 'I': [[], []]}
-    for stnd_fl in pars['stnd_obs_fields']:
-        stnd_f_name, fits_list = stnd_fl[0], stnd_fl[1:]
-        print("Perform aperture photometry and resolve transformation\n"
-              "equations for standard field {}".format(stnd_f_name))
-
-        # Data for this Landolt field.
-        landolt_fl = read_standard_coo(in_out_path, stnd_f_name)
-
-        # For each _crop.fits observed (aligned and cropped) standard file.
-        for imname in fits_list:
-            # Load .fits file.
-            hdulist = fits.open(join(in_out_path, imname))
-            # Extract header and data.
-            hdr, hdu_data = hdulist[0].header, hdulist[0].data
-            filt, exp_time, airmass = hdr[pars['filter_key']],\
-                hdr[pars['exposure_key']], hdr[pars['airmass_key']]
-            print("  {}, Filter {}, Exp {}".format(imname, filt, exp_time))
-
-            # Extract data for this filter.
-            stand_mag, stand_col = standardMagnitude(landolt_fl, filt)
-            # Obtain instrumental magnitudes for the standard stars in the
-            # defined Landolt field, in this observed frame.
-            photu = instrumMags(
-                landolt_fl, hdu_data, exp_time, float(pars['aperture']),
-                float(pars['annulus_in']), float(pars['annulus_out']))
-            # Correct instrumental magnitudes for zero airmass.
-            photu = zeroAirmass(photu, pars['extin_coeffs'][0], filt, airmass)
-
-            # Group frames by filter.
-            filters[filt][0].append(
-                [stand_mag, stand_col, list(photu['instZA'].value)])
-            # Store these data to identify stars rejected in the linear fit.
-            filters[filt][1].append(
-                [imname + ' ' + '(' + str(exp_time) + ')' + ' ' +
-                 stnd_f_name + '-' + _ for _ in landolt_fl['ID']])
-
-    # Remove not observed filters from dictionary.
-    filters = {k: v for k, v in filters.iteritems() if v[0]}
     if 'V' not in filters.keys():
         print("Filter V is missing.")
         sys.exit()
@@ -423,9 +308,10 @@ def main():
             print("Filter B is missing.")
             sys.exit()
 
-    # Obtain transformation coefficients.
+    print("Obtain transformation coefficients.")
     filt_col_data = fitTransfEquations(filters)
 
+    print("Write 'fit_coeffs.dat' output file.")
     writeTransfCoeffs(pars['mypath'], filt_col_data)
 
     if pars['do_plots_D'] == 'y':

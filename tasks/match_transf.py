@@ -7,7 +7,6 @@ import warnings
 
 import operator
 import numpy as np
-import random
 from scipy.spatial.distance import cdist
 from astropy.io import ascii
 from astropy.table import Table, hstack
@@ -27,6 +26,7 @@ import matplotlib.pyplot as plt
 #     """
 #     Generate synthetic photometric data.
 #     """
+#     import random
 #     random.seed(9001)
 #     np.random.seed(117)
 #     frames = {'U': {'60': [], '100': [], '250': []},
@@ -367,7 +367,7 @@ def frameCoordsUpdt(x_fr, y_fr, match_fr2_ids):
 
 
 def UpdtRefFrame(
-    refFrameInfo, refFrame, frame, match_fr1_ids_all, match_fr2_ids_all):
+        refFrameInfo, refFrame, frame, match_fr1_ids_all, match_fr2_ids_all):
     """
     Update the reference frame adding the stars in the processed frame that
     were assigned as matches to each reference star. If a reference star was
@@ -840,7 +840,7 @@ def standardCalib(avrg_phot, ab_coeffs={}):
     Transform instrumental (zero airmass) magnitudes into the standard V
     magnitude and standard colors.
 
-    Assumes that the V and B filters are present.
+    !!! --> Assumes that the V and B filters are present. <-- !!!
 
     Parameters
     ----------
@@ -863,6 +863,7 @@ def standardCalib(avrg_phot, ab_coeffs={}):
     #     'sb': {'V': 0.03, 'BV': 0.01, 'UB': 0.01, 'VI': 0.01}
     # }
 
+    # DELETE
     # Values for the .als files used for testing.
     u1, u3 = 3.964132, -0.135271
     b1, b3 = 2.086563, 0.01751888
@@ -878,6 +879,7 @@ def standardCalib(avrg_phot, ab_coeffs={}):
         'b': {'V': bV, 'BV': bBV, 'UB': bUB, 'VI': bVI},
         'sb': {'V': 0.03, 'BV': 0.01, 'UB': 0.01, 'VI': 0.01}
     }
+    # DELETE
 
     # Obtain the calibrated BV color and its standard deviation.
     BV_cal, BV_sig = inst2cal(avrg_phot, ab_coeffs, 'BV')
