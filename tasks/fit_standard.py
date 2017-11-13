@@ -36,6 +36,23 @@ def in_params():
     return pars, in_out_path
 
 
+def readData(in_out_path):
+    """
+    """
+    f = join(in_out_path, "stnd_aperphot.dat")
+    stndData = ascii.read(f)
+
+    for f_id in ['V', 'B']:
+        if f_id not in stndData['Filt']:
+            print("Filter {} is missing.".format(f_id))
+            sys.exit()
+
+    # Group by filters
+    f_grouped = stndData.group_by('Filt')
+
+    return f_grouped
+
+
 def rmse(targets, predictions):
     return np.sqrt(((predictions - targets) ** 2).mean())
 
@@ -101,8 +118,7 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
 
     from scipy.stats import linregress
     m, c, r_value, p_value, std_err = linregress(x, y)
-    import pdb; pdb.set_trace()  # breakpoint a1aa645c //
-    
+
     predictions = m * np.array(x) + c
     red_chisq = redchisqg(y, predictions)
     R2, RMSE = r_value**2, rmse(y, predictions)
@@ -138,14 +154,27 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     return xy_accpt, xy_rjct, m, c, R2, RMSE
 
 
+def extractData(filters, f_id):
+    """
+    """
+    mask = filters.groups.keys['Filt'] == f_id
+    f_dat = filters.groups[mask]
+    stand_mag, stand_col, instZA_mag = f_dat['Mag'], f_dat['Col'],\
+        f_dat['ZA_mag']
+    # Flatten extra data used to identify rejected stars
+    extra_data = [
+        _[0] + ' ' + _[1] + '-' + _[2] + ' (' + str(_[3]) + ')' for _ in
+        zip(*[f_dat['Filt'], f_dat['Stnd_field'], f_dat['ID'], f_dat['file']])]
+
+    return stand_mag, stand_col, instZA_mag, extra_data
+
+
 def fitTransfEquations(filters):
     """
     Solve transformation equation to the Landolt system.
     """
     # Assume that the 'V' filter was used.
-    stand_V, stand_BV, instZA_V = np.array(filters['V'][0]).transpose(1, 2, 0)
-    # Flatten extra data used to identify rejected stars
-    z = [_ for subl in zip(*filters['V'][1]) for _ in subl]
+    stand_V, stand_BV, instZA_V, z = extractData(filters, 'V')
     x_fit, y_fit = stand_BV, (stand_V - instZA_V)
     # Find slope and/or intersection of linear regression.
     print("Filter V")
@@ -153,10 +182,8 @@ def fitTransfEquations(filters):
         x_fit.flatten(), y_fit.flatten(), z)
     filt_col_data = [["V", V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE]]
 
-    if 'B' in filters.keys():
-        stand_BV, instZA_B =\
-            np.array(filters['B'][0]).transpose(1, 2, 0)
-        z = [_ for subl in zip(*filters['B'][1]) for _ in subl]
+    if 'B' in filters['Filt']:
+        _, stand_BV, instZA_B, z = extractData(filters, 'B')
         x_fit, y_fit = (instZA_B - instZA_V), stand_BV
         print("Filter B")
         BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE = regressRjctOutliers(
@@ -164,10 +191,8 @@ def fitTransfEquations(filters):
         filt_col_data.append(
             ["BV", BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE])
 
-        if 'U' in filters.keys():
-            stand_UB, instZA_U = np.array(
-                filters['U'][0]).transpose(1, 2, 0)
-            z = [_ for subl in zip(*filters['U'][1]) for _ in subl]
+        if 'U' in filters['Filt']:
+            _, stand_UB, instZA_U, z = extractData(filters, 'U')
             x_fit, y_fit = (instZA_U - instZA_B), stand_UB
             print("Filter U")
             UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE = regressRjctOutliers(
@@ -175,10 +200,8 @@ def fitTransfEquations(filters):
             filt_col_data.append(
                 ["UB", UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE])
 
-    if 'I' in filters.keys():
-        stand_VI, instZA_I =\
-            np.array(filters['I'][0]).transpose(1, 2, 0)
-        z = [_ for subl in zip(*filters['U'][1]) for _ in subl]
+    if 'I' in filters['Filt']:
+        _, stand_VI, instZA_I, z = extractData(filters, 'I')
         x_fit, y_fit = (instZA_V - instZA_I), stand_VI
         print("Filter I")
         VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE = regressRjctOutliers(
@@ -186,10 +209,8 @@ def fitTransfEquations(filters):
         filt_col_data.append(
             ["VI", VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE])
 
-    if 'R' in filters.keys():
-        stand_VR, instZA_R =\
-            np.array(filters['R'][0]).transpose(1, 2, 0)
-        z = [_ for subl in zip(*filters['R'][1]) for _ in subl]
+    if 'R' in filters['Filt']:
+        _, stand_VR, instZA_R, z = extractData(filters, 'R')
         x_fit, y_fit = (instZA_V - instZA_R), stand_VR
         print("Filter R")
         VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE = regressRjctOutliers(
@@ -301,12 +322,7 @@ def main():
     """
     pars, in_out_path = in_params()
 
-    if 'V' not in filters.keys():
-        print("Filter V is missing.")
-        sys.exit()
-        if 'B' not in filters.keys():
-            print("Filter B is missing.")
-            sys.exit()
+    filters = readData(in_out_path)
 
     print("Obtain transformation coefficients.")
     filt_col_data = fitTransfEquations(filters)
@@ -314,7 +330,7 @@ def main():
     print("Write 'fit_coeffs.dat' output file.")
     writeTransfCoeffs(pars['mypath'], filt_col_data)
 
-    if pars['do_plots_D'] == 'y':
+    if pars['do_plots_E'] == 'y':
         make_plot(pars['mypath'], filt_col_data)
 
     print("\nFinished.")

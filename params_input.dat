@@ -17,7 +17,7 @@ dmax             60000.0
 ###############################################################################
 # Scripts applied on both standard and field frames.
 
-# 'fitstats' parameters
+# 'fitstats'
 #
 in_folder_A      standards
 ellip_max        0.15
@@ -29,7 +29,7 @@ max_stars        100
 do_plots_A       y
 
 
-# 'align_crop' parameters
+# 'align_crop'
 #
 in_folder_B      standards
 ref_align        none
@@ -45,9 +45,9 @@ do_plots_B       y
 
 
 ###############################################################################
-# Standard stars identification, photometry, and transformations.
+# Standard stars identification, aperture photometry, and transformations.
 
-# 'id_standards' parameters
+# 'id_standards'
 #
 landolt_fld      pg1323
 ref_id_std       stk_2127_crop.fits
@@ -58,7 +58,7 @@ rot_max          5.0
 do_plots_C       y
 
 
-# 'aperphot_standards' parameters
+# 'aperphot_standards'
 #
 stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
 stnd_obs_fields  pg1323, stk_2149_crop.fits, stk_2142_crop.fits, stk_2153_crop.fits, stk_2146_crop.fits
@@ -70,7 +70,7 @@ annulus_out      25
 do_plots_D       y
 
 
-# 'fit_standards' parameters
+# 'fit_standards'
 #
 R^2_min          0.98
 RMSE_max         0.05
@@ -86,15 +86,23 @@ do_plots_E       y
 # PSF photometry, exposure matching, and transformation of instrumental
 # magnitudes into standard magnitudes.
 
-# 'psf_phot' parameters
+# 'find_stars'
 #
-aaa              aaa
-bbb              bbb
-ccc              ccc
+fits_find        field/stk_fcd0044.fits
+find_method      DAO
+threshold        3.5
 do_plots_F       y
 
 
-# 'match_transf' parameters
+# 'psf_phot'
+#
+fits_psf         field/stk_fcd0044.fits
+bbb              bbb
+ccc              ccc
+do_plots_G       y
+
+
+# 'match_transf'
 #
 match_folder     field
 load_format      allstar, list
@@ -102,6 +110,6 @@ load_format      allstar, list
 ref_frame        none
 maxrad           5.
 method           mean
-do_plots_G       y
+do_plots_H       y
 
 ###############################################################################

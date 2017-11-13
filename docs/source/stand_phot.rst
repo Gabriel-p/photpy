@@ -69,7 +69,7 @@ The ``aperphot_standard`` automatically performs aperture photometry on your
 observed standard frames, for the identified stars in one.
 
 .. warning::
-  We assume that you will work with a *single* aperture radius value for the
+  We assume that you will work with a **single** aperture radius value for the
   standards from all the nights for all the filters.
 
 The selected aperture value should be large enough to contain as much light from

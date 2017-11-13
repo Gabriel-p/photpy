@@ -1018,7 +1018,7 @@ def main():
 
     # Create all output files and make final plot.
     writeToFile(pars['in_out_path'], group_phot, stand_phot, id_coords)
-    if pars['do_plots_F'] == 'y':
+    if pars['do_plots_H'] == 'y':
         make_plots(pars['in_out_path'])
 
 

@@ -123,6 +123,16 @@ General
 * ``do_plots_C``:       y
 
 
+``aperphot_standards``
+...........................
+
+* ``stnd_obs_fields``:  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
+* ``aperture``:         15
+* ``annulus_in``:       20
+* ``annulus_out``:      25
+* ``do_plots_D``:       y
+
+
 ``fit_standards``
 ............................
 
