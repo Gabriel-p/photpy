@@ -33,7 +33,7 @@ def bckg_data(hdr, hdu_data, gain_key, rdnoise_key, method):
     print("STDDEV estimated from GAIN, RDNOISE, and median: {:.2f}".format(
         np.sqrt(sky_median * gain + rdnoise ** 2) / gain))
 
-    return sky_mean, sky_std
+    return sky_mean, sky_median, sky_std
 
 
 def st_fwhm_select(
