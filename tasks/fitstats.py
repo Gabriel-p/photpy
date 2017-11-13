@@ -87,7 +87,7 @@ def isolate_stars(hdu_data, fwhm_accptd, crop_side):
         # Crop image
         crop = cutout_footprint(hdu_data, (st[0], st[1]), crop_side)
         # Skip stars placed on borders.
-        if len(crop[0]) == crop_side:
+        if crop[0].shape == (crop_side, crop_side):
             stars.append(crop[0])
         else:
             print("Skip star on border (xc, yc)=({}, {})".format(st[0], st[1]))
@@ -410,14 +410,16 @@ def main():
                     fwhm_outl, fwhm_mean, fwhm_std, stars, psf_avrg, out_path,
                     imname, hdr[pars['filter_key']])
 
-            # Store data to write to output file.
-            im_name = imname.split('/')[-1]
-            out_data.append(
-                [im_name, hdr[pars['filter_key']], hdr[pars['airmass_key']],
-                 hdr[pars['exposure_key']], sky_mean, sky_std,
-                 len(fwhm_accptd), fwhm_mean, fwhm_std])
         else:
+            fwhm_accptd, fwhm_mean, fwhm_std = [], np.nan, np.nan
             print("  ERROR: no stars returned from 'psfmeasure' task.")
+
+        # Store data to write to output file.
+        im_name = imname.split('/')[-1]
+        out_data.append(
+            [im_name, hdr[pars['filter_key']], hdr[pars['airmass_key']],
+             hdr[pars['exposure_key']], sky_mean, sky_std,
+             len(fwhm_accptd), fwhm_mean, fwhm_std])
 
     if out_data:
         storeOutFile(out_path, out_data)
