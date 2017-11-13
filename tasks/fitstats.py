@@ -114,7 +114,7 @@ def isolate_stars(hdu_data, fwhm_accptd, crop_side):
 def make_plots(
     hdu_data, crop_side, max_stars, all_sources, n_not_satur,
         fwhm_min_rjct, ellip_rjct, fwhm_accptd, fwhm_outl, fwhm_mean,
-        fwhm_std, stars, psf_avrg, out_path, imname):
+        fwhm_std, stars, psf_avrg, out_path, imname, filter_val):
     """
     Make plots.
     """
@@ -289,7 +289,8 @@ def make_plots(
         fig_name = join(out_path.replace(".fits", ""))
     else:
         fig_name = join(
-            out_path, imname.split('/')[-1].replace(".fits", ""))
+            out_path, 'filt_' + filter_val,
+            imname.split('/')[-1].replace(".fits", ""))
     plt.savefig(fig_name + '.png', dpi=150, bbox_inches='tight')
 
     # Close to release memory.
@@ -297,12 +298,13 @@ def make_plots(
     plt.close()
 
 
-def storeCooFile(out_path, imname, fwhm_accptd):
+def storeCooFile(out_path, imname, filter_val, fwhm_accptd):
     """
     Write .coo file.
     """
     # Save coordinates data to file.
-    fn = join(out_path, imname.split('/')[-1].replace('.fits', '.coo'))
+    fn = join(out_path, 'filt_' + filter_val,
+              imname.split('/')[-1].replace('.fits', '.coo'))
     ascii.write(
         zip(*fwhm_accptd), fn,
         names=['x', 'y', 'FWHM', 'Ellip', 'Mag'],
@@ -344,7 +346,7 @@ def main():
     out_data = []
     # For each .fits image in the root folder.
     for imname in fits_list:
-        print("\nFile: {}".format(
+        print("\n* File: {}".format(
             imname.replace(pars['mypath'].replace('tasks', 'input'), "")))
 
         # Load .fits file.
@@ -364,19 +366,21 @@ def main():
         hdu_data = hdulist[0].data
 
         # Background estimation.
-        sky_mean, sky_std = bckg_data(
+        sky_mean, sky_median, sky_std = bckg_data(
             hdr, hdu_data, pars['gain_key'], pars['rdnoise_key'],
             pars['sky_method'])
 
         # Stars selection.
         psf_select, all_sources, n_not_satur = st_fwhm_select(
             float(pars['dmax']), int(pars['max_stars']),
-            float(pars['thresh_level']), float(pars['fwhm_init']),
+            float(pars['thresh_fit']), float(pars['fwhm_init']),
             sky_std, hdu_data)
 
-        # IRAF 'psfmeasure' task.
-        psf_data = psfmeasure.main(
-            float(pars['dmax']), psf_select, imname, hdu_data)
+        psf_data = []
+        if psf_select:
+            # IRAF 'psfmeasure' task.
+            psf_data = psfmeasure.main(
+                float(pars['dmax']), psf_select, imname, hdu_data)
 
         if psf_data:
             # Filter out stars.
@@ -385,10 +389,16 @@ def main():
                     float(pars['fwhm_min']), float(pars['ellip_max']),
                     psf_data)
 
+            # Create output folder if it does not exist.
+            filt_folder = join(out_path, 'filt_' + hdr[pars['filter_key']])
+            if not exists(filt_folder):
+                os.makedirs(filt_folder)
+
             stars, psf_avrg = [], []
             if fwhm_accptd:
                 # Create .coo file.
-                storeCooFile(out_path, imname, fwhm_accptd)
+                storeCooFile(out_path, imname, hdr[pars['filter_key']],
+                             fwhm_accptd)
                 # Isolated stars, and average PSF.
                 stars, psf_avrg = isolate_stars(
                     hdu_data, fwhm_accptd, crop_side)
@@ -398,7 +408,7 @@ def main():
                     hdu_data, crop_side, int(pars['max_stars']), all_sources,
                     n_not_satur, fwhm_min_rjct, ellip_rjct, fwhm_accptd,
                     fwhm_outl, fwhm_mean, fwhm_std, stars, psf_avrg, out_path,
-                    imname)
+                    imname, hdr[pars['filter_key']])
 
             # Store data to write to output file.
             im_name = imname.split('/')[-1]
