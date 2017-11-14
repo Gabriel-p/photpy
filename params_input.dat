@@ -89,10 +89,11 @@ do_plots_E       y
 # 'find_stars'
 #
 fits_find        field
-filter_proc      V
+filter_proc      U
 find_method      DAO
-thresh_find      3.
-round_max        0.1
+thresh_find      3.5
+round_method     OR
+round_max        0.2
 do_plots_F       y
 
 

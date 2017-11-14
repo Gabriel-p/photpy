@@ -8,7 +8,6 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-# from photutils import CircularAperture
 
 from astropy.io import ascii, fits
 from astropy.visualization import ZScaleInterval
@@ -34,8 +33,7 @@ def in_params():
             fits_list.append(f)
 
     if not fits_list:
-        print("No '*_crop.fits' files found in 'output/standards' folder."
-              " Exit.")
+        print("No '*.fits' files found in '{}' folder.".format(in_path))
         sys.exit()
 
     return pars, in_path, out_path, fits_list
@@ -48,10 +46,6 @@ def readData(pars, in_path, imname):
     hdulist = fits.open(join(in_path, imname))
     # Extract header and data.
     hdr, hdu_data = hdulist[0].header, hdulist[0].data
-    filt, exp_time, airmass = hdr[pars['filter_key']],\
-        hdr[pars['exposure_key']], hdr[pars['airmass_key']]
-    print("Filter {}, Exp time {}, Airmass {}".format(
-        filt, exp_time, airmass))
 
     return hdr, hdu_data
 
@@ -75,23 +69,50 @@ def readStats(out_path, imname):
     return fwhm, sky_mean, sky_std
 
 
-def strFind(hdu_data, fwhm, sky_mean, sky_std, find_method, thrsh, round_max):
+def strFind(
+        hdu_data, dmax, fwhm, sky_mean, sky_std, find_method, thrsh,
+        round_method, round_max):
     """
     """
-    if find_method == 'IRAF':
-        finder = IRAFStarFinder(threshold=thrsh * sky_std, fwhm=fwhm)
-    elif find_method == 'DAO':
-        finder = DAOStarFinder(threshold=thrsh * sky_std, fwhm=fwhm)
-    sources = finder(hdu_data - sky_mean)
-    print("Sources found ({}).".format(len(sources)))
+    if round_method == 'AND':
 
-    mask1 = (sources['roundness1'] > -round_max) &\
-        (sources['roundness1'] < round_max)
-    mask2 = (sources['roundness2'] > -round_max) &\
-        (sources['roundness2'] < round_max)
-    mask = mask1 | mask2
-    sources = sources[mask]
-    print("Sources filtered ({}).".format(len(sources)))
+        if find_method == 'IRAF':
+            finder = IRAFStarFinder(
+                threshold=thrsh * sky_std, fwhm=fwhm, roundlo=-round_max,
+                roundhi=round_max)
+        elif find_method == 'DAO':
+            finder = DAOStarFinder(
+                threshold=thrsh * sky_std, fwhm=fwhm, roundlo=-round_max,
+                roundhi=round_max)
+        sources = finder(hdu_data - sky_mean)
+        print("Sources after roundness '{}' filter: {}".format(
+            round_method, len(sources)))
+
+        mask = sources['peak'] < dmax
+        sources = sources[mask]
+        print("Sources after 'dmax' filter: {}".format(len(sources)))
+
+    elif round_method == 'OR':
+
+        if find_method == 'IRAF':
+            finder = IRAFStarFinder(threshold=thrsh * sky_std, fwhm=fwhm)
+        elif find_method == 'DAO':
+            finder = DAOStarFinder(threshold=thrsh * sky_std, fwhm=fwhm)
+        sources = finder(hdu_data - sky_mean)
+        print("Sources found ({}).".format(len(sources)))
+
+        mask1 = (sources['roundness1'] > -round_max) &\
+            (sources['roundness1'] < round_max)
+        mask2 = (sources['roundness2'] > -round_max) &\
+            (sources['roundness2'] < round_max)
+        mask = mask1 | mask2
+        sources = sources[mask]
+        print("Sources after roundness '{}' filter: {}".format(
+            round_method, len(sources)))
+
+        mask = sources['peak'] < dmax
+        sources = sources[mask]
+        print("Sources after 'dmax' filter: {}".format(len(sources)))
 
     return sources
 
@@ -125,6 +146,7 @@ def makePlot(
                origin='lower', vmin=zmin, vmax=zmax)
 
     plt.subplot(gs[0:5, 10:15])
+    plt.xlim(-1., 1.)
     plt.hist(sources['roundness1'], bins=30, alpha=.5, label='round1')
     plt.hist(sources['roundness2'], bins=30, alpha=.5, label='round2')
     plt.legend()
@@ -134,24 +156,23 @@ def makePlot(
     plt.legend()
 
     plt.subplot(gs[5:10, 10:15])
+    plt.scatter(sources['xcentroid'], sources['ycentroid'],
+                marker='.', c='r', s=1)
+    interval = ZScaleInterval()
+    zmin, zmax = interval.get_limits(hdu_data)
+    plt.imshow(hdu_data, cmap='viridis', interpolation='nearest',
+               origin='lower', vmin=zmin, vmax=zmax)
+    # Center of image
+    xcent, ycent = np.array(hdu_data.shape) / 2.
+    # x,y 5% lengths
+    xl, yl = np.array(hdu_data.shape) * .05
+    plt.xlim(xcent - xl, xcent + xl)
+    plt.ylim(ycent - yl, ycent + yl)
+
+    plt.subplot(gs[5:10, 15:20])
     plt.xlabel("flux")
     plt.ylabel("peak")
     plt.scatter(sources['flux'], sources['peak'])
-
-    # xmax = np.median(sources['flux']) + 3. * np.std(sources['flux'])
-    # print("flux", xmax)
-    # plt.xlim(0., xmax)
-    # mask = sources['flux'] < xmax
-    # plt.hist(sources['flux'][mask], alpha=.5, label='flux')
-    # plt.legend()
-
-    # plt.subplot(gs[5:10, 15:20])
-    # xmax = np.median(sources['peak']) + 3. * np.std(sources['peak'])
-    # print("peak", xmax)
-    # plt.xlim(0., xmax)
-    # mask = sources['peak'] < xmax
-    # plt.hist(sources['peak'][mask], alpha=.5, label='peak')
-    # plt.legend()
 
     fig.tight_layout()
     fig_name = join(
@@ -170,20 +191,25 @@ def main():
 
     # For each .fits image in the root folder.
     for imname in fits_list:
-        print("\n* File: {}".format(
-            imname.replace(pars['mypath'].replace('tasks', 'input'), "")))
-
         hdr, hdu_data = readData(pars, in_path, imname)
+
         if hdr[pars['filter_key']] == pars['filter_proc']:
+
+            print("\n* File: {}".format(
+                imname.replace(pars['mypath'].replace('tasks', 'input'), "")))
+            print("Filter {}, Exp time {}, Airmass {}".format(
+                hdr[pars['filter_key']], hdr[pars['exposure_key']],
+                hdr[pars['airmass_key']]))
 
             fwhm, sky_mean, sky_std = readStats(
                 out_path, imname.split('/')[-1])
-            print("Sky mean ({:.2f}) & STDDEV ({:.2f}) estimated.".format(
-                sky_mean, sky_std))
+            print("FWHM ({:.2f}), Sky mean ({:.2f}), Sky std ({:.2f}).".format(
+                fwhm, sky_mean, sky_std))
 
             sources = strFind(
-                hdu_data, fwhm, sky_mean, sky_std, pars['find_method'],
-                float(pars['thresh_find']), float(pars['round_max']))
+                hdu_data, float(pars['dmax']), fwhm, sky_mean, sky_std,
+                pars['find_method'], float(pars['thresh_find']),
+                pars['round_method'], float(pars['round_max']))
 
             writeSources(out_path, imname, hdr[pars['filter_key']], sources)
 
