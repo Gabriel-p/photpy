@@ -83,25 +83,28 @@ do_plots_E       y
 
 
 ###############################################################################
-# PSF photometry, exposure matching, and transformation of instrumental
-# magnitudes into standard magnitudes.
+# Find stars, perform PSF photometry, exposure matching, and final
+# transformation of instrumental magnitudes into standard magnitudes.
 
 # 'find_stars'
 #
 fits_find        field
 filter_proc      U
 find_method      DAO
-thresh_find      3.5
-round_method     OR
-round_max        0.2
+thresh_find      5.
+round_method     AND
+round_max        1.
 do_plots_F       y
 
 
 # 'psf_phot'
 #
 fits_psf         field/stk_fcd0044.fits
-bbb              bbb
-ccc              ccc
+filter_psf       V
+fitshape         3.
+group_sep        2.
+psf_thresh       5.
+niters           1
 do_plots_G       y
 
 

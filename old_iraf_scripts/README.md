@@ -215,7 +215,7 @@ keep
       
       * If used in 'automatic' mode, then the following will be used as default:
       
-      datapars.noise = "poisson"
+        datapars.noise = "poisson"
         datapars.ccdread = "RDNOISE"
         datapars.gain = "GAIN"
         datapars.exposur = "EXPTIME"
@@ -239,8 +239,7 @@ keep
         image3.fits
         ...
         
-        (the dots at the end indicate more images) and when asked by the script
-        to "Input image name" the user will write: @image_list
+        and when asked by the script to "Input image name" write: @image_list
         
       * The name of the image files should be introduced without the
       '.fits'/'.fit' extension (the same applies to image names written inside
@@ -256,17 +255,18 @@ keep
       in the first line, separated by a single space. If the file 'gain_rdnoise'
       does not exist, the script will attempt to read these values from the
       image header, this means that GAIN and RDNOISE values MUST exist in the
-      image header. * 'aperture' value used for standard stars should reside in
+      image header.
+      
+      * 'aperture' value used for standard stars should reside in
       a file called 'apert_standard'. If this file doesn't exist, the value will
       be asked and the file containing that value will be created in that folder
-      (THIS MEANS THE APERTURE VALUE USED FOR STANDARD STARS MUST BEKNOWN). Only
-      ONE aperture value for standard stars can be inputed. If MORE than one
-      value of aperture was used for standard stars previously, then the code
-      might need to be re-written.
+      (THIS MEANS THE APERTURE VALUE USED FOR STANDARD STARS MUST BE KNOWN).
+      Only ONE aperture value for standard stars can be inputed. If MORE than
+      one value of aperture was used for standard stars previously, then the
+      code might need to be re-written.
         
         ^^ (If all scripts worked correctly (for CASLEO frames), both this files
         should already exist inside each of the cluster's folders)
-        
         
       * A file 'imname_data' will be expected by the script (where 'imname' is
       the name of the image being processed; without any extension) This file
@@ -278,7 +278,6 @@ keep
         the frame and aperture photometry radius to be used [pixels] are
         calculated by 'psfphot'.
            
-        
       * 'psfrad' value (radius of bigger PSF star in the frame) will be
       calculated by the script as (4xFWHM + 1). The user can accept or reject
       this value (in the case the user reject the value, he will have to input

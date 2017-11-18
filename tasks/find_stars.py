@@ -41,6 +41,7 @@ def in_params():
 
 def readData(pars, in_path, imname):
     """
+    Read data and header from input .fits file.
     """
     # Load .fits file.
     hdulist = fits.open(join(in_path, imname))
@@ -52,8 +53,9 @@ def readData(pars, in_path, imname):
 
 def readStats(out_path, imname):
     """
+    Read stats (FWHM, sky mean and STDDEV) for the processed frame, from the
+    *existing* 'fitstats.dat' file.
     """
-
     fitdata = ascii.read(join(out_path, 'fitstats.dat'))
     im_found = False
     for r in fitdata:
@@ -73,6 +75,10 @@ def strFind(
         hdu_data, dmax, fwhm, sky_mean, sky_std, find_method, thrsh,
         round_method, round_max):
     """
+    Detect sources according to the parameters given.
+
+    IRAF: IRAFStarFinder
+    DAO:  DAOStarFinder
     """
     if round_method == 'AND':
 
@@ -124,13 +130,16 @@ def writeSources(out_path, imname, filt_val, sources):
         out_path, 'filt_' + filt_val,
         imname.split('/')[-1].replace('fits', 'src'))
     ascii.write(
-        sources['xcentroid', 'ycentroid'], out_file, format='fixed_width',
-        delimiter=' ', formats={'xcentroid': '%10.4f', 'ycentroid': '%10.4f'},
+        sources['xcentroid', 'ycentroid', 'flux'],
+        out_file, names=['x_0', 'y_0', 'flux_0'], format='fixed_width',
+        delimiter=' ',
+        formats={'x_0': '%10.4f', 'y_0': '%10.4f', 'flux_0': '%10.4f'},
         fill_values=[(ascii.masked, 'nan')], overwrite=True)
 
 
 def makePlot(
-        out_path, imname, filter_val, hdu_data, sky_mean, sky_std, sources):
+        out_path, imname, filter_val, hdu_data, sky_mean, sky_std, thresh_find,
+        sources):
     """
     """
     print("Plotting.")
@@ -138,6 +147,8 @@ def makePlot(
     gs = gridspec.GridSpec(10, 20)
 
     plt.subplot(gs[0:10, 0:10])
+    plt.title("Sources detected: {} (thresh = {:.1f})".format(
+        len(sources), thresh_find))
     plt.scatter(sources['xcentroid'], sources['ycentroid'],
                 marker='.', c='r', s=1, lw=.5)
     interval = ZScaleInterval()
@@ -146,16 +157,18 @@ def makePlot(
                origin='lower', vmin=zmin, vmax=zmax)
 
     plt.subplot(gs[0:5, 10:15])
-    plt.xlim(-1., 1.)
-    plt.hist(sources['roundness1'], bins=30, alpha=.5, label='round1')
-    plt.hist(sources['roundness2'], bins=30, alpha=.5, label='round2')
+    plt.scatter(sources['mag'], sources['roundness1'], s=5, label='round1')
+    plt.scatter(sources['mag'], sources['roundness2'], s=5, label='round2')
+    plt.xlabel("mag")
     plt.legend()
 
     plt.subplot(gs[0:5, 15:20])
     plt.hist(sources['sharpness'], bins=30, alpha=.5, label='sharpness')
+    # plt.xlabel("mag")
     plt.legend()
 
     plt.subplot(gs[5:10, 10:15])
+    plt.title("Center zoom (5% of length)")
     plt.scatter(sources['xcentroid'], sources['ycentroid'],
                 marker='.', c='r', s=1)
     interval = ZScaleInterval()
@@ -206,6 +219,9 @@ def main():
             print("FWHM ({:.2f}), Sky mean ({:.2f}), Sky std ({:.2f}).".format(
                 fwhm, sky_mean, sky_std))
 
+            print("Params: {}, {}, {}, {}".format(
+                pars['find_method'], float(pars['thresh_find']),
+                pars['round_method'], float(pars['round_max'])))
             sources = strFind(
                 hdu_data, float(pars['dmax']), fwhm, sky_mean, sky_std,
                 pars['find_method'], float(pars['thresh_find']),
@@ -216,7 +232,7 @@ def main():
             if pars['do_plots_F'] is 'y':
                 makePlot(
                     out_path, imname, hdr[pars['filter_key']], hdu_data,
-                    sky_mean, sky_std, sources)
+                    sky_mean, sky_std, float(pars['thresh_find']), sources)
 
 
 if __name__ == '__main__':

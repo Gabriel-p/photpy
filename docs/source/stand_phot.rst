@@ -19,6 +19,15 @@ and set up the transformation from instrumental to standard. The steps are
 Identify standard stars
 -----------------------
 
+* ``ref_id_std``:       stk_2078_crop.fits
+* ``landolt_fld``:      pg1323
+* ``scale_min``:        0.1
+* ``scale_max``:        10.0
+* ``rot_min``:          0.0
+* ``rot_max``:          5.0
+* ``do_plots_C``:       y
+
+
 The ``id_standard`` script allows the automatic identification of standard
 stars in your observed frame, requiring only minimal information.
 
@@ -64,6 +73,13 @@ Aperture photometry on standard stars
 
 .. todo::
    Not finished.
+
+* ``stnd_obs_fields``:  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
+* ``aperture``:         15
+* ``annulus_in``:       20
+* ``annulus_out``:      25
+* ``do_plots_D``:       y
+
 
 The ``aperphot_standard`` automatically performs aperture photometry on your
 observed standard frames, for the identified stars in one.
@@ -117,6 +133,10 @@ Define and solve the transformation equations
 .. todo::
    Not finished.
 
+* ``R^2_min``:          0.98
+* ``RMSE_max``:         0.05
+* ``extin_coeffs``:     U .49, B .27, V .12, I .02
+* ``do_plots_E``:       y
 
 .. warning::
   The extinction coefficients for your observed filters are assumed to be known.

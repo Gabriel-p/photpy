@@ -1,18 +1,19 @@
 
 import read_pars_file as rpf
+from find_stars import readStats
 
 import os
 from os.path import join, isfile
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 from astropy.io import ascii, fits
-from photutils.psf import IntegratedGaussianPRF, DAOGroup
-from photutils.background import MMMBackground
+from photutils.psf import IntegratedGaussianPRF
 from astropy.modeling.fitting import LevMarLSQFitter
-from astropy.stats import gaussian_sigma_to_fwhm
-from photutils.psf import IterativelySubtractedPSFPhotometry
+from astropy.stats import gaussian_fwhm_to_sigma
+from astropy.visualization import ZScaleInterval
 
 
 def in_params():
@@ -21,77 +22,274 @@ def in_params():
     """
     pars = rpf.main()
 
-    out_path = pars['mypath'].replace('tasks', 'output/field')
+    in_path = join(pars['mypath'].replace('tasks', 'input'), pars['fits_psf'])
 
-    fits_list = []
-    for file in os.listdir(in_out_path):
-        f = join(in_out_path, file)
-        if isfile(f):
-            if f.endswith('_crop.fits'):
+    if isfile(in_path):
+        fits_list = [in_path]
+        out_path = join(
+            pars['mypath'].replace('tasks', 'output'),
+            pars['fits_psf'].split('/')[0])
+    else:
+        fits_list = []
+        for file in os.listdir(in_path):
+            f = join(in_path, file)
+            if isfile(f):
                 fits_list.append(f)
 
-    if not fits_list:
-        print("No '*_crop.fits' files found in 'output/standards' folder."
-              " Exit.")
-        sys.exit()
+        if not fits_list:
+            print("No '*.fits' files found in '{}' folder.".format(in_path))
+            sys.exit()
 
-    return pars, out_path
+        out_path = join(
+            pars['mypath'].replace('tasks', 'output'), pars['fits_psf'])
+
+    return pars, out_path, fits_list
 
 
-def readData(pars, in_out_path, imname):
+def readData(pars, imname):
     """
     """
     # Load .fits file.
-    hdulist = fits.open(join(in_out_path, imname))
+    hdulist = fits.open(imname)
     # Extract header and data.
     hdr, hdu_data = hdulist[0].header, hdulist[0].data
-    filt, exp_time, airmass = hdr[pars['filter_key']],\
-        hdr[pars['exposure_key']], hdr[pars['airmass_key']]
-    print("  Filter {}, Exp time {}, Airmass {}".format(
-        filt, exp_time, airmass))
 
-    return hdu_data
+    return hdr, hdu_data
 
 
-def main(hdu_data, fwhm, xy_cents):
+def readSources(out_path, imname, filt_val):
     """
     """
-    daogroup = DAOGroup(2.0 * sigma_psf * gaussian_sigma_to_fwhm)
-    mmm_bkg = MMMBackground()
-    # fitter = LevMarLSQFitter()
-    psf_model = IntegratedGaussianPRF(sigma=sigma_psf)
 
-    photometry = IterativelySubtractedPSFPhotometry(
-        group_maker=daogroup, bkg_estimator=mmm_bkg,
-        psf_model=psf_model, fitter=LevMarLSQFitter(), niters=1,
-        fitshape=(11, 11))
+    src_f = join(
+        out_path, 'filt_' + filt_val,
+        imname.split('/')[-1].replace('fits', 'src'))
 
-    result_tab = photometry(image=hdu_data, positions=xy_cents)
+    sources = ascii.read(src_f)
+
+    return sources
+
+
+def psfPhot(
+        fwhm, niters, fitshape, psf_thresh, group_sep, hdu_data, sources):
+    """
+    Class to calculate the background in an array...
+
+    MMMBackground            using the DAOPHOT MMM algorithm.
+    MeanBackground           as the (sigma-clipped) mean.
+    MedianBackground         as the (sigma-clipped) median.
+    ModeEstimatorBackground  using a mode estimator of the form
+                             (median_factor * median) - (mean_factor * mean).
+    SExtractorBackground     using the SExtractor algorithm.
+
+    """
+
+    # from photutils.background import MMMBackground
+    # bkg = MMMBackground()
+
+    # from astropy.stats import SigmaClip
+    # from photutils import MedianBackground
+    # sigma_clip = SigmaClip(sigma=3.)
+    # bkg = MedianBackground(sigma_clip)
+
+    # from photutils.detection import IRAFStarFinder
+    # finder = IRAFStarFinder(
+    #     threshold=psf_thresh * std, fwhm=fwhm, minsep_fwhm=0.01, roundhi=5.0,
+    #     roundlo=-5.0, sharplo=0.0, sharphi=2.0)
+
+    # from photutils.psf import DAOGroup
+    # daogroup = DAOGroup(group_sep * fwhm)
+
+    psf_model = IntegratedGaussianPRF(sigma=fwhm * gaussian_fwhm_to_sigma)
+
+    # psf_model = prf_discrete
+
+    # from photutils.psf import IterativelySubtractedPSFPhotometry
+    # photometry = IterativelySubtractedPSFPhotometry(
+    #     group_maker=daogroup, bkg_estimator=bkg, finder=finder,
+    #     psf_model=psf_model, fitter=LevMarLSQFitter(), niters=niters,
+    #     fitshape=fitshape)
+
+    # from photutils.psf import BasicPSFPhotometry
+    # photometry = BasicPSFPhotometry(
+    #     group_maker=daogroup, bkg_estimator=bkg, finder=finder,
+    #     psf_model=psf_model, fitter=LevMarLSQFitter(),
+    #     fitshape=fitshape)
+
+    psf_model.x_0.fixed = True
+    psf_model.y_0.fixed = True
+
+    from photutils.psf import DAOPhotPSFPhotometry
+    photometry = DAOPhotPSFPhotometry(
+        crit_separation=group_sep * fwhm, threshold=psf_thresh, fwhm=fwhm,
+        psf_model=psf_model, fitshape=fitshape, fitter=LevMarLSQFitter(),
+        aperture_radius=fwhm, niters=niters)
+
+    result_tab = photometry(image=hdu_data, init_guesses=sources)
     residual_image = photometry.get_residual_image()
+    print("PSF performed.")
 
-    plt.subplot(1, 2, 1)
+    return result_tab, residual_image
+
+
+def apertCorrect(result_tab):
+    """
+    """
+
+    return result_tab
+
+
+def writePSF(out_path, imname, filt_val, results):
+    """
+    """
+    out_file = join(
+        out_path, 'filt_' + filt_val,
+        imname.split('/')[-1].replace('.fits', '_psf.out'))
+    ascii.write(
+        results, out_file, format='fixed_width', delimiter=' ',
+        formats={
+            'x_fit': '%10.4f', 'y_fit': '%10.4f', 'flux_fit': '%10.4f',
+            'flux_unc': '%10.4f'},
+        fill_values=[(ascii.masked, 'nan')], overwrite=True)
+
+
+def makePlot(out_path, imname, filter_val, hdu_data, sources, residual_image):
+    """
+    """
+    print("Plotting.")
+    interval = ZScaleInterval()
+
+    fig = plt.figure(figsize=(10, 10))
+    gs = gridspec.GridSpec(10, 10)
+    plt.subplot(gs[0:10, 0:10])
+    zmin, zmax = interval.get_limits(hdu_data)
     plt.imshow(hdu_data, cmap='viridis', aspect=1, interpolation='nearest',
-               origin='lower')
-    plt.title('Simulated data')
-    plt.colorbar(orientation='horizontal', fraction=0.046, pad=0.04)
-    plt.subplot(1, 2, 2)
-    plt.imshow(residual_image, cmap='viridis', aspect=1,
-               interpolation='nearest', origin='lower')
-    plt.title('Residual Image')
-    plt.colorbar(orientation='horizontal', fraction=0.046, pad=0.04)
-    plt.show()
+               origin='lower', vmin=zmin, vmax=zmax,
+               extent=[0., hdu_data.shape[1], 0., hdu_data.shape[0]])
+    plt.scatter(sources['x_0'], sources['y_0'], marker='.', c='r', s=1, lw=.0)
+    plt.xlim(0., hdu_data.shape[1])
+    plt.ylim(0., hdu_data.shape[0])
+    #
+    fig.tight_layout()
+    fig_name = join(
+        out_path, 'filt_' + filter_val,
+        imname.split('/')[-1].replace(".fits", "_orig"))
+    plt.savefig(fig_name + '.png', dpi=250, bbox_inches='tight')
+    # Close to release memory.
+    plt.clf()
+    plt.close("all")
+
+    fig = plt.figure(figsize=(10, 10))
+    gs = gridspec.GridSpec(10, 10)
+    plt.subplot(gs[0:10, 0:10])
+    # plt.title('Residual Image')
+    zmin, zmax = interval.get_limits(residual_image)
+    plt.imshow(
+        residual_image, cmap='viridis', aspect=1, interpolation='nearest',
+        origin='lower', vmin=zmin, vmax=zmax,
+        extent=[0., hdu_data.shape[1], 0., hdu_data.shape[0]])
+    plt.xlim(0., hdu_data.shape[1])
+    plt.ylim(0., hdu_data.shape[0])
+    #
+    fig.tight_layout()
+    fig_name = join(
+        out_path, 'filt_' + filter_val,
+        imname.split('/')[-1].replace(".fits", "_psf"))
+    plt.savefig(fig_name + '.png', dpi=250, bbox_inches='tight')
+    # Close to release memory.
+    plt.clf()
+    plt.close("all")
+
+
+def main():
+    """
+    """
+
+    pars, out_path, fits_list = in_params()
+
+    # For each .fits image in the root folder.
+    for imname in fits_list:
+        hdr, hdu_data = readData(pars, imname)
+
+        if hdr[pars['filter_key']] == pars['filter_psf']:
+            import time as t
+            s = t.clock()
+
+            print("\n* File: {}".format(
+                imname.replace(pars['mypath'].replace('tasks', 'input'), "")))
+            filt, exp_time, airmass = hdr[pars['filter_key']],\
+                hdr[pars['exposure_key']], hdr[pars['airmass_key']]
+            print("  Filter {}, Exp time {}, Airmass {}".format(
+                filt, exp_time, airmass))
+
+            fwhm, sky_mean, sky_std = readStats(
+                out_path, imname.split('/')[-1])
+            print("  FWHM: {:.2f}".format(fwhm))
+
+            # from photutils.psf.sandbox import DiscretePRF
+            # psf_file = ascii.read(
+            #     join(out_path, 'filt_' + filt,
+            #          imname.split('/')[-1].replace('.fits', '.coo')))
+            # psf_coords = psf_file['x', 'y']
+            # psf_coords.rename_column('x', 'x_0')
+            # psf_coords.rename_column('y', 'y_0')
+            # prf_discrete = DiscretePRF.create_from_image(
+            #     hdu_data, psf_coords, size=21, subsampling=2)
+
+            # fig, axes = plt.subplots(nrows=5, ncols=5)
+            # fig.set_size_inches(12, 9)
+            # # Plot kernels
+            # for i in range(2):
+            #     for j in range(2):
+            #         prf_image = prf_discrete._prf_array[i, j]
+            #         im = axes[i, j].imshow(prf_image, interpolation='None')
+            # cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
+            # plt.colorbar(im, cax=cax)
+            # plt.subplots_adjust(left=0.05, right=0.85, top=0.95, bottom=0.05)
+            # plt.show()
+
+            sources = readSources(out_path, imname, filt)
+            print("  Sources read: {}".format(len(sources)))
+
+            # Odd int
+            c_fwhm = np.ceil(float(pars['fitshape']) * fwhm)
+            fitshape = int(c_fwhm + 1 if (c_fwhm % 2) < 1. else c_fwhm)
+            niters = int(pars['niters'])
+            print("  fitshape, group_sep: {:.2f}, {:.2f}".format(
+                fitshape, float(pars['group_sep'])))
+
+            result_tab, residual_image = psfPhot(
+                fwhm, niters, fitshape, float(pars['psf_thresh']),
+                float(pars['group_sep']), hdu_data, sources)
+
+            print("Perform aperture correction.")
+            result_tab = apertCorrect(result_tab)
+
+            writePSF(out_path, imname, filt, result_tab)
+
+            if pars['do_plots_G'] is 'y':
+                makePlot(
+                    out_path, imname, filt, hdu_data, sources, residual_image)
+
+            print(t.clock() - s)
 
 
 if __name__ == '__main__':
-    pars, in_out_path = in_params()
-    hdu_data = readData()
-    sigma_psf = -1.
     main()
 
 # PSF Photometry
 # https://photutils.readthedocs.io/en/stable/psf.html
-# PSF Photometry in Crowded Fields with Photutils
-# https://github.com/astropy/photutils-datasets/blob/master/notebooks/ArtificialCrowdedFieldPSFPhotometry.ipynb
+
+# * photutils-datasets
+#   http://nbviewer.jupyter.org/github/astropy/photutils-datasets/tree/master/
+#
+# 1. PSF Photometry in Crowded Fields with Photutils
+#    http://nbviewer.jupyter.org/github/astropy/photutils-datasets/blob/master/notebooks/ArtificialCrowdedFieldPSFPhotometry.ipynb
+# 2. PSF/PRF Photometry on Spitzer Data
+#    http://nbviewer.jupyter.org/github/astropy/photutils-datasets/blob/master/notebooks/PSFPhotometrySpitzer.ipynb
+# 3. PSF photometry on artificial Gaussian stars
+#    http://nbviewer.jupyter.org/github/astropy/photutils-datasets/blob/master/notebooks/GaussianPSFPhot.ipynb
+
 # Uncertainties
 # issue:
 # https://github.com/pyDANDIA/pyDANDIA/issues/10
