@@ -2,10 +2,14 @@
 import read_pars_file as rpf
 
 import os
-from os.path import join, isfile
+from os.path import exists, join, isfile
 import sys
 
 import numpy as np
+# For server
+import matplotlib
+matplotlib.use('Agg')
+# For server
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
@@ -226,6 +230,10 @@ def main():
                 hdu_data, float(pars['dmax']), fwhm, sky_mean, sky_std,
                 pars['find_method'], float(pars['thresh_find']),
                 pars['round_method'], float(pars['round_max']))
+
+            # Generate output dir/subdir if it doesn't exist.
+            if not exists(join(out_path, 'filt_' + hdr[pars['filter_key']])):
+                os.makedirs(join(out_path, 'filt_' + hdr[pars['filter_key']]))
 
             writeSources(out_path, imname, hdr[pars['filter_key']], sources)
 

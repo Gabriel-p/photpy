@@ -1,0 +1,14 @@
+#PBS -S /bin/bash
+#PBS -N PHOTPY
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=1
+#PBS -q dia
+#PBS -e errores_photpy.out
+#PBS -o pantalla_photpy.out
+#PBS -M gperren@fcaglp.unlp.edu.ar
+#PBS -m bae
+
+source ~/.bashrc
+source activate iraf27
+cd $HOME/photpy
+python photpy.py $1

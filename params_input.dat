@@ -70,7 +70,7 @@ annulus_out      25
 do_plots_D       y
 
 
-# 'fit_standards'
+# 'fit_standard'
 #
 R^2_min          0.98
 RMSE_max         0.05

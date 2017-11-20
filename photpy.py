@@ -4,6 +4,10 @@ import argparse
 
 def main():
     """
+    Call as:
+
+    $ python photpy.py name_of_task
+
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('task', type=str, help='Name of task to execute')
@@ -21,6 +25,21 @@ def main():
     elif task == 'id_standard':
         from tasks import id_standard
         id_standard.main()
+    elif task == 'aperphot_standards':
+        from tasks import aperphot_standards
+        aperphot_standards.main()
+    elif task == 'fit_standard':
+        from tasks import fit_standard
+        fit_standard.main()
+    elif task == 'find_stars':
+        from tasks import find_stars
+        find_stars.main()
+    elif task == 'psf_phot':
+        from tasks import psf_phot
+        psf_phot.main()
+    elif task == 'match_transf':
+        from tasks import match_transf
+        match_transf.main()
     else:
         print("Unrecognized task.")
 

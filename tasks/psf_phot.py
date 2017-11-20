@@ -3,7 +3,7 @@ import read_pars_file as rpf
 from find_stars import readStats
 
 import os
-from os.path import join, isfile
+from os.path import exists, join, isfile
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -264,6 +264,10 @@ def main():
 
             print("Perform aperture correction.")
             result_tab = apertCorrect(result_tab)
+
+            # Generate output dir/subdir if it doesn't exist.
+            if not exists(join(out_path, 'filt_' + filt)):
+                os.makedirs(join(out_path, 'filt_' + filt))
 
             writePSF(out_path, imname, filt, result_tab)
 
