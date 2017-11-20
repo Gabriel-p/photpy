@@ -276,22 +276,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# PSF Photometry
-# https://photutils.readthedocs.io/en/stable/psf.html
-
-# * photutils-datasets
-#   http://nbviewer.jupyter.org/github/astropy/photutils-datasets/tree/master/
-#
-# 1. PSF Photometry in Crowded Fields with Photutils
-#    http://nbviewer.jupyter.org/github/astropy/photutils-datasets/blob/master/notebooks/ArtificialCrowdedFieldPSFPhotometry.ipynb
-# 2. PSF/PRF Photometry on Spitzer Data
-#    http://nbviewer.jupyter.org/github/astropy/photutils-datasets/blob/master/notebooks/PSFPhotometrySpitzer.ipynb
-# 3. PSF photometry on artificial Gaussian stars
-#    http://nbviewer.jupyter.org/github/astropy/photutils-datasets/blob/master/notebooks/GaussianPSFPhot.ipynb
-
-# Uncertainties
-# issue:
-# https://github.com/pyDANDIA/pyDANDIA/issues/10
-# example:
-# https://gist.github.com/larrybradley/e23d905cd69ca44d032541f69c2b5433
