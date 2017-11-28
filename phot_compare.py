@@ -20,11 +20,13 @@ def load_data(imname):
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
     image_file = mypath + '/input/' + imname + '.fits'
     coo_file = mypath + '/output/' + imname + '.coo'
-    print(image_file)
+    print("Fits: {}".format(image_file))
+    print("Coordinates: {}".format(coo_file))
     # Load .fits file.
     hdulist = fits.open(image_file)
     hdu_data, hdr = hdulist[0].data, hdulist[0].header
     exp_time, gain, rdnoise = hdr['EXPTIME'], hdr['EGAIN'], hdr['ENOISE']
+    print("Itime, Gain, Rdnoise: {}, {}, {}".format(exp_time, gain, rdnoise))
 
     return image_file, coo_file, hdu_data, exp_time, gain, rdnoise
 
@@ -37,17 +39,29 @@ def iraf_phot(image_file, coo_file, dmin, dmax, gain, rdnoise, exp_time,
         os.remove('iraf_phot')
     except OSError:
         pass
-    iraf.datapars(
-        datamin=dmin, datamax=dmax, epadu=gain, readnoise=rdnoise,
-        itime=exp_time, airmass="AIRMASS", filter="FILTER",
-        mode="h")
-    iraf.centerpars(calgorithm="centroid", cbox=8., mode="h")
-    iraf.fitskypars(annulus=aper_rad + 5., dannulus=5., mode="h")
-    iraf.photpars(apertures=aper_rad, zmag=25., mode="h")
     iraf.daophot()
+
+    iraf.datapars.datamin = dmin
+    iraf.datapars.datamax = dmax
+    iraf.datapars.epadu = gain
+    iraf.datapars.readnoise = rdnoise
+    iraf.datapars.itime = exp_time
+    iraf.datapars.airmass = "AIRMASS"
+    iraf.datapars.filter = "FILTER"
+
+    iraf.centerpars.calgorithm = "centroid"
+    iraf.centerpars.cbox = 8.
+
+    iraf.fitskypars.annulus = aper_rad + 5.
+    iraf.fitskypars.dannulus = 5.
+
+    iraf.photpars.apertures = aper_rad
+    iraf.photpars.zmag = 25.
+
     iraf.phot(
         image=image_file, coords=coo_file, output="iraf_phot", verify="no",
         mode="h")
+    # iraf.epar('phot')
 
     data = ascii.read('iraf_phot', format='daophot')
     os.remove('iraf_phot')
@@ -87,11 +101,14 @@ def write_data(iraf_data, photu_data):
     t2 = Table(photu_data['xcenter', 'ycenter', 'flux_fit', 'cal_mags'])
     tab_comb.add_columns(t2.columns.values())
 
+    flux_diff = iraf_data['FLUX'] - photu_data['flux_fit']
+    tab_comb['flux_diff'] = flux_diff
     mag_diff = iraf_data['MAG'] - photu_data['cal_mags']
     tab_comb['mag_diff'] = mag_diff
 
     tab_comb['MAG'].fill_value = -99.9
     tab_comb['mag_diff'].fill_value = -99.9
+    tab_comb['flux_diff'].fill_value = -99.9
     tt = tab_comb.filled()
 
     tt.sort('mag_diff')
@@ -110,6 +127,7 @@ def main():
     image_file, coo_file, hdu_data, exp_time, gain, rdnoise = load_data(imname)
 
     aper_rad, dmax = 15., 60000.
+    print("Aperture radius: {}".format(aper_rad))
     dmin = -3. * (rdnoise / gain)
     print("dmin = {:.2f}".format(dmin))
 
@@ -123,6 +141,8 @@ def main():
     #
     plt.grid()
     plt.scatter(iraf_data['MAG'], iraf_data['MAG'] - photu_data['cal_mags'])
+    plt.xlabel("IRAF mags")
+    plt.ylabel("(IRAF - photutil) mags")
     plt.show()
 
 
