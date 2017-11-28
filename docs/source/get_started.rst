@@ -6,6 +6,8 @@ Getting started
    Not finished.
 
 
+.. _secinput:
+
 Input parameters and folder structure
 -------------------------------------
 
@@ -97,7 +99,7 @@ Extract data from your observed frames
 The ``fitstats`` script is used to estimate the FWHM, sky mean, and sky standard
 deviation for your observed set of standard and field frames.
 Once executed, it will go through all the files defined as input 
-(see :ref:`Input <secinput>` section) and automatically process them.
+(see :ref:`secinput` section) and automatically process them.
 
 The steps followed by the script are:
 

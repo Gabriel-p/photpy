@@ -24,7 +24,6 @@ It is under development as of April 2017, with much work still needed.
     get_started
     stand_phot
     crowd_phot
-    transf
 
 
 .. Indices and tables
