@@ -7,8 +7,8 @@ import sys
 
 import numpy as np
 # For server
-import matplotlib
-matplotlib.use('Agg')
+# import matplotlib
+# matplotlib.use('Agg')
 # For server
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -84,45 +84,25 @@ def strFind(
     IRAF: IRAFStarFinder
     DAO:  DAOStarFinder
     """
-    if round_method == 'AND':
 
-        if find_method == 'IRAF':
-            finder = IRAFStarFinder(
-                threshold=thrsh * sky_std, fwhm=fwhm, roundlo=-round_max,
-                roundhi=round_max)
-        elif find_method == 'DAO':
-            finder = DAOStarFinder(
-                threshold=thrsh * sky_std, fwhm=fwhm, roundlo=-round_max,
-                roundhi=round_max)
-        sources = finder(hdu_data - sky_mean)
-        print("Sources after roundness '{}' filter: {}".format(
-            round_method, len(sources)))
+    if find_method == 'IRAF':
+        finder = IRAFStarFinder(threshold=thrsh * sky_std, fwhm=fwhm)
+    elif find_method == 'DAO':
+        finder = DAOStarFinder(threshold=thrsh * sky_std, fwhm=fwhm)
+    sources = finder(hdu_data - sky_mean)
 
-        mask = sources['peak'] < dmax
-        sources = sources[mask]
-        print("Sources after 'dmax' filter: {}".format(len(sources)))
+    mask1 = (sources['roundness1'] > -round_max) &\
+        (sources['roundness1'] < round_max)
+    mask2 = (sources['roundness2'] > -round_max) &\
+        (sources['roundness2'] < round_max)
+    mask = mask1 & mask2 if round_method == 'AND' else mask1 | mask2
+    sources = sources[mask]
+    print("  Sources after roundness '{}' filter: {}".format(
+        round_method, len(sources)))
 
-    elif round_method == 'OR':
-
-        if find_method == 'IRAF':
-            finder = IRAFStarFinder(threshold=thrsh * sky_std, fwhm=fwhm)
-        elif find_method == 'DAO':
-            finder = DAOStarFinder(threshold=thrsh * sky_std, fwhm=fwhm)
-        sources = finder(hdu_data - sky_mean)
-        print("Sources found ({}).".format(len(sources)))
-
-        mask1 = (sources['roundness1'] > -round_max) &\
-            (sources['roundness1'] < round_max)
-        mask2 = (sources['roundness2'] > -round_max) &\
-            (sources['roundness2'] < round_max)
-        mask = mask1 | mask2
-        sources = sources[mask]
-        print("Sources after roundness '{}' filter: {}".format(
-            round_method, len(sources)))
-
-        mask = sources['peak'] < dmax
-        sources = sources[mask]
-        print("Sources after 'dmax' filter: {}".format(len(sources)))
+    mask = sources['peak'] < dmax
+    sources = sources[mask]
+    print("  Sources after 'dmax' filter: {}".format(len(sources)))
 
     return sources
 
@@ -226,10 +206,17 @@ def main():
             print("Params: {}, {}, {}, {}".format(
                 pars['find_method'], float(pars['thresh_find']),
                 pars['round_method'], float(pars['round_max'])))
-            sources = strFind(
-                hdu_data, float(pars['dmax']), fwhm, sky_mean, sky_std,
-                pars['find_method'], float(pars['thresh_find']),
-                pars['round_method'], float(pars['round_max']))
+
+            # TODO finish this
+            n_old = np.nan
+            for thresh in np.arange(3., float(pars['thresh_find']) + .01, .25):
+                print("Threshold = {}".format(thresh))
+                sources = strFind(
+                    hdu_data, float(pars['dmax']), fwhm, sky_mean, sky_std,
+                    pars['find_method'], thresh,
+                    pars['round_method'], float(pars['round_max']))
+                print("  Variation: {:.2f}".format(n_old / len(sources) - 1.))
+                n_old = float(len(sources))
 
             # Generate output dir/subdir if it doesn't exist.
             if not exists(join(out_path, 'filt_' + hdr[pars['filter_key']])):
