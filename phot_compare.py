@@ -12,6 +12,7 @@ from astropy.io import ascii
 from photutils import CircularAperture
 from photutils import CircularAnnulus
 from photutils import aperture_photometry
+from photutils.utils import calc_total_error
 
 
 def load_data(imname):
@@ -74,7 +75,7 @@ def calibrate_magnitudes(tab, itime=1., zmag=25.):
     return tab
 
 
-def photutils_phot(coo_file, hdu_data, exp_time, aper_rad):
+def photutils_phot(coo_file, hdu_data, gain, exp_time, aper_rad):
     """
     """
     # Coordinates from observed frame.
@@ -85,11 +86,37 @@ def photutils_phot(coo_file, hdu_data, exp_time, aper_rad):
         positions, r_in=aper_rad + 5, r_out=aper_rad + 10.)
 
     apers = [apertures, annulus_apertures]
-    phot_table = aperture_photometry(hdu_data, apers)
+
+    from photutils import Background2D
+    # from astropy.stats import SigmaClip
+    # from photutils import MedianBackground
+    # sigma_clip = SigmaClip(sigma=3., iters=10)
+    # bkg_estimator = MedianBackground()
+
+    # Selecting the box size requires some care by the user. The box size
+    # should generally be larger than the typical size of sources in the
+    # image, but small enough to encapsulate any background variations. For
+    # best results, the box size should also be chosen so that the data are
+    # covered by an integer number of boxes in both dimensions.
+    bl = 10
+    box_xy = (bl, bl)
+    bkg = Background2D(hdu_data, box_xy)
+    print("background estimated")
+    error = calc_total_error(hdu_data, bkg.background, gain)
+
+    # from astropy.stats import biweight_midvariance
+    # sky_std = biweight_midvariance(hdu_data)
+    # sky_median = np.median(hdu_data)
+    # error = calc_total_error(hdu_data, sky_median, gain)
+
+    phot_table = aperture_photometry(hdu_data, apers, error=error)
     bkg_mean = phot_table['aperture_sum_1'] / annulus_apertures.area()
     bkg_sum = bkg_mean * apertures.area()
     phot_table['flux_fit'] = phot_table['aperture_sum_0'] - bkg_sum
     phot_table = calibrate_magnitudes(phot_table, itime=exp_time)
+
+    phot_table['merr'] = 1.0857 *\
+        phot_table['aperture_sum_err_0'] / phot_table['flux_fit']
 
     return phot_table
 
@@ -97,8 +124,9 @@ def photutils_phot(coo_file, hdu_data, exp_time, aper_rad):
 def write_data(iraf_data, photu_data):
     """
     """
-    tab_comb = Table(iraf_data['XINIT', 'YINIT', 'FLUX', 'MAG'])
-    t2 = Table(photu_data['xcenter', 'ycenter', 'flux_fit', 'cal_mags'])
+    tab_comb = Table(iraf_data['XINIT', 'YINIT', 'FLUX', 'MAG', 'MERR'])
+    t2 = Table(
+        photu_data['xcenter', 'ycenter', 'flux_fit', 'cal_mags', 'merr'])
     tab_comb.add_columns(t2.columns.values())
 
     flux_diff = iraf_data['FLUX'] - photu_data['flux_fit']
@@ -114,8 +142,11 @@ def write_data(iraf_data, photu_data):
     tt.sort('mag_diff')
     tt.reverse()
 
-    ascii.write(tt, 'iraf_photut_phot.dat', overwrite=True,
-                format='fixed_width', delimiter=' ')
+    ascii.write(
+        tt, 'iraf_photut_phot.dat', format='fixed_width', delimiter=' ',
+        formats={
+            'flux_fit': '%10.2f', 'cal_mags': '%10.3f', 'merr': '%10.3f',
+            'flux_diff': '%10.3f', 'mag_diff': '%10.6f'}, overwrite=True)
 
 
 def main():
@@ -134,15 +165,23 @@ def main():
     iraf_data = iraf_phot(image_file, coo_file, dmin, dmax, gain, rdnoise,
                           exp_time, aper_rad)
 
-    photu_data = photutils_phot(coo_file, hdu_data, exp_time, aper_rad)
+    photu_data = photutils_phot(coo_file, hdu_data, gain, exp_time, aper_rad)
 
     write_data(iraf_data, photu_data)
 
     #
+    plt.subplot(121)
     plt.grid()
     plt.scatter(iraf_data['MAG'], iraf_data['MAG'] - photu_data['cal_mags'])
     plt.xlabel("IRAF mags")
     plt.ylabel("(IRAF - photutil) mags")
+    plt.subplot(122)
+    plt.grid()
+    plt.scatter(
+        iraf_data['MERR'] * 100.,
+        (iraf_data['MERR'] - photu_data['merr']) * 100.)
+    plt.xlabel("IRAF merr")
+    plt.ylabel("(IRAF - photutil)*100 merr")
     plt.show()
 
 
