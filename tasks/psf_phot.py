@@ -57,6 +57,36 @@ def readData(pars, imname):
     return hdr, hdu_data
 
 
+def getPRF(out_path, imname, filt, hdu_data):
+    """
+    """
+    from photutils.psf.sandbox import DiscretePRF
+    psf_file = ascii.read(
+        join(out_path, 'filt_' + filt,
+             imname.split('/')[-1].replace('.fits', '.coo')))
+    psf_coords = psf_file['x', 'y']
+    psf_coords.rename_column('x', 'x_0')
+    psf_coords.rename_column('y', 'y_0')
+    sub_s = 2
+    prf_discrete = DiscretePRF.create_from_image(
+        hdu_data, psf_coords, size=25, subsampling=sub_s)
+    print("  PRF created.")
+
+    fig, axes = plt.subplots(nrows=5, ncols=5)
+    fig.set_size_inches(12, 9)
+    # Plot kernels
+    for i in range(sub_s):
+        for j in range(sub_s):
+            prf_image = prf_discrete._prf_array[i, j]
+            im = axes[i, j].imshow(prf_image, interpolation='None')
+    cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
+    plt.colorbar(im, cax=cax)
+    plt.subplots_adjust(left=0.05, right=0.85, top=0.95, bottom=0.05)
+    plt.show()
+
+    return prf_discrete
+
+
 def readSources(out_path, imname, filt_val):
     """
     """
@@ -71,7 +101,8 @@ def readSources(out_path, imname, filt_val):
 
 
 def psfPhot(
-        fwhm, niters, fitshape, psf_thresh, group_sep, hdu_data, sources):
+        fwhm, niters, fitshape, psf_thresh, group_sep, hdu_data, sources,
+        prf_discrete):
     """
     Class to calculate the background in an array...
 
@@ -204,7 +235,6 @@ def makePlot(out_path, imname, filter_val, hdu_data, sources, residual_image):
 def main():
     """
     """
-
     pars, out_path, fits_list = in_params()
 
     # For each .fits image in the root folder.
@@ -226,27 +256,7 @@ def main():
                 out_path, imname.split('/')[-1])
             print("  FWHM: {:.2f}".format(fwhm))
 
-            # from photutils.psf.sandbox import DiscretePRF
-            # psf_file = ascii.read(
-            #     join(out_path, 'filt_' + filt,
-            #          imname.split('/')[-1].replace('.fits', '.coo')))
-            # psf_coords = psf_file['x', 'y']
-            # psf_coords.rename_column('x', 'x_0')
-            # psf_coords.rename_column('y', 'y_0')
-            # prf_discrete = DiscretePRF.create_from_image(
-            #     hdu_data, psf_coords, size=21, subsampling=2)
-
-            # fig, axes = plt.subplots(nrows=5, ncols=5)
-            # fig.set_size_inches(12, 9)
-            # # Plot kernels
-            # for i in range(2):
-            #     for j in range(2):
-            #         prf_image = prf_discrete._prf_array[i, j]
-            #         im = axes[i, j].imshow(prf_image, interpolation='None')
-            # cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
-            # plt.colorbar(im, cax=cax)
-            # plt.subplots_adjust(left=0.05, right=0.85, top=0.95, bottom=0.05)
-            # plt.show()
+            prf_discrete = getPRF(out_path, imname, filt, hdu_data)
 
             sources = readSources(out_path, imname, filt)
             print("  Sources read: {}".format(len(sources)))
@@ -260,7 +270,7 @@ def main():
 
             result_tab, residual_image = psfPhot(
                 fwhm, niters, fitshape, float(pars['psf_thresh']),
-                float(pars['group_sep']), hdu_data, sources)
+                float(pars['group_sep']), hdu_data, sources, prf_discrete)
 
             print("Perform aperture correction.")
             result_tab = apertCorrect(result_tab)
