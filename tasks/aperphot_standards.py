@@ -97,52 +97,11 @@ def instrumMags(landolt_fl, hdu_data, exp_time, aper_rad, annulus_in,
     apers = [apertures, annulus_apertures]
     # TODO obtain errors for aperture photometry.
 
-    # from astropy.stats import SigmaClip
-    from photutils import Background2D  # , MedianBackground
-    # sigma_clip = SigmaClip(sigma=3., iters=10)
-    # bkg_estimator = MedianBackground()
-
-    # Selecting the box size requires some care by the user. The box size
-    # should generally be larger than the typical size of sources in the
-    # image, but small enough to encapsulate any background variations. For
-    # best results, the box size should also be chosen so that the data are
-    # covered by an integer number of boxes in both dimensions.
-    bl = 10
-    box_xy = (bl, bl)
-    bkg = Background2D(hdu_data, box_xy)
-    print("background estimated")
-
-    from photutils.utils import calc_total_error
-    effective_gain = 1.1
-    error = calc_total_error(hdu_data, bkg.background, effective_gain)
-    phot_table = aperture_photometry(hdu_data, apers, error=error)
-
-    # phot_table = aperture_photometry(hdu_data, apers)
+    phot_table = aperture_photometry(hdu_data, apers)
     bkg_mean = phot_table['aperture_sum_1'] / annulus_apertures.area()
     bkg_sum = bkg_mean * apertures.area()
     phot_table['flux_fit'] = phot_table['aperture_sum_0'] - bkg_sum
     phot_table = calibrate_magnitudes(phot_table, itime=exp_time)
-
-    phot_table['merr'] = 1.0857 *\
-        phot_table['aperture_sum_err_0'] / phot_table['flux_fit']
-
-    # # plt.subplot(131)
-    # # median, std = np.median(hdu_data), np.std(hdu_data)
-    # # plt.imshow(hdu_data, origin='lower', cmap='Greys_r', vmin=0.,
-    # #            vmax=median + std)
-    # plt.figure(figsize=(15, 15))
-    # plt.subplot(121)
-    # plt.title("Background, box_size=({}, {})".format(bl, bl))
-    # plt.imshow(bkg.background, origin='lower', cmap='Greys_r')
-    # plt.subplot(122)
-    # plt.title("Data - background")
-    # hdu_bckg = hdu_data - bkg.background
-    # median, std = np.median(hdu_bckg), np.std(hdu_bckg)
-    # plt.imshow(hdu_bckg, origin='lower',
-    #            cmap='Greys_r', vmin=0., vmax=median + std)
-    # # plt.show()
-    # plt.savefig(str(bl) + '.png', dpi=150, bbox_inches='tight')
-
 
     return phot_table
 
