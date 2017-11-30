@@ -260,7 +260,7 @@ def make_plots(
         ax0.axhline(combined_star_argmax[0], ls='--', lw=2, c='w')
         ax0.axvline(combined_star_argmax[1], ls='--', lw=2, c='w')
         cent = int(crop_side / 2.) - 1
-        apertures = CircularAperture((cent, cent), r=fwhm_mean)
+        apertures = CircularAperture((cent, cent), r=.5 * fwhm_mean)
         apertures.plot(color='b', lw=0.75)
 
         # x,y histograms of average PSF.
