@@ -6,7 +6,7 @@ Standard stars photometry
    Not finished.
 
 This section describes how to obtain instrumental magnitudes for your standards,
-and set up the transformation from instrumental to standard. The steps are
+and set up the transformation from instrumental to standard. The steps are:
 
 * `Identify standard stars`_: identify the coordinates of the stars in the
   observed standard field.
@@ -19,6 +19,15 @@ and set up the transformation from instrumental to standard. The steps are
 Identify standard stars
 -----------------------
 
+.. warning::
+
+   This script assumes three things: that you are using `Landolt standards`_,
+   that **all** your standard frames are aligned, and that there are **at
+   least** three standard stars in your observed Landolt frame.
+
+
+``id_standard`` parameters
+
 * ``ref_id_std``:       stk_2078_crop.fits
 * ``landolt_fld``:      pg1323
 * ``scale_min``:        0.1
@@ -30,12 +39,6 @@ Identify standard stars
 
 The ``id_standard`` script allows the automatic identification of standard
 stars in your observed frame, requiring only minimal information.
-
-.. warning::
-
-   This script assumes three things: that you are using `Landolt standards`_,
-   that **all** your standard frames are aligned, and that there are **at
-   least** three standard stars in your observed Landolt frame.
 
 Landolt equatorial standards are the only set supported currently by the code.
 The alignment of your observed standard frames is required since the coordinates
@@ -73,6 +76,8 @@ Aperture photometry on standard stars
 
 .. todo::
    Not finished.
+
+``aperphot_standard`` parameters
 
 * ``stnd_obs_fields``:  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
 * ``aperture``:         15
@@ -132,6 +137,8 @@ Define and solve the transformation equations
 
 .. todo::
    Not finished.
+
+``fit_standard`` parameters
 
 * ``R^2_min``:          0.98
 * ``RMSE_max``:         0.05

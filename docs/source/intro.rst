@@ -9,10 +9,9 @@ Requirements
 ------------
 
 - matplotlib, numpy, astropy, photutils
-- PyRAF, IRAF (until photutils grows enough to allow replacing some tasks
-  still used from IRAF)
--  `imexam (Python)`_
--  `ginga (Python)`_
+- PyRAF, IRAF (temporary until photutils allows replacing the ``psfmeasure``
+  tasks still used from IRAF)
+- `imexam`_, `ginga`_ (optional)
 
 
 Installing
@@ -26,7 +25,6 @@ to be able to easily install PyRAF + IRAF:
 
 .. code-block:: bash
 
-  # Write changes to ~/.condarc
   $ conda config --add channels http://ssb.stsci.edu/astroconda
 
 Create a dedicated environment with all the necessary dependences:
@@ -49,6 +47,8 @@ Generate a ``login.cl`` file and ``uparm/`` directory:
 
 and select ``xgterm`` as the terminal type when prompted.
 
+The ``pyraf`` command should now correctly load an IRAF session.
+
 
 Useful links
 ............
@@ -65,8 +65,8 @@ Useful links
 .. _Astroconda: http://astroconda.readthedocs.io/en/latest/index.html
 
 
-.. _imexam (Python): http://imexam.readthedocs.io/en/latest/index.html
-.. _ginga (Python): http://ejeschke.github.io/ginga/
+.. _imexam: http://imexam.readthedocs.io/en/latest/index.html
+.. _ginga: http://ejeschke.github.io/ginga/
 .. _IRAF + DS9: http://www.astronomy.ohio-state.edu/~khan/iraf/%20iraf_step_by_step_installation_64bit
 .. _PSF Photometry in Crowded Fields with Photutils: https://github.com/astropy/photutils-datasets/blob/master/notebooks/ArtificialCrowdedFieldPSFPhotometry.ipynb
 .. _Photometry overview: http://telvsn.fcaglp.unlp.edu.ar/normativas/charlas/%20seminario_baume.pdf

@@ -22,7 +22,7 @@ dmax             60000.0
 in_folder_A      field
 ellip_max        0.15
 fwhm_min         1.5
-sky_method       SC
+sky_method       BW
 thresh_fit       5.0
 fwhm_init        3.0
 max_stars        100
@@ -89,18 +89,18 @@ do_plots_E       y
 # 'find_stars'
 #
 fits_find        field
-filter_proc      U
+filter_proc      V
 find_method      DAO
-thresh_find      5.
-round_method     AND
+thresh_find      3.4
+round_method     OR
 round_max        1.
 do_plots_F       y
 
 
 # 'psf_phot'
 #
-fits_psf         field/stk_fcd0044.fits
-filter_psf       V
+fits_psf         field/stk_2063.fits
+filter_psf       U
 fitshape         3.
 group_sep        2.
 psf_thresh       5.
