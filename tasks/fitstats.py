@@ -20,6 +20,7 @@ from astropy.visualization import ZScaleInterval
 from photutils import CircularAperture
 from photutils.utils import cutout_footprint
 
+import subprocess
 import psfmeasure
 
 
@@ -295,7 +296,7 @@ def make_plots(
 
     # Close to release memory.
     plt.clf()
-    plt.close()
+    plt.close("all")
 
 
 def storeCooFile(out_path, imname, filter_val, fwhm_accptd):
@@ -379,8 +380,26 @@ def main():
         psf_data = []
         if psf_select:
             # IRAF 'psfmeasure' task.
-            psf_data = psfmeasure.main(
-                float(pars['dmax']), psf_select, imname, hdu_data)
+            print("Total number of analyzed stars: {}".format(len(psf_select)))
+            ascii.write(
+                psf_select, output='positions', overwrite=True, include_names=[
+                    'xcentroid', 'ycentroid'], format='fast_no_header')
+
+            # Call it as a subprocess so that no zombie processes are left
+            # behind.
+            subprocess.call(
+                ['python', 'tasks/psfmeasure.py', pars['dmax'],
+                 str(len(psf_select)), imname])
+
+            # Read PSFMEASURE task output, leaving out the last line with the
+            # average FWHM.
+            psf_data = ascii.read(
+                "psfmeasure", format='fixed_width', header_start=1,
+                data_end=-1, col_starts=(15, 23, 32, 40, 48, 56))
+            psf_data = psf_data['Column', 'Line', 'FWHM', 'Ellip', 'Mag']
+            print("Stars rejected by 'psfmeasure': {}".format(
+                len(psf_select) - len(psf_data)))
+            os.remove('psfmeasure')
 
         if psf_data:
             # Filter out stars.

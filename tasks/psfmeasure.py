@@ -1,26 +1,22 @@
 
 import os
-from astropy.io import ascii
 from pyraf import iraf
 
 
-def main(dmax, psf_select, imname, hdu_data):
+def main(dmax, N_psf_select, imname):
     """
     Use the IRAF task 'psfmeasure' to estimate the FWHM and ellipticity of
     all the stars in the 'psf_select' list.
     """
+    dmax, N_psf_select = float(dmax), int(N_psf_select)
+
     print("\nRun 'psfmeasure' task to estimate the FWHMs.")
     try:
-        os.remove('positions')
         os.remove('cursor')
         os.remove('psfmeasure')
     except OSError:
         pass
 
-    print("Total number of analyzed stars: {}".format(len(psf_select)))
-    ascii.write(
-        psf_select, output='positions',
-        include_names=['xcentroid', 'ycentroid'], format='fast_no_header')
     with open('cursor', 'w') as f:
         f.write('q\n')
     iraf.noao()
@@ -37,21 +33,16 @@ def main(dmax, psf_select, imname, hdu_data):
     # plots = Imexamine()
     # plots.set_data(hdu_data)
 
-    # Read PSFMEASURE task output, leaving out the last line with the average
-    # FWHM.
-    psf_data = ascii.read(
-        "psfmeasure", format='fixed_width', header_start=1, data_end=-1,
-        col_starts=(15, 23, 32, 40, 48, 56))
-    psf_data = psf_data['Column', 'Line', 'FWHM', 'Ellip', 'Mag']
-    print("Stars rejected by 'psfmeasure': {}".format(
-        len(psf_select) - len(psf_data)))
-
     os.remove('positions')
     os.remove('cursor')
-    os.remove('psfmeasure')
 
-    return psf_data
+    return
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    dmax = sys.argv[1]
+    N_psf_select = sys.argv[2]
+    imname = sys.argv[3]
+
+    main(dmax, N_psf_select, imname)
