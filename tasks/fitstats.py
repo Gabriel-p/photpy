@@ -13,6 +13,7 @@ from matplotlib.ticker import NullFormatter
 
 from hlpr import bckg_data, st_fwhm_select, psf_filter
 
+from astropy import log
 from astropy.io import ascii, fits
 from astropy.table import Table
 from astropy.visualization import ZScaleInterval
@@ -329,13 +330,11 @@ def storeOutFile(out_path, out_data):
         format='fixed_width', delimiter=None)
 
 
-def main():
+def main_call(pars, fits_list, out_path):
     """
     Get FWHM, sky mean, and sky standard deviation from a single .fits file or
     a folder containing .fits files.
     """
-    pars, fits_list, out_path = read_params()
-
     # Generate output dir/subdir if it doesn't exist.
     if not exists(out_path):
         os.makedirs(out_path)
@@ -442,6 +441,13 @@ def main():
         storeOutFile(out_path, out_data)
 
     print("\nFinished.")
+
+
+def main():
+    pars, fits_list, out_path = read_params()
+    # TODO finish logging
+    with log.log_to_file(join(out_path, "fitstats.log")):
+        main_call(pars, fits_list, out_path)
 
 
 if __name__ == "__main__":
