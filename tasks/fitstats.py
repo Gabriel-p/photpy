@@ -21,7 +21,6 @@ from photutils import CircularAperture
 from photutils.utils import cutout_footprint
 
 import subprocess
-import psfmeasure
 
 
 def read_params():
@@ -388,8 +387,7 @@ def main():
             # Call it as a subprocess so that no zombie processes are left
             # behind.
             subprocess.call(
-                ['python', 'tasks/psfmeasure.py', pars['dmax'],
-                 str(len(psf_select)), imname])
+                ['python', 'tasks/psfmeasure.py', pars['dmax'], imname])
 
             # Read PSFMEASURE task output, leaving out the last line with the
             # average FWHM.
