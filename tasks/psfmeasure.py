@@ -3,12 +3,12 @@ import os
 from pyraf import iraf
 
 
-def main(dmax, N_psf_select, imname):
+def main(dmax, imname):
     """
     Use the IRAF task 'psfmeasure' to estimate the FWHM and ellipticity of
     all the stars in the 'psf_select' list.
     """
-    dmax, N_psf_select = float(dmax), int(N_psf_select)
+    dmax = float(dmax)
 
     print("\nRun 'psfmeasure' task to estimate the FWHMs.")
     try:
@@ -42,7 +42,6 @@ def main(dmax, N_psf_select, imname):
 if __name__ == "__main__":
     import sys
     dmax = sys.argv[1]
-    N_psf_select = sys.argv[2]
-    imname = sys.argv[3]
+    imname = sys.argv[2]
 
-    main(dmax, N_psf_select, imname)
+    main(dmax, imname)
