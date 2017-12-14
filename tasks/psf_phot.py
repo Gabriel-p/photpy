@@ -147,8 +147,8 @@ def psfPhot(
     #     psf_model=psf_model, fitter=LevMarLSQFitter(),
     #     fitshape=fitshape)
 
-    psf_model.x_0.fixed = True
-    psf_model.y_0.fixed = True
+    # psf_model.x_0.fixed = True
+    # psf_model.y_0.fixed = True
 
     from photutils.psf import DAOPhotPSFPhotometry
     photometry = DAOPhotPSFPhotometry(
@@ -157,8 +157,8 @@ def psfPhot(
         aperture_radius=fwhm, niters=niters)
 
     result_tab = photometry(image=hdu_data, init_guesses=sources)
-    residual_image = photometry.get_residual_image()
     print("PSF performed.")
+    residual_image = photometry.get_residual_image()
 
     return result_tab, residual_image
 
@@ -226,7 +226,7 @@ def makePlot(out_path, imname, filter_val, hdu_data, sources, residual_image):
     fig_name = join(
         out_path, 'filt_' + filter_val,
         imname.split('/')[-1].replace(".fits", "_psf"))
-    plt.savefig(fig_name + '.png', dpi=250, bbox_inches='tight')
+    plt.savefig(fig_name + '.png', dpi=150, bbox_inches='tight')
     # Close to release memory.
     plt.clf()
     plt.close("all")
@@ -256,7 +256,9 @@ def main():
                 out_path, imname.split('/')[-1])
             print("  FWHM: {:.2f}".format(fwhm))
 
-            prf_discrete = getPRF(out_path, imname, filt, hdu_data)
+            # TODO finish PRF creation
+            # prf_discrete = getPRF(out_path, imname, filt, hdu_data)
+            prf_discrete = []
 
             sources = readSources(out_path, imname, filt)
             print("  Sources read: {}".format(len(sources)))
