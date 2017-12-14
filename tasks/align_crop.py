@@ -1,5 +1,7 @@
 
 import read_pars_file as rpf
+from hlpr import st_fwhm_select
+from find_stars import readStats
 
 import os
 import sys
@@ -13,7 +15,8 @@ from matplotlib.patches import Rectangle
 from itertools import cycle
 import datetime
 
-from astropy.io import fits
+from astropy.io import ascii, fits
+from astropy.table import Table
 from astropy.visualization import ZScaleInterval
 from photutils import CircularAperture
 from astropy.wcs import WCS
@@ -50,16 +53,16 @@ def in_params():
             pars['ref_align'] = ref_im_f
 
     # Create path to output folder
-    out_path = in_path.replace('input', 'output')
+    out_path = join(in_path.replace('input', 'output') + '/filt_')
 
     return fits_list, pars, out_path
 
 
-def get_coords_data(imname):
+def get_coords_data(out_path, imname, filt):
     """
     Read stars coordinates from .coo files.
     """
-    fn = imname.replace('input', 'output').replace('fits', 'coo')
+    fn = join(out_path + filt, imname.split('/')[-1].replace('fits', 'coo'))
     coords_data = []
     try:
         with open(fn, 'r') as f:
@@ -92,10 +95,11 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
 
     while max_shift >= 1.:
         dists = []
-        li = 10
-        # Shift in x
+        # This parameter controls the resolution of the shift grid.
+        li = 20
+        # Shifts in x from -max_shift to max_shift
         for sx in np.linspace(-1. * max_shift, max_shift, li):
-            # Shift in y
+            # Shifts in y from -max_shift to max_shift
             for sy in np.linspace(-1. * max_shift, max_shift, li):
                 # Apply possible x,y translation
                 sf = [f[0] + sx + x0, f[1] + sy + y0]
@@ -104,10 +108,18 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
                     np.min(distance.cdist(zip(*sf), zip(*ref)), axis=1))
                 # Store x,y shift values, and the average minimal distance.
                 dists.append([sx + x0, sy + y0, d])
+                print(sx, sy, d)
+
+        print(dists[np.array(zip(*dists)[2]).argmin()][2])
+        plt.scatter(f[0], f[1], c='r')
+        plt.scatter(ref[0], ref[1], c='b')
+        plt.show()
+        import pdb; pdb.set_trace()  # breakpoint 2c4f5ae5 //
 
         # Index of the x,y shifts that resulted in the average minimal
         # distance.
         min_idx = np.array(zip(*dists)[2]).argmin()
+        # Update shifts.
         x0, y0 = dists[min_idx][0], dists[min_idx][1]
         # Decrease max shift by X%
         max_shift = (1. - tol) * max_shift
@@ -121,6 +133,23 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
     print("Median average distance: {:.2f}".format(d[2]))
 
     return d
+
+
+def writeShifts(out_path, fits_list, shifts):
+    """
+    """
+    out_data_file = join(out_path.replace('filt_', ''), 'xy_shifts.dat')
+
+    fits_list = [_.split('/')[-1] for _ in fits_list]
+    xs, ys, d_median = list(zip(*shifts))
+    data = Table(
+        [fits_list, xs, ys, d_median],
+        names=('image', 'x_shift', 'y_shift', 'd_median'))
+
+    ascii.write(
+        data, out_data_file, overwrite=True, format='fixed_width',
+        delimiter=' ',
+        formats={'x_shift': '%10.4f', 'y_shift': '%10.4f'})
 
 
 def overlap_reg(h, w, shifts):
@@ -196,7 +225,7 @@ def make_sub_plot(ax, frame, fname, xy, shifts, overlap, n_ref):
 
 
 def make_plots(out_path, hdu, ref_i, fits_list, xy_coo, shifts, overlap,
-               hdu_crop):
+    hdu_crop):
     """
     Make plots.
     """
@@ -252,7 +281,7 @@ def make_plots(out_path, hdu, ref_i, fits_list, xy_coo, shifts, overlap,
             ax, frame, fits_list[i], xy_coo[i], shifts[i], overlap, '')
 
     fig.tight_layout()
-    fn = join(out_path, 'align_crop.png')
+    fn = join(out_path.replace('filt_', ''), 'align_crop.png')
     plt.savefig(fn, dpi=150, bbox_inches='tight')
     plt.clf()
     plt.close()
@@ -269,6 +298,7 @@ def main():
     for i, imname in enumerate(fits_list):
         # Extract frame data.
         hdulist = fits.open(imname)
+        # filt = hdulist[0].header[pars['filter_key']]
         hdu_data = hdulist[0].data
         hdu.append(hdu_data)
         # Height and width (h=y, w=x)
@@ -278,15 +308,28 @@ def main():
         hdr.append(hdulist[0].header)
         hdulist.close()
 
+        print('\n' + str(imname.split('/')[-1]))
+        out_path2 = out_path.replace('filt_', '')
+        fwhm, sky_mean, sky_std = readStats(out_path2, imname.split('/')[-1])
+        dmax, max_stars, thresh_level, fwhm_init = 60000., 100, 10., 3.
+        psf_select = st_fwhm_select(
+            dmax, max_stars, thresh_level, fwhm_init, sky_std, hdu_data)[0]
+        psf_select.sort(['mag'])
+        x, y = psf_select['xcentroid'], psf_select['ycentroid']
+        xy_coo.append([x, y])
+
         # Obtain stars coordinates.
-        xy_coo.append(get_coords_data(imname))
+        # xy_coo.append(get_coords_data(out_path, imname, filt))
 
     # Check that all observed frames are of the same size.
     if hw[0][1:] == hw[0][:-1] and hw[1][1:] == hw[1][:-1]:
         h, w = hw[0][0], hw[1][0]
+        overlap_flag = True
     else:
         print("ERROR: frames are not all of the same size.")
-        sys.exit()
+        for i, f in enumerate(fits_list):
+            print(f, hw[0][i], hw[1][i])
+        overlap_flag = False
 
     # Identify reference frame.
     if pars['ref_align'] not in ['none', 'None', None]:
@@ -296,7 +339,7 @@ def main():
         N_coo = [len(_[0]) for _ in xy_coo]
         ref_i = N_coo.index(max(N_coo))
     ref = xy_coo[ref_i]
-    print('Reference image: {}'.format(fits_list[ref_i].split('/')[-1]))
+    print('\nReference image: {}'.format(fits_list[ref_i].split('/')[-1]))
 
     # Find x,y shifts (to reference frame) for alignment.
     shifts = []
@@ -312,15 +355,19 @@ def main():
             # Shift for reference frame.
             shifts.append([0., 0., 0.])
 
-    # Obtain overlapping region.
-    overlap = overlap_reg(h, w, shifts)
+    writeShifts(out_path, fits_list, shifts)
 
-    # Crop frames.
-    hdu_crop = crop_frames(fits_list, pars, hdu, hdr, shifts, overlap)
+    if overlap_flag:
+        # Obtain overlapping region.
+        overlap = overlap_reg(h, w, shifts)
 
-    if pars['do_plots_B'] == 'y':
-        make_plots(
-            out_path, hdu, ref_i, fits_list, xy_coo, shifts, overlap, hdu_crop)
+        # Crop frames.
+        hdu_crop = crop_frames(fits_list, pars, hdu, hdr, shifts, overlap)
+
+        if pars['do_plots_B'] == 'y':
+            make_plots(
+                out_path, hdu, ref_i, fits_list, xy_coo, shifts, overlap,
+                hdu_crop)
 
 
 if __name__ == "__main__":
