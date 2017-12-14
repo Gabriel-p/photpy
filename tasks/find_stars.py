@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
+import astropy.units as u
 from astropy.io import ascii, fits
 from astropy.visualization import ZScaleInterval
 # from photutils.background import MADStdBackgroundRMS
@@ -27,14 +28,20 @@ def in_params():
     pars = rpf.main()
 
     in_path = join(pars['mypath'].replace('tasks', 'input'), pars['fits_find'])
-    out_path = join(
-        pars['mypath'].replace('tasks', 'output'), pars['fits_find'])
 
     fits_list = []
-    for file in os.listdir(in_path):
-        f = join(in_path, file)
-        if isfile(f):
-            fits_list.append(f)
+    if isfile(in_path):
+        if in_path.endswith(".fits"):
+            fits_list.append(in_path)
+        in_path = '/' + join(*in_path.split('/')[:-1])
+    else:
+        for file in os.listdir(in_path):
+            f = join(in_path, file)
+            if isfile(f):
+                if f.endswith(".fits"):
+                    fits_list.append(f)
+
+    out_path = in_path.replace('input', 'output')
 
     if not fits_list:
         print("No '*.fits' files found in '{}' folder.".format(in_path))
@@ -95,7 +102,10 @@ def strFind(
         (sources['roundness1'] < round_max)
     mask2 = (sources['roundness2'] > -round_max) &\
         (sources['roundness2'] < round_max)
-    mask = mask1 & mask2 if round_method == 'AND' else mask1 | mask2
+    if round_method == 'AND':
+        mask = mask1 & mask2
+    else:
+        mask = mask1 | mask2
     sources = sources[mask]
     print("  Sources after roundness '{}' filter: {}".format(
         round_method, len(sources)))
@@ -107,17 +117,30 @@ def strFind(
     return sources
 
 
+def flux2mag(tab, itime=1., zmag=15.):
+    tab['mag'] = (zmag - 2.5 * np.log10(tab['flux'] / itime)) * u.mag
+    return tab
+
+
 def writeSources(out_path, imname, filt_val, sources):
     """
     """
     out_file = join(
         out_path, 'filt_' + filt_val,
         imname.split('/')[-1].replace('fits', 'src'))
+    # DELETE
+    # mask = [sources['xcentroid'] > 1500., sources['xcentroid'] < 2500.,
+    #         sources['ycentroid'] > 1500., sources['ycentroid'] < 2500.]
+    # total_mask = reduce(np.logical_and, mask)
+    # sources = sources[total_mask]
+    # DELETE
+    sources.sort(['mag'])
     ascii.write(
-        sources['xcentroid', 'ycentroid', 'flux'],
-        out_file, names=['x_0', 'y_0', 'flux_0'], format='fixed_width',
+        sources['xcentroid', 'ycentroid', 'flux', 'mag'],
+        out_file, names=['x_0', 'y_0', 'flux_0', 'mag'], format='fixed_width',
         delimiter=' ',
-        formats={'x_0': '%10.4f', 'y_0': '%10.4f', 'flux_0': '%10.4f'},
+        formats={'x_0': '%10.4f', 'y_0': '%10.4f', 'flux_0': '%10.4f',
+                 'mag': '%10.4f'},
         fill_values=[(ascii.masked, 'nan')], overwrite=True)
 
 
@@ -139,6 +162,8 @@ def makePlot(
     zmin, zmax = interval.get_limits(hdu_data)
     plt.imshow(hdu_data, cmap='viridis', aspect=1, interpolation='nearest',
                origin='lower', vmin=zmin, vmax=zmax)
+    # plt.xticks([])
+    # plt.yticks([])
 
     plt.subplot(gs[0:5, 10:15])
     plt.scatter(sources['mag'], sources['roundness1'], s=5, label='round1')
@@ -209,8 +234,9 @@ def main():
 
             # TODO finish this
             n_old = np.nan
-            for thresh in np.arange(3., float(pars['thresh_find']) + .01, .25):
-                print("Threshold = {}".format(thresh))
+            for thresh in np.arange(3.5, float(pars['thresh_find']) + .01, .25):
+                print("Threshold = ({}) {:.2f}".format(
+                    thresh, thresh * sky_std))
                 sources = strFind(
                     hdu_data, float(pars['dmax']), fwhm, sky_mean, sky_std,
                     pars['find_method'], thresh,
@@ -222,6 +248,7 @@ def main():
             if not exists(join(out_path, 'filt_' + hdr[pars['filter_key']])):
                 os.makedirs(join(out_path, 'filt_' + hdr[pars['filter_key']]))
 
+            sources = flux2mag(sources, float(hdr[pars['exposure_key']]))
             writeSources(out_path, imname, hdr[pars['filter_key']], sources)
 
             if pars['do_plots_F'] is 'y':
