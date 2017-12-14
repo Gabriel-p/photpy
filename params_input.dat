@@ -19,10 +19,10 @@ dmax             60000.0
 
 # 'fitstats'
 #
-in_folder_A      field
+in_folder_A      field/dont_use
 ellip_max        0.15
 fwhm_min         1.5
-sky_method       BW
+sky_method       SC
 thresh_fit       5.0
 fwhm_init        3.0
 max_stars        100
@@ -31,12 +31,12 @@ do_plots_A       y
 
 # 'align_crop'
 #
-in_folder_B      standards
+in_folder_B      field
 ref_align        none
 crop_save        y
-x_init_shift     0.0
-y_init_shift     0.0
-max_shift        -1.0
+x_init_shift     27.0
+y_init_shift     27.0
+max_shift        5.
 tolerance        0.05
 do_plots_B       y
 
@@ -88,19 +88,19 @@ do_plots_E       y
 
 # 'find_stars'
 #
-fits_find        field
+fits_find        field/stk_fcd0044.fits
 filter_proc      V
 find_method      DAO
-thresh_find      3.4
-round_method     OR
+thresh_find      5.
+round_method     AND
 round_max        1.
 do_plots_F       y
 
 
 # 'psf_phot'
 #
-fits_psf         field/stk_2063.fits
-filter_psf       U
+fits_psf         field/stk_2059.fits
+filter_psf       I
 fitshape         3.
 group_sep        2.
 psf_thresh       5.
@@ -110,7 +110,7 @@ do_plots_G       y
 
 # 'match_transf'
 #
-match_folder     field
+match_folder     field/IRAF_PSF
 load_format      allstar, list
 #load_format      default
 ref_frame        none

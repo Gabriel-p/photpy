@@ -2402,44 +2402,44 @@ if (dopsf==yes) {
 
   if (dopsf==yes) {    
     if (l==1) { # l = 1 means NO 'Second stars search' was performed.
-      # if (inter) {
-      #   print ('\n ----------------------------------------------------- ')
-      #   print (' Display task                                          ')
-      #   print (' Display .als.1 (Frame1) and .coo.1 (Frame2) files')
-      #   print (' ----------------------------------------------------- ')
-      #   display ((imname // '.fits'), 1)
-      #   display ((imname // '.fits'), 2)
+      if (inter) {
+        print ('\n ----------------------------------------------------- ')
+        print (' Display task                                          ')
+        print (' Display .als.1 (Frame1) and .coo.1 (Frame2) files')
+        print (' ----------------------------------------------------- ')
+        display ((imname // '.fits'), 1)
+        display ((imname // '.fits'), 2)
 
-      #   print ('\n ----------------------------------------------------- ')
-      #   print (' Tvmark                                                ')
-      #   print ('   - Frame1: detected stars by "allstar"               ')
-      #   print ('   - Frame2: detected stars by "daofind"               ')
-      #   print (' ----------------------------------------------------- ')
-      #   txdump.textfile = (imname // '.als.1')
-      #   txdump.headers = no
-      #   txdump.fields = 'xcenter, ycenter'
-      #   txdump.expr = 'yes'
-      #   txdump > auxiliar1 
+        print ('\n ----------------------------------------------------- ')
+        print (' Tvmark                                                ')
+        print ('   - Frame1: detected stars by "allstar"               ')
+        print ('   - Frame2: detected stars by "daofind"               ')
+        print (' ----------------------------------------------------- ')
+        txdump.textfile = (imname // '.als.1')
+        txdump.headers = no
+        txdump.fields = 'xcenter, ycenter'
+        txdump.expr = 'yes'
+        txdump > auxiliar1 
 
-      #   tvmark.interactive = no
-      #   tvmark.mark = 'point'
-      #   tvmark.font = "raster"
-      #   tvmark.color = 204
-      #   tvmark.number = no
-      #   tvmark.label = no
-      #   tvmark.toleran = 3.5
-      #   tvmark (1, 'auxiliar1')
+        tvmark.interactive = no
+        tvmark.mark = 'point'
+        tvmark.font = "raster"
+        tvmark.color = 204
+        tvmark.number = no
+        tvmark.label = no
+        tvmark.toleran = 3.5
+        tvmark (1, 'auxiliar1')
         
-      #   tvmark.interac = no 
-      #   tvmark.mark = 'point'
-      #   tvmark.font = "raster"
-      #   tvmark.color = 204
-      #   tvmark.number = no      
-      #   tvmark.label = no
-      #   tvmark.toleran = 3.5
-      #   tvmark (2, imname // '.coo.1')
-      #   del ('auxiliar1')
-      # }
+        tvmark.interac = no 
+        tvmark.mark = 'point'
+        tvmark.font = "raster"
+        tvmark.color = 204
+        tvmark.number = no      
+        tvmark.label = no
+        tvmark.toleran = 3.5
+        tvmark (2, imname // '.coo.1')
+        del ('auxiliar1')
+      }
       check=no
       while (check == no) {
         if (inter) {
