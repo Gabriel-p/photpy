@@ -335,9 +335,6 @@ def main_call(pars, fits_list, out_path):
     Get FWHM, sky mean, and sky standard deviation from a single .fits file or
     a folder containing .fits files.
     """
-    # Generate output dir/subdir if it doesn't exist.
-    if not exists(out_path):
-        os.makedirs(out_path)
 
     # HARDCODED: length used to isolate stars used to obtain the average FWHM.
     crop_side = 20
@@ -445,6 +442,11 @@ def main_call(pars, fits_list, out_path):
 
 def main():
     pars, fits_list, out_path = read_params()
+
+    # Generate output dir/subdir if it doesn't exist.
+    if not exists(out_path):
+        os.makedirs(out_path)
+
     # TODO finish logging
     with log.log_to_file(join(out_path, "fitstats.log")):
         main_call(pars, fits_list, out_path)
