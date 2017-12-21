@@ -108,14 +108,6 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     # TODO: finish reduced chi function
     # TODO: errors for fit coefficients?
 
-    coeff0 = [1., 0.]
-    coeff, cov, infodict, mesg, ier = leastsq(
-        residual, coeff0, args=(x, y), full_output=True)
-
-    sol = least_squares(residual, coeff0, args=(x, y))
-
-    popt, pcov = curve_fit(f, x, y, coeff0)
-
     from scipy.stats import linregress
     m, c, r_value, p_value, std_err = linregress(x, y)
 
@@ -140,6 +132,21 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
         red_chisq = redchisqg(y_accpt, predictions)
         # STD = np.std(y - predictions)
         R2, RMSE = r_value**2, rmse(y_accpt, predictions)
+
+    # TODO optional ways of fitting
+    coeff0 = [1., 0.]
+    coeff, cov, infodict, mesg, ier = leastsq(
+        residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)),
+        full_output=True)
+    print("leastsq: m={}, c={}".format(*coeff))
+
+    sol = least_squares(
+        residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)))
+    print("least_squares: m={}, c={}".format(*sol.x))
+
+    popt, pcov = curve_fit(f, x_accpt, y_accpt, coeff0)
+    print("curve_fit: m={}, c={}".format(*popt))
+    # TODO optional ways of fitting
 
     print("  N, m, c: {}, {:.3f}, {:.3f}".format(len(x_accpt), m, c))
     print("  Red_Chi^2: {:.3f}".format(red_chisq))
