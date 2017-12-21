@@ -1,6 +1,6 @@
 
 import read_pars_file as rpf
-from fit_standard import instrumMags
+from aperphot_standards import instrumMags
 from hlpr import st_fwhm_select
 
 import os
@@ -39,12 +39,14 @@ def main():
     f_key, exp_key, air_key = pars['filter_key'], pars['exposure_key'],\
         pars['airmass_key']
 
+    ffile = 'stk_2083_crop.fits'
+    print("Obtain standard stars coordinates from: {}".format(ffile))
     # Perform a Daofind on a selected .fits frame.
-    hdulist = fits.open(join(in_out_path, 'stk_2083_crop.fits'))
+    hdulist = fits.open(join(in_out_path, ffile))
     hdu_data = hdulist[0].data
     psf_select = st_fwhm_select(
         float(pars['dmax']), int(pars['max_stars']),
-        float(pars['thresh_level']), float(pars['fwhm_init']), 35.,
+        float(pars['thresh_fit']), float(pars['fwhm_init']), 35.,
         hdu_data)[0]
     psf_select['ID'], psf_select['x_obs'], psf_select['y_obs'] =\
         psf_select['id'], psf_select['xcentroid'], psf_select['ycentroid']
@@ -92,11 +94,14 @@ def main():
 
             # Obtain median of extinction coefficients for this filter.
             median_K = np.nanmedian(slopes)
-            print("Median K: {:.3f}".format(median_K))
-            # Plot histogram of coefficients.
-            plt.xlim(0., 2 * median_K)
+            print("Filter {}, median K: {:.3f}".format(filt, median_K))
+            # Plot coefficients.
+            plt.title("Filter {}".format(filt))
+            plt.ylim(0., 2 * median_K)
             slopes = np.array(slopes)
-            plt.hist(slopes[~np.isnan(slopes)], bins=50)
+            slopes = slopes[~np.isnan(slopes)]
+            plt.scatter(range(len(slopes)), slopes)
+            plt.axhline(y=median_K, color='r')
             plt.show()
 
 
@@ -104,5 +109,7 @@ if __name__ == '__main__':
     main()
 
 # https://arxiv.org/PS_cache/arxiv/pdf/0906/0906.3014v1.pdf
-
 # v3 = +0.16, b3 = +0.25, i3 = +0.08, u3 = +0.45
+
+# From an old 'noche.ans' file when BO14 was processed.
+# U .49, B .27, V .12, I .02
