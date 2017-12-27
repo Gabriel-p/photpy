@@ -1,4 +1,4 @@
-F77=fort77
+F77=gfortran
 FFLAGS = -c -O3
 LFLAGS = -O3
 

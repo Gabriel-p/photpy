@@ -37,9 +37,12 @@ def main():
     elif task == 'psf_phot':
         from tasks import psf_phot
         psf_phot.main()
-    elif task == 'match_transf':
-        from tasks import match_transf
-        match_transf.main()
+    elif task == 'match':
+        from tasks import match
+        match.main()
+    elif task == 'transf':
+        from tasks import transf
+        transf.main()
     else:
         print("Unrecognized task.")
 

@@ -94,8 +94,8 @@ keep
 #### What it does
 
  1. Runs 'daofind' and an interactive 'tvmark' to mark ONLY the standard stars.
- 1. Runs 'phot' task on '.coo.*' files containing ONLY standard stars.
- 1. Asks if we want to keep the '.coo.*' files (not needed).
+ 1. Runs 'phot' task on '.coo.' files containing ONLY standard stars.
+ 1. Asks if we want to keep the '.coo.' files (not needed).
 
 #### Files created, copied, moved or deleted
 
@@ -106,8 +106,8 @@ keep
  deleted.
  1. "standars2" - This file stores the names of the standard stars files,
  without the '.fit' extension (used by the next script).
- 1. '.coo.*' files are deleted or kept according to the user's choice.
- 1. One '*.mag.1' file for each image (used by the next script).
+ 1. '.coo.' files are deleted or kept according to the user's choice.
+ 1. One '.mag.1' file for each image (used by the next script).
 
 
 
@@ -396,21 +396,22 @@ keep
       2- WHAT IT DOES
       
       * Converts the '.als' or '.mag' files to 'DAOMASTER' format ('.txt'
-      files).
+      files) using txdump extracting the fields:
+      "ID,XC,YC,MAG,MERR,CHI,SHARP,CHI,SHARP".
       * Identifies filter and exposure time information and creates one '.mch'
       file per filter, with the first frame in the '.mch' files being the one
       with the longest exposure.
       * Creates the file 'daom.mch'. This file contains the names 'vfilter.mag',
       'bfilter.mag', 'ufilter.mag' and 'ifilter.mag', IN THAT ORDER (ie: with
       the 'V' filter file in first place), with the correct file format.
-      * Feeds this created files ('*.mch') to DAOMASTER (which can be used in an
+      * Feeds these created files ('*.mch') to DAOMASTER (which can be used in an
       automatic, semi-automatic or manual way). The output files are:
       'ufilter.mag', 'vfilter.mag', 'bfilter.mag', 'ifilter.mag' and 'daom.raw'
       * Adds airmass information to 'daom.raw' file (the airmass for each filter
       is the one that corresponds to the frame with the longest exposure). The
       output is 'daom.obs' file.
       * Deletes all the '*.mch' files. Optionally deletes all the '*.txt' files.
-      * Runs 'invertifit' task TWO times. The first time we get a
+      * Runs 'invertfit' task TWO times. The first time we get a
       'night_obs.out.BV' file, the second time the output is a
       'night_obs.out.VI' file. The difference with this second file is that, to
       obtain it, only the equations for 'V' and 'I' filters (in the 'noche.cfg'

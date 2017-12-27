@@ -944,10 +944,10 @@ begin
        print (' 1st Invertfit task (all equations)                    ')
        print (' ----------------------------------------------------- ')
        invertfit.mode = "hl"
-       invertfit.observations = "daom.obs"
-       invertfit.config = "noche.cfg"
-       invertfit.parameters = "noche.ans"
-       invertfit.calib = "night_obs.out.BV"  #  <---------------------------- FINAL OUTPUT FILE!!
+       invertfit.observations = "daom.obs"   # <-- Input file
+       invertfit.config = "noche.cfg"        # <-- Input file
+       invertfit.parameters = "noche.ans"    # <-- Input file
+       invertfit.calib = "night_obs.out.BV"  # <---------------------------- FINAL OUTPUT FILE!!
        invertfit.print = "x,y"
        invertfit
 

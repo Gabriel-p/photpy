@@ -355,7 +355,7 @@ C
 C NOTE that NLINE and LINE share storage with XM, YM, ...
 C
       INTEGER MAX, MAXFRM, MINY, MAXY, MAXCON
-      PARAMETER (MAXFRM=400, MAXCON=20, MINY=-11 384, MAXY=15 000)
+      PARAMETER (MAXFRM=400, MAXCON=20, MINY=-11384, MAXY=15000)
 C
 C Arrays and functions.
 C
@@ -372,7 +372,8 @@ C
       REAL OLD(MAXCON,MAXFRM), CON(MAXCON,*), TERM(MAXCON), 
      .     NOC(MAXCON,MAXFRM)
       REAL DATUM(2,MAXFRM), DMAG(MAXFRM), FLIP(MAXFRM)
-      CHARACTER(LEN=10) DATUM2(2,MAXFRM)
+C      CHARACTER(LEN=10) DATUM2(2,MAXFRM)
+      CHARACTER*20 DATUM2(2,MAXFRM)
       REAL MAG90(MAXFRM), MAG95(MAXFRM), SMAG(MAXFRM), WWW(MAXFRM)
       INTEGER IDMAST(MAX), LASTAR(0:MAXFRM), NOK(MAXFRM)
       INTEGER IWHICH(MAX,*), NOBS(*), INDEX(*), NLINE(*)
@@ -487,27 +488,8 @@ C
       CALL TBLANK
 C      CALL GETDAT ('Your choice:', WT, 1)
       
-      IF (LFILE .EQ. 'ufilter.mch') THEN
-      WT = 2
-      ELSE
-          IF (LFILE .EQ. 'bfilter.mch') THEN
-          WT = 2
-          ELSE
-              IF (LFILE .EQ. 'vfilter.mch') THEN
-              WT = 2
-              ELSE
-                  IF (LFILE .EQ. 'ifilter.mch') THEN
-                  WT = 2
-                  ELSE
-                      IF (LFILE .EQ. 'daom.mch') THEN
-                      WT = 2
-                      ELSE
-                          WRITE (*,*) 'Unknown error. Check code'
-                      END IF
-                  END IF
-              END IF
-          END IF
-       END IF 
+C     Fixed
+      WT = 4
        
        WRITE (*,*) 'Desired degrees of freedom: ',WT
       
@@ -534,7 +516,7 @@ C      CALL GETDAT ('Critical match-up radius:', RADIUS, 1)
 
 c      matchup = 30
       RADIUS = 30
-      WRITE (*,*) 'INGRESANDO RADIUS = 30 '
+      WRITE (*,*) 'INGRESANDO RADIUS = 30'
 
       IF (RADIUS .LE. 0) GO TO 80
 C
@@ -590,6 +572,11 @@ c        B = A /1.5
          END IF
       END DO
       DMAG(1)=0.
+
+C       WRITE(*,*) 'Line 594, DMAG'
+C       DO I=1,NFRM
+C         write(*,*) DMAG(I)
+C       ENDDO
 C
 C-----------------------------------------------------------------------
 C
@@ -1157,6 +1144,7 @@ C binary search.
 C
          J = IBNRY(SM, L, 0.5)
          DMAG(IFRM) = RMIN(J)
+C          write(*,*) 'DMAG as RMIN: ',DMAG(IFRM)
 C        dmag(ifrm) = 0.   !xyz
          J = IBNRY(SM, L, 0.3085)
          A = RMIN(J)
@@ -1201,6 +1189,12 @@ C
          IF (DMAG(IFRM) .LE. 90.) DMAG(IFRM)=DMAG(IFRM)-DMAG(1)
       END DO
       DMAG(1) = 0.
+
+C       WRITE(*,*) 'Line 1210, DMAG'
+C       DO I=1,NFRM
+C         write(*,*) DMAG(I)
+C       ENDDO
+
 C
       IFIRST=1
       CALL TBLANK
@@ -1270,12 +1264,14 @@ C
             J=IWHICH(IMASTR,IFRM)
             IF ((J .GT. 0) .AND. (DMAG(IFRM) .LT. 90.)) THEN
                RR = 1. / S(J)
+C               WRITE (*,*) IFRM,MM(IMASTR),M(J),DMAG(IFRM),S(J)
                MM(IMASTR)=MM(IMASTR)+(M(J)+DMAG(IFRM))*RR
                SM(IMASTR)=SM(IMASTR)+RR
             END IF
          END DO
          IF (SM(IMASTR) .GT. 0.) THEN
             MM(IMASTR)=MM(IMASTR)/SM(IMASTR)
+C            WRITE (*,*) '1',MM(IMASTR)
             SM(IMASTR)=1./SM(IMASTR)
          ELSE IF (IWHICH(IMASTR,1) .GT. 0) THEN
             MM(IMASTR) = M(IWHICH(IMASTR,1))
@@ -1283,6 +1279,7 @@ C
          ELSE
             MM(IMASTR)=99.999
          END IF
+C         read( *, * )
       END DO
 C
 C Invert the transformation equations.
@@ -1419,15 +1416,15 @@ C
       ROLD = RADIUS
 C      CALL GETDAT ('New match-up radius (0 to exit):', RADIUS, 1)
       
-      IF (RADIUS .GE. 6) THEN
+      IF (RADIUS .GE. 3) THEN
          RADIUS = RADIUS -1
-      ELSE IF (radius_param .LE. 18) THEN
-         RADIUS = 5.
+      ELSE IF (radius_param .LE. 10) THEN
+         RADIUS = 2.
          radius_param = radius_param +1
       ELSE
             RADIUS = 0.
       END IF   
-      WRITE (*,*) 'RADIUS = ', RADIUS
+      WRITE (*,*) 'RADIUS,radius_param = ', RADIUS,radius_param
               
       
       IF (RADIUS .LT. -1.E10) CALL BYEBYE
@@ -1541,6 +1538,22 @@ c      CALL GETYN ('A file with mean magnitudes and scatter?', ANSWER)
             WRITE (1,*)
          END IF
 C
+         WRITE (*,*) 'NFRM: ',NFRM
+         WRITE (*,*) 'NMASTR: ',NMASTR
+         DO IFRM=1,NFRM
+            WRITE (*,*) 'DMAG(IFRM): ',DMAG(IFRM)
+         ENDDO
+
+C          DO IMASTR=1,NMASTR
+C             DO IFRM=1,NFRM
+C               J=IWHICH(IMASTR,IFRM)
+C               IF (J .GT. 0) THEN
+C                   WRITE (*,*) 'IMASTR, NOBS, MM, J, M(J): ',IMASTR,
+C      .                 NOBS(IMASTR),MM(IMASTR),J,M(J),M(J)-MM(IMASTR)
+C               ENDIF
+C             ENDDO
+C          ENDDO
+
          DO IMASTR=1,NMASTR
             IF (NOBS(IMASTR) .GE. 2) THEN
 C
@@ -1733,13 +1746,13 @@ C
 C      CALL GETYN ('A file with raw magnitudes and errors?', ANSWER)
       
       IF (LFILE .EQ. 'ufilter.mch') THEN
-      ANSWER = 'N'
+      ANSWER = 'Y'
       ELSE
           IF (LFILE .EQ. 'bfilter.mch') THEN
           ANSWER = 'N'
           ELSE
               IF (LFILE .EQ. 'vfilter.mch') THEN
-              ANSWER = 'N'
+              ANSWER = 'Y'
               ELSE
                   IF (LFILE .EQ. 'ifilter.mch') THEN
                   ANSWER = 'N'

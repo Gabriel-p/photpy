@@ -2832,6 +2832,7 @@ if (dopsf==yes) {
   if (doapert == yes) {
     print ('\n Performing correction...')
     if (l == 1) {
+      print ('Aperture correction on als.1 file.')
       pcalc.mode = "hl"
       pcalc.infile = imname//'.als.1'
       pcalc.field = "MAG"

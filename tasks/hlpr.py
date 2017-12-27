@@ -2,6 +2,7 @@
 import numpy as np
 from astropy.stats import biweight_location, biweight_midvariance
 from astropy.stats import sigma_clipped_stats
+from astropy.table import Table
 from photutils import DAOStarFinder
 
 
@@ -100,3 +101,32 @@ def psf_filter(fwhm_min, ellip_max, psf_data, out_f=2.):
 
     return fwhm_min_rjct, ellip_rjct, fwhm_accptd, fwhm_mean, fwhm_std,\
         fwhm_outl
+
+
+def rmNaNrows(tab, not_cols):
+    """
+    Remove from 'tab' all those rows that contain only NaN values.
+
+    Parameters
+    ----------
+    tab : class astropy.table
+        All cross-matched stars for a given filter.
+    not_cols : int
+        Leave out this many columns when searching for all NaN values in a row.
+        This is used because otherwise the 'ID' column (for example) would
+        count towards that row containing one non-NaN value.
+
+    Returns
+    -------
+    tab : class astropy.table
+        Same table minus rows with all NaN values.
+
+    """
+    # Convert to pandas dataframe.
+    tab_df = tab.to_pandas()
+    # Find rows with *all* nan values (~ means 'not').
+    nan_idx = ~tab_df[tab.keys()[not_cols:]].isnull().all(1)
+    # Filter out all nan rows and transform back to Table.
+    tab = Table.from_pandas(tab_df[nan_idx])
+
+    return tab

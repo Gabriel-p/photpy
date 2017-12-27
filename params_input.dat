@@ -75,7 +75,8 @@ do_plots_D       y
 R^2_min          0.98
 RMSE_max         0.05
 #extin_coeffs     U .45, B .25, V .16, I .08
-extin_coeffs     U .49, B .27, V .12, I .02
+#extin_coeffs     U .49, B .27, V .12, I .02
+extin_coeffs     U .442, B .232, V .136, I .048
 do_plots_E       y
 
 ###############################################################################
@@ -108,14 +109,20 @@ niters           1
 do_plots_G       y
 
 
-# 'match_transf'
+# 'match'
 #
 match_folder     field/IRAF_PSF
 load_format      allstar, list
 #load_format      default
 ref_frame        none
 maxrad           5.
-method           mean
 do_plots_H       y
+
+
+# 'transf'
+#
+transf_folder    field/IRAF_PSF
+method           mean
+do_plots_I       y
 
 ###############################################################################
