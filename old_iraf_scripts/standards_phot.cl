@@ -145,11 +145,11 @@ begin
 # ------------------------------------------------------------------------------------
 
       # ------------------------------------------------------------------------------
-      # We store the names of the standards frames in a file ("standars")
+      # We store the names of the standards frames in a file ("standards")
       # and store the name of the file inside the *struct variable 'flist'
       #
-      files ("*.fit", > "standars")
-      file_name = ("standars")
+      files ("*.fits", > "standards")
+      file_name = ("standards")
       flist = file_name
       # ------------------------------------------------------------------------------
 
@@ -423,7 +423,7 @@ begin
           del ('*.coo.*')
       }
 
-      delete ("standars")
+      delete ("standards")
 
       print ('                                                       ')
       print (' ----------------------------------------------------- ')
