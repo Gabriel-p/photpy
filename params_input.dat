@@ -19,7 +19,7 @@ dmax             60000.0
 
 # 'fitstats'
 #
-in_folder_A      field/dont_use
+in_folder_A      field/
 ellip_max        0.15
 fwhm_min         1.5
 sky_method       SC

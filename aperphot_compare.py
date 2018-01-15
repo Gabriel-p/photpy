@@ -154,7 +154,7 @@ def main():
     Compare results from aperture photometry using IRAF's 'phot' and photutil's
     'CircularAperture'.
     """
-    imname = 'standards/stk_2150'
+    imname = 'input/standards/stk_2150'
     image_file, coo_file, hdu_data, exp_time, gain, rdnoise = load_data(imname)
 
     aper_rad, dmax = 15., 60000.

@@ -13,6 +13,9 @@ def main(dmax, imname):
     print("\nRun 'psfmeasure' task to estimate the FWHMs.")
     try:
         os.remove('cursor')
+    except OSError:
+        pass
+    try:
         os.remove('psfmeasure')
     except OSError:
         pass
