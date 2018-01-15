@@ -47,10 +47,11 @@ do_plots_B       y
 ###############################################################################
 # Standard stars identification, aperture photometry, and transformations.
 
-# 'id_standards'
+# 'match'
 #
-landolt_fld      pg1323
-ref_id_std       stk_2127_crop.fits
+# Input Landolt frame first if matching standard frames.
+ref_field        SA98, field/stk1041.fits
+match_fldr       standards
 scale_min        0.1
 scale_max        10.0
 rot_min          0.0
@@ -109,9 +110,9 @@ niters           1
 do_plots_G       y
 
 
-# 'match'
+# 'master'
 #
-match_folder     field/IRAF_PSF
+master_folder    field/IRAF_PSF
 load_format      allstar, list
 #load_format      default
 ref_frame        none
