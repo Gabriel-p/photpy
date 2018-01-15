@@ -3,8 +3,9 @@ import read_pars_file as rpf
 
 import os
 from os.path import exists, join, isfile
+from pathlib2 import Path
 import sys
-from operator import itemgetter
+# from operator import itemgetter
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
@@ -312,22 +313,40 @@ def storeCooFile(out_path, imname, filter_val, fwhm_accptd):
         format='commented_header', overwrite=True, delimiter=' ')
 
 
+def outFileHeader(out_path):
+    """
+    Create output stats file with a header.
+    """
+    out_data_file = join(out_path, "fitstats.dat")
+    if not Path(out_data_file).exists():
+        with open(out_data_file, mode='w') as f:
+            f.write(
+                "# image           filter  airmass  exposure    Sky_mean  "
+                "Sky_STDDEV  FWHM_(N_stars)  FWHM_(mean)  FWHM_(std)\n")
+
+
 def storeOutFile(out_path, out_data):
     """
     Write output file.
     """
     # Sort list by filter names and then by exposure time.
-    data_sort = sorted(out_data, key=itemgetter(1, 3))
+    # data_sort = sorted(out_data, key=itemgetter(1, 3))
+
     out_data_file = join(out_path, "fitstats.dat")
-    data = Table(zip(*data_sort), names=(
+    data = Table(zip(out_data), names=(
         '# image         ', 'filter', 'airmass', 'exposure', 'Sky_mean',
         'Sky_STDDEV', 'FWHM_(N_stars)', 'FWHM_(mean)', 'FWHM_(std)'))
-    ascii.write(
-        data, out_data_file, overwrite=True, formats={
-            '# image         ': '%-16s', 'FWHM_(N_stars)': '%14.0f',
+
+    with open(out_data_file, mode='a') as f:
+        # Some platforms don't automatically seek to end when files opened
+        # in append mode
+        f.seek(0, os.SEEK_END)
+        ascii.write(data, f, formats={
+            '# image         ': '%-16s', 'filter': '%5s', 'airmass': '%7.3f',
+            'exposure': '%8.1f', 'FWHM_(N_stars)': '%14.0f',
             'Sky_mean': '%10.2f', 'Sky_STDDEV': '%10.2f',
-            'FWHM_(mean)': '%10.2f', 'FWHM_(std)': '%10.2f'},
-        format='fixed_width', delimiter=None)
+            'FWHM_(mean)': '%11.2f', 'FWHM_(std)': '%10.2f'},
+            format='fixed_width_no_header', delimiter=None)
 
 
 def main_call(pars, fits_list, out_path):
@@ -339,7 +358,8 @@ def main_call(pars, fits_list, out_path):
     # HARDCODED: length used to isolate stars used to obtain the average FWHM.
     crop_side = 20
 
-    out_data = []
+    outFileHeader(out_path)
+
     # For each .fits image in the root folder.
     for imname in fits_list:
         print("\n* File: {}".format(
@@ -383,7 +403,8 @@ def main_call(pars, fits_list, out_path):
             # Call it as a subprocess so that no zombie processes are left
             # behind.
             subprocess.call(
-                ['python', 'tasks/psfmeasure.py', pars['dmax'], imname])
+                ['python', pars['mypath'] + '/psfmeasure.py', pars['dmax'],
+                 imname])
 
             # Read PSFMEASURE task output, leaving out the last line with the
             # average FWHM.
@@ -429,12 +450,10 @@ def main_call(pars, fits_list, out_path):
 
         # Store data to write to output file.
         im_name = imname.split('/')[-1]
-        out_data.append(
-            [im_name, hdr[pars['filter_key']], hdr[pars['airmass_key']],
-             hdr[pars['exposure_key']], sky_mean, sky_std,
-             len(fwhm_accptd), fwhm_mean, fwhm_std])
-
-    if out_data:
+        out_data = [
+            im_name, hdr[pars['filter_key']], hdr[pars['airmass_key']],
+            hdr[pars['exposure_key']], sky_mean, sky_std,
+            len(fwhm_accptd), fwhm_mean, fwhm_std]
         storeOutFile(out_path, out_data)
 
     print("\nFinished.")
