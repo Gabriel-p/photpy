@@ -8,7 +8,7 @@ filter_key       FILTER
 exposure_key     EXPTIME
 airmass_key      AIRMASS
 dmin             a        <-- TODO
-dmax             60000.0
+dmax             65000.0
 
 ###############################################################################
 
@@ -49,14 +49,25 @@ do_plots_B       y
 
 # 'match'
 #
-# Input Landolt frame first if matching standard frames.
-ref_field        SA98, field/stk1041.fits
-match_fldr       standards
-scale_min        0.1
-scale_max        10.0
-rot_min          0.0
-rot_max          5.0
+# ref_fld_fldr: input Landolt frame ID if matching a standard frame (else
+# nothing), reference frame's name, and the folder where the fits files for
+# this group are located.
+#
+#ref_fld_fldr     SA98, standards_98
+ref_fld_fldr     SA95, standards_95
+#ref_fld_fldr     TPHE, standards_TPHE
+#ref_fld_fldr     stk1112.fits, field
+match_mode       auto
+match_toler      .5
+max_stars_match  100
+scale_min        .1
+scale_max        10.
+rot_min          0.
+rot_max          10.0
 do_plots_C       y
+# Only used of 'auto' mode is selected.
+min_x-max_x      min, max
+min_y-max_y      min, max
 
 
 # 'aperphot_standards'
