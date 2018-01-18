@@ -16,10 +16,8 @@ def bckg_data(hdr, hdu_data, gain_key, rdnoise_key, method):
 
     Usually BW is close enough to the SC values to justify using it.
     """
-    gain = hdr[gain_key]
-    rdnoise = hdr[rdnoise_key]
-    print("Gain, Rdnoise: {}, {}".format(gain, rdnoise))
     print("\nEstimating background mean, median, and STDDEV.")
+    print(" Method: {}".format(method))
 
     if method == 'BW':
         sky_mean = biweight_location(hdu_data)
@@ -29,9 +27,13 @@ def bckg_data(hdr, hdu_data, gain_key, rdnoise_key, method):
         sky_mean, sky_median, sky_std = sigma_clipped_stats(
             hdu_data, sigma=3.0, iters=5)
 
-    print("Mean, median, and STDDEV: {:.2f}, {:.2f}, {:.2f}".format(
+    print(" Mean, median, and STDDEV: {:.2f}, {:.2f}, {:.2f}".format(
         sky_mean, sky_median, sky_std))
-    print("STDDEV estimated from GAIN, RDNOISE, and median: {:.2f}".format(
+
+    gain = hdr[gain_key]
+    rdnoise = hdr[rdnoise_key]
+    print(" Gain, Rdnoise: {}, {}".format(gain, rdnoise))
+    print(" STDDEV estimated from GAIN, RDNOISE, and median: {:.2f}".format(
         np.sqrt(sky_median * gain + rdnoise ** 2) / gain))
 
     return sky_mean, sky_median, sky_std
@@ -46,13 +48,14 @@ def st_fwhm_select(
     """
     print("\nFinding stars.")
     thresh = thresh_level * std
-    print('Threshold, initial FWHM: {:.1f}, {:.1f}'.format(thresh, fwhm_init))
+    print(' Threshold, initial FWHM: {:.1f}, {:.1f}'.format(thresh, fwhm_init))
     stfind = DAOStarFinder(threshold=thresh, fwhm=fwhm_init)
     sources = stfind(hdu_data)
-    print("Sources found: {}".format(len(sources)))
+    print(" Sources found: {}".format(len(sources)))
     mask = sources['peak'] < dmax
     sour_no_satur = sources[mask]
-    print("Non-saturated sources found: {}".format(len(sour_no_satur)))
+    print(" Non-saturated sources found: {}".format(len(sour_no_satur)))
+    # Sort by brightness.
     sour_no_satur.sort('mag')
     psf_select = sour_no_satur[:int(max_stars)]
 
