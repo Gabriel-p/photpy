@@ -42,6 +42,9 @@ def read_params():
             if isfile(f):
                 if f.endswith('.fits'):
                     fits_list.append(f)
+                    # hdulist = fits.open(f)
+                    # hdr = hdulist[0].heaer
+                    # print(file, hdr['FILTER'], hdr['OBJECT'])
     else:
         print("{}\nis not a folder. Exit.".format(in_path))
         sys.exit()
