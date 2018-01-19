@@ -61,9 +61,9 @@ def main(field):
         ('652', 328.94892473118233, 229.46865969422043, 14.82,  0.611,  0.126,  0.276,  0.339,  0.618,  0.0113, 0.0297, 0.0177, 0.0453, 0.024,  0.0226),
         ('666', 308.35836693548339, 205.00910408266134, 12.73,  0.164,  -0.004, 0.091,  0.108,  0.2,    0.0034, 0.0028, 0.0042, 0.0042, 0.003,  0.0048),
         ('671', 302.49059139784896, 285.78650243615618, 13.39,  0.968,  0.719,  0.575,  0.494,  1.071,  0.0037, 0.0048, 0.0108, 0.0033, 0.0035, 0.0046),
-        ('670', 303.87752016128979, 272.13058845766153, 11.93,  1.356,  1.313,  0.723,  0.653,  1.375,  0.0016, 0.0018, 0.0058, 0.0018, 0.0012, 0.0023),
-        ('676', 295.66263440860166, 271.59715431787657, 13.07,  1.146,  0.666,  0.683,  0.673,  1.352,  0.0032, 0.0041, 0.0107, 0.0015, 0.0218, 0.0032),
-        ('675', 296.19606854838662, 266.36949974798415, 13.4,   1.909,  1.936,  1.082,  1.002,  2.085,  0.0026, 0.0035, 0.0283, 0.0018, 0.0018, 0.0024),
+        ('670', 304.03755040322579, 272.4241105930779, 11.93,  1.356,  1.313,  0.723,  0.653,  1.375,  0.0016, 0.0018, 0.0058, 0.0018, 0.0012, 0.0023),
+        ('676', 295.47593245967744, 271.7039745043682, 13.07,  1.146,  0.666,  0.683,  0.673,  1.352,  0.0032, 0.0041, 0.0107, 0.0015, 0.0218, 0.0032),
+        ('675', 296.22274025537632, 266.47631993447573, 13.4,   1.909,  1.936,  1.082,  1.002,  2.085,  0.0026, 0.0035, 0.0283, 0.0018, 0.0018, 0.0024),
         ('L5',  287.44774865591347, 265.59441994287658, 17.8,   1.9,    -0.1,   3.1,    2.6,    5.8,    0.1633, 0.3266, 0.4491, 0.1225, 0.0408, 0.1225),
         ('682', 284.24714381720378, 266.76797505040349, 13.75,  0.632,  0.098,  0.366,  0.352,  0.717,  0.0039, 0.0039, 0.0064, 0.0017, 0.0025, 0.0039),
         ('685', 276.88575268817152, 256.7394132224465,  11.95,  0.463,  0.096,  0.29,   0.28,   0.57,   0.003,  0.0021, 0.0028, 0.0024, 0.0021, 0.0034),
@@ -155,60 +155,60 @@ if __name__ == '__main__':
     to screen on mouse click.
     """
 
-    field = 'SA95'
+    field = 'SA98'
 
-    # # Load Landolt standard file. Notice that y axis is inverted.
-    # import matplotlib.pyplot as plt
-    # fig, ax = plt.subplots()
-    # ax.imshow(plt.imread("landolt/" + field + ".gif"))
+    # Load Landolt standard file. Notice that y axis is inverted.
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.imshow(plt.imread("landolt/" + field + ".gif"))
 
-    # max_y = ax.get_ylim()[0]
+    max_y = ax.get_ylim()[0]
 
-    # def onclick(event):
-    #     if event.button == 1:
-    #         # Write to figure
-    #         circ = plt.Circle(
-    #             (event.xdata, event.ydata), radius=1, color='g')
-    #         ax.add_patch(circ)
-    #         ax.figure.canvas.draw()
-    #         print(event.xdata, max_y - event.ydata)
-    #     else:
-    #         pass
+    def onclick(event):
+        if event.button == 1:
+            # Write to figure
+            circ = plt.Circle(
+                (event.xdata, event.ydata), radius=1, color='g')
+            ax.add_patch(circ)
+            ax.figure.canvas.draw()
+            print(event.xdata, max_y - event.ydata)
+        else:
+            pass
 
-    # def zoom_fun(event):
-    #     """
-    #     https://gist.github.com/tacaswell/3144287
-    #     """
-    #     base_scale = 2.
-    #     # get the current x and y limits
-    #     cur_xlim = ax.get_xlim()
-    #     cur_ylim = ax.get_ylim()
-    #     # set the range
-    #     cur_xrange = (cur_xlim[1] - cur_xlim[0])*.5
-    #     cur_yrange = (cur_ylim[1] - cur_ylim[0])*.5
-    #     xdata = event.xdata # get event x location
-    #     ydata = event.ydata # get event y location
-    #     if event.button == 'up':
-    #         # deal with zoom in
-    #         scale_factor = 1/base_scale
-    #     elif event.button == 'down':
-    #         # deal with zoom out
-    #         scale_factor = base_scale
-    #     else:
-    #         # deal with something that should never happen
-    #         scale_factor = 1
-    #         print event.button
-    #     # set new limits
-    #     ax.set_xlim([xdata - cur_xrange*scale_factor,
-    #                  xdata + cur_xrange*scale_factor])
-    #     ax.set_ylim([ydata - cur_yrange*scale_factor,
-    #                  ydata + cur_yrange*scale_factor])
-    #     ax.figure.canvas.draw() # force re-draw
+    def zoom_fun(event):
+        """
+        https://gist.github.com/tacaswell/3144287
+        """
+        base_scale = 2.
+        # get the current x and y limits
+        cur_xlim = ax.get_xlim()
+        cur_ylim = ax.get_ylim()
+        # set the range
+        cur_xrange = (cur_xlim[1] - cur_xlim[0])*.5
+        cur_yrange = (cur_ylim[1] - cur_ylim[0])*.5
+        xdata = event.xdata # get event x location
+        ydata = event.ydata # get event y location
+        if event.button == 'up':
+            # deal with zoom in
+            scale_factor = 1/base_scale
+        elif event.button == 'down':
+            # deal with zoom out
+            scale_factor = base_scale
+        else:
+            # deal with something that should never happen
+            scale_factor = 1
+            print event.button
+        # set new limits
+        ax.set_xlim([xdata - cur_xrange*scale_factor,
+                     xdata + cur_xrange*scale_factor])
+        ax.set_ylim([ydata - cur_yrange*scale_factor,
+                     ydata + cur_yrange*scale_factor])
+        ax.figure.canvas.draw() # force re-draw
 
-    # # attach the call back
-    # fig.canvas.mpl_connect('scroll_event', zoom_fun)
+    # attach the call back
+    fig.canvas.mpl_connect('scroll_event', zoom_fun)
 
-    # fig.canvas.mpl_connect('button_press_event', onclick)
-    # plt.show()
+    fig.canvas.mpl_connect('button_press_event', onclick)
+    plt.show()
 
     main(field)

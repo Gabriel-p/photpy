@@ -1,18 +1,26 @@
 
 
-def zoom(event, ax):
+def zoom(event, ax_all):
     """
     Source: https://gist.github.com/tacaswell/3144287
     """
-    base_scale = 2.
+    # get event location
+    xdata, ydata = event.xdata, event.ydata
+    base_scale = 5.
+
+    for axX in ax_all:
+        if event.inaxes == axX:
+            ax = axX
+            break
+    # else:
+    #     ax = ax2
+
     # get the current x and y limits
     cur_xlim = ax.get_xlim()
     cur_ylim = ax.get_ylim()
     # set the range
     cur_xrange = (cur_xlim[1] - cur_xlim[0]) * .5
     cur_yrange = (cur_ylim[1] - cur_ylim[0]) * .5
-    # get event location
-    xdata, ydata = event.xdata, event.ydata
     if event.button == 'up':
         # deal with zoom in
         scale_factor = 1 / base_scale

@@ -55,19 +55,19 @@ do_plots_B       y
 #
 #ref_fld_fldr     SA98, standards_98
 ref_fld_fldr     SA95, standards_95
-#ref_fld_fldr     TPHE, standards_TPHE
+ref_fld_fldr     TPHE, standards_TPHE
 #ref_fld_fldr     stk1112.fits, field
-match_mode       auto
-match_toler      .5
+match_mode       manual
+do_plots_C       y
+# Only used of 'auto' mode is selected.
 max_stars_match  100
+min_x-max_x      min, max
+min_y-max_y      min, max
+match_toler      .5
 scale_min        .1
 scale_max        10.
 rot_min          0.
-rot_max          10.0
-do_plots_C       y
-# Only used of 'auto' mode is selected.
-min_x-max_x      min, max
-min_y-max_y      min, max
+rot_max          5.0
 
 
 # 'aperphot_standards'

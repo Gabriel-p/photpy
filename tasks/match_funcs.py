@@ -73,7 +73,7 @@ def lengthDiff(a, b):
     return diff_idxs
 
 
-def findRotAngle(A_pts, B_rot):
+def findRotAngle(A_pts, B_pts):
     '''
     Find the appropriate rotation between two equivalent triangles, when one
     of them is also translated and scaled.
@@ -86,7 +86,7 @@ def findRotAngle(A_pts, B_rot):
     '''
 
     # Distances between each point,in the order given by the dict below.
-    dA, dB = pdist(A_pts), pdist(B_rot)
+    dA, dB = pdist(A_pts), pdist(B_pts)
     idx = {"0": (0, 1), "1": (0, 2), "2": (1, 2)}
 
     # Indexes the points that define the shortest and longest segments for
@@ -105,8 +105,8 @@ def findRotAngle(A_pts, B_rot):
             if list(A_pts[idx_sh]) == list(_):
                 A_corner = list(_)
     for idx_sh in idxB_shr:
-        for _ in [B_rot[idxB_lng[0]], B_rot[idxB_lng[1]]]:
-            if B_rot[idx_sh] == _:
+        for _ in [B_pts[idxB_lng[0]], B_pts[idxB_lng[1]]]:
+            if B_pts[idx_sh] == _:
                 B_corner = list(_)
     # print("A_corner", A_corner)
     # print("B_corner", B_corner)
@@ -118,10 +118,10 @@ def findRotAngle(A_pts, B_rot):
     else:
         vect_A = A_pts[idxA_shr[1]] - np.array(A_corner)
 
-    if list(B_rot[idxB_shr[0]]) != B_corner:
-        vect_B = B_rot[idxB_shr[0]] - np.array(B_corner)
+    if list(B_pts[idxB_shr[0]]) != B_corner:
+        vect_B = B_pts[idxB_shr[0]] - np.array(B_corner)
     else:
-        vect_B = B_rot[idxB_shr[1]] - np.array(B_corner)
+        vect_B = B_pts[idxB_shr[1]] - np.array(B_corner)
 
     # Use the dot product definition to find the angle between these two
     # translated vectors.

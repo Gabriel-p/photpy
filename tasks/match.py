@@ -2,7 +2,7 @@
 import read_pars_file as rpf
 from match_funcs import triangleMatch, getTriangles, findRotAngle,\
     standard2observed
-from img_zoom import zoom
+from plot_events import zoom
 
 import landolt_fields
 import os
@@ -17,6 +17,9 @@ from astropy.table import Table, hstack
 from astropy.io import ascii, fits
 from photutils import centroid_2dg
 from photutils.utils import cutout_footprint
+from photutils import detect_threshold, detect_sources
+from photutils import source_properties
+from astropy.convolution import Gaussian2DKernel
 
 from astropy.visualization import ZScaleInterval
 from photutils import CircularAperture
@@ -93,19 +96,107 @@ def reCenter(hdu_data, positions, side=30):
     Find better center coordinates for selected stars.
     """
     xy_cent = []
-    for x, y in positions:
-        # Check that new position falls inside of the observed frame.
-        if 0. < x < hdu_data.shape[1] and 0. < y < hdu_data.shape[0]:
-            crop = cutout_footprint(hdu_data, (x, y), side)[0]
-            xy = centroid_2dg(crop)
-            xy_cent.append((x + xy[0] - side * .5, y + xy[1] - side * .5))
+    for x0, y0 in positions:
+        # Check that position falls inside of the observed frame.
+        if 0. < x0 < hdu_data.shape[1] and 0. < y0 < hdu_data.shape[0]:
+            crop = cutout_footprint(hdu_data, (x0, y0), side)[0]
+
+            # fig, (ax1, ax2) = plt.subplots(1, 2)
+            # print('')
+            # print('orig', x0, y0)
             # median, std = np.median(crop), np.std(crop)
-            # plt.imshow(
+            # ax1.imshow(
             #     crop, cmap='viridis', aspect=1, interpolation='nearest',
             #     origin='lower', vmin=0., vmax=median + std)
+            # # PLot center.
+            # # ax1.scatter(side / 2., side / 2., c='r')
+
+            # xy0 = centroid_2dg(crop)
+            # x, y = (x0 + xy0[0] - side * .5, y0 + xy0[1] - side * .5)
+            # print(xy0)
+            # print('0', x, y)
+            # ax1.scatter(*xy0, c='g', marker='x')
+
+            # 1st way of obtaining center
+            threshold = detect_threshold(crop, snr=10)
+            sigma = 3.0 / (2.0 * np.sqrt(2.0 * np.log(2.0)))   # FWHM = 3
+            kernel = Gaussian2DKernel(sigma)  # 
+            kernel.normalize()
+            segm = detect_sources(crop, threshold, npixels=5,
+                                  filter_kernel=kernel)
+            try:
+                tbl = source_properties(crop, segm).to_table()
+                # Index of the brightest detected source
+                idx_b = tbl['source_sum'].argmax()
+                # Index of the closest source.
+                sh, d_old, idx_c = side / 2., 1.e6, 0
+                for i, xy1 in enumerate(tbl['xcentroid', 'ycentroid']):
+                    x, y = xy1[0].value, xy1[1].value
+                    d = np.sqrt((sh - x) ** 2 + (sh - y) ** 2)
+                    tbl['source_sum']
+                    if d < d_old:
+                        idx_c = i
+                        d_old = 1. * d
+                # Choose the brightest star except when its distance to the
+                # center of the region is N or more that of the closest star.
+                N = 4.
+                if np.sqrt(
+                        (sh - tbl['xcentroid'][idx_b].value) ** 2 +
+                        (sh - tbl['ycentroid'][idx_b].value) ** 2) > N * d_old:
+                    idx = idx_c
+                else:
+                    idx = idx_b
+                xy1 = tbl['xcentroid'][idx].value, tbl['ycentroid'][idx].value
+                x, y = (x0 + xy1[0] - side * .5, y0 + xy1[1] - side * .5)
+            except ValueError:
+                # "SourceCatalog contains no sources" may happen when no
+                # detected stars is within the cropped region.
+                x, y = x0, y0
+
+            # print(xy1)
+            # print('1', x, y)
+            # ax1.scatter(*xy1, c='r', marker='*')
+
+            # # 2nd way of obatining center
+            # centers, crops, sh = [], [], side / 4.
+            # xy_shifts = [(0., 0.), (sh, 0.), (0., -sh), (-sh, 0.), (sh, sh)]
+            # for (xs, ys) in xy_shifts:
+            #     crop = cutout_footprint(hdu_data, (x0 + xs, y0 + ys), side)[0]
+            #     crops.append(crop)
+            #     centers.append(centroid_2dg(crop))
+            # idx = np.array(
+            #     [np.sqrt(
+            #         (xs + sh - _[0]) ** 2 + (ys + xs - _[1]) ** 2)
+            #         for _ in centers]).argmin()
+            # xy2 = centers[idx]
+            # x, y = (x0 + xy2[0] - side * .5, y0 + xy2[1] - side * .5)
+            # print(xy2)
+            # print('2', x, y)
+
+            # # Third way of obtaining center
+            # runs, xy3 = 0, (side * 2., side * 2.)
+            # x, y = 1. * x0, 1. * y0
+            # while 0. > xy3[0] or xy3[0] > side or 0 > xy3[1] or xy3[1] > side\
+            #         and runs < 5:
+            #     crop = cutout_footprint(hdu_data, (x, y), side)[0]
+            #     xy3 = centroid_2dg(crop)
+            #     x, y = (x0 + xy3[0] - side * .5, y0 + xy3[1] - side * .5)
+            #     runs += 1
+            # print(xy3)
+            # print('3', x, y)
+            # ax1.scatter(*xy3, c='r', marker='^')
+
+            # median, std = np.median(crops[idx]), np.std(crops[idx])
+            # ax2.imshow(
+            #     crops[idx], cmap='viridis', aspect=1, interpolation='nearest',
+            #     origin='lower', vmin=0., vmax=median + std)
             # # PLot new center.
-            # plt.scatter(*xy, c='g')
-            # plt.show()
+            # ax2.scatter(*xy2, c='r', marker='+')
+            # plt.title("{}".format(xy_shifts[idx]))
+
+            plt.show()
+
+        xy_cent.append((x, y))
 
     return np.asarray(xy_cent)
 
@@ -119,13 +210,45 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
     fitstats: sky_method, fwhm_init, thresh_fit
 
     """
-    answ = 'n'
-    if xy_selec:
-        answ = raw_input("Use existing coordinates? (y/n): ")
-
     # Load .fits file.
     hdulist = fits.open(fr)
     hdu_data = hdulist[0].data
+
+    answ = 'n'
+    if xy_selec:
+
+        # Re-center coordinates.
+        xy_cent = reCenter(hdu_data, xy_selec, side=10)
+        xy_selec = xy_cent.tolist()
+
+        # Manual selection of reference stars in the observed frame.
+        fig, ax = plt.subplots()
+        interval = ZScaleInterval()
+        zmin, zmax = interval.get_limits(hdu_data)
+        ax.imshow(
+            hdu_data, cmap='Greys', aspect=1, interpolation='nearest',
+            origin='lower', vmin=zmin, vmax=zmax)
+        # positions = (zip(*fwhm_accptd)[0], zip(*fwhm_accptd)[1])
+        apertures = CircularAperture(xy_selec, r=10.)
+        apertures.plot(color='red', lw=1.)
+        plt.title("Existing coordinates")
+        if id_selec:
+            xmax, ymax = hdu_data.shape[1], hdu_data.shape[0]
+            for i, txt in enumerate(id_selec):
+                xtxt, ytxt = xy_selec[i][0] + .01 * xmax,\
+                    xy_selec[i][1] + .01 * ymax
+                ax.annotate(
+                    txt, xy=(xy_selec[i][0], xy_selec[i][1]),
+                    xytext=(xtxt, ytxt),
+                    fontsize=15, color='r', arrowprops=dict(
+                        arrowstyle="-", color='b',
+                        connectionstyle="angle3,angleA=90,angleB=0"))
+        fig.canvas.mpl_connect(
+            'scroll_event', lambda event: zoom(event, [ax]))
+        plt.show()
+        plt.close('all')
+
+        answ = raw_input("Use these coordinates? (y/n): ").strip()
 
     if answ != 'y':
 
@@ -167,6 +290,7 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
             id_selec = []
 
         else:
+            id_selec, xy_selec = [], []
             # Ref stars selection
             landolt_field_img = join(
                 pars['mypath'], 'landolt',
@@ -186,7 +310,7 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
                         (event.xdata, event.ydata), r=10.)
                     apertures.plot(color='green', lw=1.)
                     ax.figure.canvas.draw()
-                    ref_id = raw_input(" ID of selected star: ")
+                    ref_id = raw_input(" ID of selected star: ").strip()
                     print(" {} added to list: ({:.2f}, {:.2f})".format(
                         ref_id, event.xdata, event.ydata))
                     id_selec.append(ref_id)
@@ -203,22 +327,27 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
 
             # Mouse click / scroll zoom events.
             fig.canvas.mpl_connect(
-                'scroll_event', lambda event: zoom(event, ax2))
+                'scroll_event', lambda event: zoom(event, [ax1, ax2]))
             fig.canvas.mpl_connect(
                 'button_press_event', lambda event: onclick(event, ax2))
             print("\nSelect three reference stars covering "
                   "as much frame as possible.")
             plt.show()
+            plt.close('all')
 
-            # Re-center coordinates.
-            d, runs = 100., 0
-            while d > .5 and runs < 10:
-                xy_cent = reCenter(hdu_data, xy_selec)
-                d = np.mean(abs(xy_cent - np.array(xy_selec)))
-                xy_selec = xy_cent
-                runs += 1
+            # # Re-center coordinates.
+            # d, runs = 100., 0
+            # while d > .5 and runs < 10:
+            #     xy_cent = reCenter(hdu_data, xy_selec)
+            #     d = np.mean(abs(xy_cent - np.array(xy_selec)))
+            #     xy_selec = xy_cent
+            #     runs += 1
+            # xy_selec = xy_selec.tolist()
 
-            xy_selec = xy_selec.tolist()
+            xy_cent = reCenter(hdu_data, xy_selec, side=20)
+            xy_selec = xy_cent.tolist()
+
+            print(id_selec)
             print(xy_selec)
 
     print(" Stars selected for match: {}".format(len(xy_selec)))
@@ -394,8 +523,8 @@ def main():
             # ID for final image
             img_id = pars['landolt_fld'][proc_grps]
 
-            print("\nLandolt field: {}m ({} stars)".format(
-                pars['landolt_fld'][proc_grps]), len(id_ref))
+            print("\nLandolt field: {} ({} stars)".format(
+                pars['landolt_fld'][proc_grps], len(id_ref)))
 
         else:
             # TODO finish
@@ -463,6 +592,7 @@ def main():
                     # Obtain scale.
                     scale = np.mean(
                         np.array(B_tr_not_scaled[0]) / A_tr_not_scaled[0])
+                    print(np.array(B_tr_not_scaled[0]) / A_tr_not_scaled[0])
                     # Rotation angle between triangles.
                     rot_angle, ref_cent, obs_cent = findRotAngle(
                         xy_ref_sel, xy_selec)
@@ -485,12 +615,13 @@ def main():
                 xy_inframe = np.array(xy_inframe)
 
                 print("Re-center final coordinates.")
-                d, runs = 100., 0
-                while d > .5 and runs < 10:
-                    xy_cent = reCenter(hdu_data, xy_inframe, side=20)
-                    d = np.mean(abs(xy_cent - np.array(xy_inframe)))
-                    xy_inframe = xy_cent
-                    runs += 1
+                xy_inframe = reCenter(hdu_data, xy_inframe, side=40)
+                # d, runs = 100., 0
+                # while d > .5 and runs < 5:
+                #     xy_cent = reCenter(hdu_data, xy_inframe, side=20)
+                #     d = np.mean(abs(xy_cent - xy_inframe))
+                #     xy_inframe = xy_cent
+                #     runs += 1
 
                 if pars['do_plots_C'] == 'y':
                     make_plot(
