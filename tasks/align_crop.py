@@ -114,7 +114,6 @@ def avrg_dist(init_shift, max_shift, tol, ref, f):
         plt.scatter(f[0], f[1], c='r')
         plt.scatter(ref[0], ref[1], c='b')
         plt.show()
-        import pdb; pdb.set_trace()  # breakpoint 2c4f5ae5 //
 
         # Index of the x,y shifts that resulted in the average minimal
         # distance.
@@ -292,7 +291,7 @@ def main():
     """
     fits_list, pars, out_path = in_params()
 
-    print("Read coordinates from .coo files.")
+    print("Detect sources.")
     xy_coo, hdu, hdr, hw = [], [], [], [[], []]
     # For each .fits image in the root folder.
     for i, imname in enumerate(fits_list):
