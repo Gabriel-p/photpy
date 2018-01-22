@@ -354,7 +354,20 @@ def xyTrans(max_shift, xy_ref, xy_selec, mtoler):
 
     if loops == 30:
         print("  WARNING: match did not converge to the requested tolerance.")
-        xy_shift = np.median(xy_shifts, axis=0)
+        med = np.median(xy_shifts, axis=0)
+        xy_shift = []
+        if max_shift[0][0] < med[0] < max_shift[0][1]:
+            xy_shift.append(med[0])
+        else:
+            print("  WARNING: x shift found is outside the limits. Use mean.")
+            xy_shift.append(np.mean(max_shift[0]))
+
+        if max_shift[1][0] < med[1] < max_shift[1][1]:
+            xy_shift.append(med[1])
+        else:
+            print("  WARNING: y shift found is outside the limits. Use mean.")
+            xy_shift.append(np.mean(max_shift[1]))
+
     else:
         xy_shift = xy_shifts[-1]
 
