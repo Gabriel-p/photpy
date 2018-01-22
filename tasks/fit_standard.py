@@ -19,19 +19,7 @@ def in_params():
     """
     pars = rpf.main()
 
-    in_out_path = pars['mypath'].replace('tasks', 'output/standards')
-
-    fits_list = []
-    for file in os.listdir(in_out_path):
-        f = join(in_out_path, file)
-        if isfile(f):
-            if f.endswith('_crop.fits'):
-                fits_list.append(f)
-
-    if not fits_list:
-        print("No '*_crop.fits' files found in 'output/standards' folder."
-              " Exit.")
-        sys.exit()
+    in_out_path = pars['mypath'].replace('tasks', 'output/')
 
     return pars, in_out_path
 
@@ -49,6 +37,12 @@ def readData(in_out_path):
 
     # Group by filters
     f_grouped = stndData.group_by('Filt')
+    stars_per_filt = [len(_) for _ in f_grouped.groups]
+    if len(set(stars_per_filt)) != 1:
+        print("ERROR: not all filters contain the same number of stars.")
+        for i, filt in enumerate(f_grouped.groups.keys):
+            print(filt[0], stars_per_filt[i])
+        sys.exit()
 
     return f_grouped
 
@@ -103,6 +97,11 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     Perform a linear regression fit, rejecting outliers until the conditions
     of abs(1 - red_chi)<chi_min_delta and RMSE<RMSE_max are met.
     """
+    # Filter out nan values carried from ZA mag.
+    x, y, z = x[~np.isnan(y)], y[~np.isnan(y)],\
+        np.array(z)[~np.isnan(y)].tolist()
+    x, y, z = x[~np.isnan(x)], y[~np.isnan(x)],\
+        np.array(z)[~np.isnan(x)].tolist()
 
     # TODO: read chi_min and RMSE_max
     # TODO: finish reduced chi function
@@ -110,13 +109,12 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
 
     from scipy.stats import linregress
     m, c, r_value, p_value, std_err = linregress(x, y)
-
     predictions = m * np.array(x) + c
     red_chisq = redchisqg(y, predictions)
     R2, RMSE = r_value**2, rmse(y, predictions)
 
-    x_accpt, y_accpt, z_accpt, x_rjct, y_rjct, z_rjct =\
-        x[:], y[:], z[:], [], [], []
+    x_accpt, y_accpt, z_accpt = x[:], y[:], z[:]
+    x_rjct, y_rjct, z_rjct = [], [], []
     while R2 < R2_min or RMSE > RMSE_max:
         x_dsort, y_dsort, z_dsort = distPoint2Line(
             m, c, x_accpt, y_accpt, z_accpt)
@@ -132,26 +130,25 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
         red_chisq = redchisqg(y_accpt, predictions)
         # STD = np.std(y - predictions)
         R2, RMSE = r_value**2, rmse(y_accpt, predictions)
+    print("  N, m, c: {}, {:.3f}, {:.3f}".format(len(x_accpt), m, c))
+    print("  Red_Chi^2: {:.3f}".format(red_chisq))
+    print("  R^2: {:.3f}".format(R2))
+    print("  RMSE: {:.3f}".format(RMSE))
 
     # TODO optional ways of fitting
     coeff0 = [1., 0.]
     coeff, cov, infodict, mesg, ier = leastsq(
         residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)),
         full_output=True)
-    print("leastsq: m={}, c={}".format(*coeff))
+    print("leastsq: m={:.3f}, c={:.3f}".format(*coeff))
 
     sol = least_squares(
         residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)))
-    print("least_squares: m={}, c={}".format(*sol.x))
+    print("least_squares: m={:.3f}, c={:.3f}".format(*sol.x))
 
     popt, pcov = curve_fit(f, x_accpt, y_accpt, coeff0)
-    print("curve_fit: m={}, c={}".format(*popt))
+    print("curve_fit: m={:.3f}, c={:.3f}".format(*popt))
     # TODO optional ways of fitting
-
-    print("  N, m, c: {}, {:.3f}, {:.3f}".format(len(x_accpt), m, c))
-    print("  Red_Chi^2: {:.3f}".format(red_chisq))
-    print("  R^2: {:.3f}".format(R2))
-    print("  RMSE: {:.3f}".format(RMSE))
 
     if len(x_accpt) == 2:
         print("  WARNING: only two stars were used in the fit.")
@@ -184,7 +181,7 @@ def fitTransfEquations(filters):
     stand_V, stand_BV, instZA_V, z = extractData(filters, 'V')
     x_fit, y_fit = stand_BV, (stand_V - instZA_V)
     # Find slope and/or intersection of linear regression.
-    print("Filter V")
+    print("\nFilter V")
     V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE = regressRjctOutliers(
         x_fit.flatten(), y_fit.flatten(), z)
     filt_col_data = [["V", V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE]]
@@ -192,7 +189,7 @@ def fitTransfEquations(filters):
     if 'B' in filters['Filt']:
         _, stand_BV, instZA_B, z = extractData(filters, 'B')
         x_fit, y_fit = (instZA_B - instZA_V), stand_BV
-        print("Filter B")
+        print("\nFilter B")
         BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE = regressRjctOutliers(
             x_fit.flatten(), y_fit.flatten(), z)
         filt_col_data.append(
@@ -201,7 +198,7 @@ def fitTransfEquations(filters):
         if 'U' in filters['Filt']:
             _, stand_UB, instZA_U, z = extractData(filters, 'U')
             x_fit, y_fit = (instZA_U - instZA_B), stand_UB
-            print("Filter U")
+            print("\nFilter U")
             UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE = regressRjctOutliers(
                 x_fit.flatten(), y_fit.flatten(), z)
             filt_col_data.append(
@@ -210,7 +207,7 @@ def fitTransfEquations(filters):
     if 'I' in filters['Filt']:
         _, stand_VI, instZA_I, z = extractData(filters, 'I')
         x_fit, y_fit = (instZA_V - instZA_I), stand_VI
-        print("Filter I")
+        print("\nFilter I")
         VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE = regressRjctOutliers(
             x_fit.flatten(), y_fit.flatten(), z)
         filt_col_data.append(
@@ -219,7 +216,7 @@ def fitTransfEquations(filters):
     if 'R' in filters['Filt']:
         _, stand_VR, instZA_R, z = extractData(filters, 'R')
         x_fit, y_fit = (instZA_V - instZA_R), stand_VR
-        print("Filter R")
+        print("\nFilter R")
         VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE = regressRjctOutliers(
             x_fit.flatten(), y_fit.flatten(), z)
         filt_col_data.append(
