@@ -6,7 +6,7 @@ def zoom(event, ax_all):
     """
     # get event location
     xdata, ydata = event.xdata, event.ydata
-    base_scale = 5.
+    base_scale = 10.
 
     for axX in ax_all:
         if event.inaxes == axX:
