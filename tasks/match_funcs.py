@@ -3,8 +3,9 @@ import numpy as np
 import itertools
 import math
 import functools
-from scipy.spatial.distance import pdist
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import pdist, cdist
+from scipy.spatial import cKDTree
+from scipy.stats import sigmaclip
 
 
 def getTriangles(set_X, X_combs):
@@ -183,7 +184,7 @@ def standard2observed(xy_ref, scale, rot_angle, ref_cent, obs_cent):
 
 def scaleTransRot(
     A_pts, B_pts, A_combs, B_combs, A_triang, A_tr_not_scaled, B_triang,
-    B_tr_not_scaled, mtoler, scale_range, rot_range, hdu_data):
+    B_tr_not_scaled, mtoler, scale_range, rot_range, trans_range, hdu_data):
     """
     For each normalized triangle in A, compare with each normalized triangle
     in B. Find the differences between their sides, sum their absolute values,
@@ -225,7 +226,10 @@ def scaleTransRot(
             rot_angle, ref_cent, obs_cent = findRotAngle(
                 A_tr_match, B_tr_match)
 
-            if rot_range[0] <= rot_angle <= rot_range[1]:
+            tr_x, tr_y = ref_cent - obs_cent
+            if rot_range[0] <= rot_angle <= rot_range[1] and\
+                    trans_range[0][0] <= tr_x <= trans_range[0][1] and\
+                    trans_range[1][0] <= tr_y <= trans_range[1][1]:
 
                 # Apply translation, scaling, and rotation to reference
                 # coordinates.
@@ -245,7 +249,7 @@ def scaleTransRot(
                         xy_transf_f = A_tr_match, B_tr_match, scale,\
                         rot_angle, xy_transf
 
-                # Accept half a pixel error for each matched star.
+                # Accept mtoler error for each matched star.
                 if mdist < mtoler * len(xy_transf):
                     # print("Mean dist: {:.3f}".format(mdist))
                     # # print(cdist(np.array(B_pts), xy_transf).min(axis=1))
@@ -279,7 +283,7 @@ def scaleTransRot(
     return A_tr_match_f, B_tr_match_f, scale_f, rot_angle_f, xy_transf_f
 
 
-def triangleMatch(A_pts, B_pts, mtoler, scale_range, rot_range, hdu_data):
+def triangleMatch(A_pts, B_pts, mtoler, scale_range, rot_range, trans_range, hdu_data):
     """
     Given two sets of 2D points, generate all possible combinations of three
     points for each (triangles), normalize the lengths, and identify the best
@@ -302,6 +306,59 @@ def triangleMatch(A_pts, B_pts, mtoler, scale_range, rot_range, hdu_data):
         scaleTransRot(
             A_pts, B_pts, A_combs, B_combs, A_triang, A_tr_not_scaled,
             B_triang, B_tr_not_scaled, mtoler, scale_range, rot_range,
-            hdu_data)
+            trans_range, hdu_data)
 
     return A_tr_match, B_tr_match, scale, rot_angle, xy_transf
+
+
+def xyTrans(max_shift, xy_ref, xy_selec, mtoler):
+    """
+    Average minimal (Euclidean) distance from points in 'xy_selec' to points in
+    'xy_ref', until the stopping condition.
+    """
+    xmin, xmax = max_shift[0]
+    ymin, ymax = max_shift[1]
+    x0, y0, mdist, loops, xy_shifts = 0., 0., 1.e6, 0, []
+    while mdist > mtoler and loops < 30:
+
+        # This parameter controls the resolution of the shift grid.
+        li = 20
+        # Shifts in x from xmin to xmax
+        dists = []
+        for sx in np.linspace(xmin, xmax, li):
+            # Shifts in y.
+            for sy in np.linspace(ymin, ymax, li):
+                # Apply possible x,y translation
+                xy_shifted = np.array([
+                    np.array(xy_selec)[:, 0] + sx + x0,
+                    np.array(xy_selec)[:, 1] + sy + y0]).T
+                # Median minimal distance for each star in xy_selec
+                # (shifted) to the closest star in xy_ref.
+                d = np.median(cKDTree(xy_ref).query(xy_shifted, 1)[0])
+                # Store x,y shift values, and the average minimal distance.
+                dists.append([sx + x0, sy + y0, d])
+
+        # Index of the x,y shifts that resulted in the median minimal
+        # distance.
+        min_idx = np.array(zip(*dists)[2]).argmin()
+        mdist = dists[min_idx][2]
+        # Update shifts.
+        x0, y0 = dists[min_idx][0], dists[min_idx][1]
+        # Decrease shift by X%
+        tol = .9
+        xmin, xmax = xmin * tol, xmax * tol
+        ymin, ymax = ymin * tol, ymax * tol
+        loops += 1
+        # print(mdist, dists[min_idx][0], dists[min_idx][1])
+        xy_shifts.append([dists[min_idx][0], dists[min_idx][1]])
+
+    if loops == 30:
+        print("  WARNING: match did not converge to the requested tolerance.")
+        xy_shift = np.median(xy_shifts, axis=0)
+    else:
+        xy_shift = xy_shifts[-1]
+
+    print(" Median average distance: {:.2f}".format(dists[min_idx][2]))
+    # print("Reg shifted by: {:.2f}, {:.2f}".format(*xy_shift))
+
+    return xy_shift
