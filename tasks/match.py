@@ -7,6 +7,7 @@ from plot_events import zoom
 import landolt_fields
 import os
 from os.path import join, isfile, exists
+from pathlib2 import Path
 import sys
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -196,6 +197,9 @@ def reCenter(hdu_data, positions, side=30):
 
             plt.show()
 
+        else:
+            x, y = x0, y0
+
         xy_cent.append((x, y))
 
     return np.asarray(xy_cent)
@@ -336,8 +340,8 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
             # Re-center coordinates.
             xy_cent = reCenter(hdu_data, xy_selec, side=20)
             xy_selec = xy_cent.tolist()
-            # print(id_selec)
-            # print(xy_selec)
+            print(id_selec)
+            print(xy_selec)
 
     print(" Stars selected for match: {}".format(len(xy_selec)))
 
@@ -348,33 +352,33 @@ def outFileHeader(out_data_file, ref_id):
     """
     Create output stats file with a header.
     """
-    if ref_id != '--':
-        with open(out_data_file, mode='w') as f:
-            f.write(
-                "# frame       x_obs      y_obs   ref    ID          x"
-                "          y      V      BV      UB     VR     RI     VI"
-                "     e_V    e_BV    e_UB    e_VR    e_RI    e_VI\n")
-    else:
-        with open(out_data_file, mode='w') as f:
-            f.write(
-                "# frame          A         B         C         D         "
-                "E         F\n")
+    if not Path(out_data_file).exists():
+        if ref_id != '--':
+            with open(out_data_file, mode='w') as f:
+                f.write(
+                    "# frame       x_obs      y_obs   ref    ID          x"
+                    "          y      V      BV      UB     VR     RI     VI"
+                    "     e_V    e_BV    e_UB    e_VR    e_RI    e_VI\n")
+        else:
+            with open(out_data_file, mode='w') as f:
+                f.write(
+                    "# frame          A         B         C         D         "
+                    "E         F\n")
 
 
 def make_out_file(
-    mode, f_name, id_inframe, xy_inframe, img_id, ref_data, xy_shift,
-    out_data_file):
+    mode, f_name, id_all, xy_all, img_id, ref_data, xy_shift, out_data_file):
     """
     Write coordinates of reference stars in the observed frame system.
     """
     if mode == 'manual':
         landolt_in = Table(dtype=ref_data.dtype)
-        for r_id in id_inframe:
+        for r_id in id_all:
             i = ref_data['ID'].tolist().index(r_id)
             landolt_in.add_row(ref_data[i])
 
         landolt_f = Table({'reference': [img_id for _ in landolt_in['ID']]})
-        ref_transf = [[f_name, xy[0], xy[1]] for xy in xy_inframe]
+        ref_transf = [[f_name, xy[0], xy[1]] for xy in xy_all]
         obs_tbl = Table(zip(*ref_transf), names=('frame', 'x_obs', 'y_obs'))
         tt = hstack([obs_tbl, landolt_f, landolt_in])
 
@@ -450,10 +454,17 @@ def posFinder(xy_inframe, max_x, min_x, max_y, min_y):
 
 def make_plot(
     f_name, hdu_data, out_plot_file, std_tr_match, obs_tr_match,
-    xy_inframe, id_inframe, landolt_field_img):
+    xy_all, id_all, landolt_field_img):
     """
     Make plots.
     """
+    id_inframe, xy_inframe = [], []
+    for i, st in enumerate(xy_all):
+        if not np.isnan(st[0]) and not np.isnan(st[1]):
+            xy_inframe.append(st)
+            id_inframe.append(id_all[i])
+    xy_inframe = np.array(xy_inframe)
+
     print("Plotting.")
     fig = plt.figure(figsize=(20, 20))
     gs = gridspec.GridSpec(10, 10)
@@ -470,12 +481,14 @@ def make_plot(
 
     ax2 = plt.subplot(gs[0:4, 4:8])
     ax2.set_aspect('auto')
-    xmin, ymin = xy_inframe.T.min(axis=1)
-    xmax, ymax = xy_inframe.T.max(axis=1)
-    ax2.set_xlim(max(0., xmin - xmax * .2),
-                 min(hdu_data.shape[1], xmax + xmax * .2))
-    ax2.set_ylim(max(0., ymin - ymax * .2),
-                 min(hdu_data.shape[0], ymax + ymax * .2))
+    xmin, ymin = np.nanmin(xy_inframe.T, axis=1)
+    xmax, ymax = np.nanmax(xy_inframe.T, axis=1)
+    xmin_e, xmax_e = max(0., xmin - xmax * .2),\
+        min(hdu_data.shape[1], xmax + xmax * .2)
+    ymin_e, ymax_e = max(0., ymin - ymax * .2),\
+        min(hdu_data.shape[0], ymax + ymax * .2)
+    ax2.set_xlim(xmin_e, xmax_e)
+    ax2.set_ylim(ymin_e, ymax_e)
     ax2.set_title("Observed frame ({})".format(f_name))
     ax2.grid(lw=1., ls='--', color='grey', zorder=1)
     interval = ZScaleInterval()
@@ -489,6 +502,8 @@ def make_plot(
     # Define offsets.
     xy_offset = posFinder(xy_inframe.tolist(), xmax, xmin, ymax, ymin)
     for i, txt in enumerate(id_inframe):
+        # if xmin_e < xy_offset[i][0] < xmax_e and\
+        #         ymin_e < xy_offset[i][1] < ymax_e:
         ax2.annotate(
             txt, xy=(xy_inframe[i][0], xy_inframe[i][1]),
             xytext=(xy_offset[i][0], xy_offset[i][1]),
@@ -539,11 +554,6 @@ def main():
             print("\nReference frame: {}".format(ref_frame.split('/')[-1]))
             _, id_ref, xy_ref = coo_ref_frame(
                 ref_frame, id_selec, xy_selec, pars, proc_grps)
-            # import pickle
-            # # with open("temp.pkl", mode='wb') as f:
-            # #     pickle.dump([id_ref, xy_ref], f)
-            # with open("temp.pkl", mode='rb') as f:
-            #     id_ref, xy_ref = pickle.load(f)
             # ID for final image/file.
             img_id = ref_frame.split('/')[-1].split('.')[0]
             ref_field_img = ref_frame
@@ -573,11 +583,6 @@ def main():
                 # Coordinates from observed frame.
                 hdu_data, id_selec, xy_selec = coo_ref_frame(
                     fr, id_selec, xy_selec, pars, proc_grps)
-                # import pickle
-                # # with open("temp2.pkl", mode='wb') as f:
-                # #     pickle.dump([hdu_data, id_selec, xy_selec], f)
-                # with open("temp2.pkl", mode='rb') as f:
-                #     hdu_data, id_selec, xy_selec = pickle.load(f)
 
                 if pars['match_mode'] == 'xyshift':
                     xmi, xma = map(float, pars['xtr_min-xtr_max'][0])
@@ -633,40 +638,43 @@ def main():
                     xy_transf = standard2observed(
                         xy_ref, scale, rot_angle, ref_cent, obs_cent)
 
-                    xy_shift = ref_cent, obs_cent
+                    xy_shift = ref_cent - obs_cent
 
                 print("Scale: {:.2f}, Rot: {:.2f}, "
                       "Trans: ({:.2f}, {:.2f})".format(
-                          scale, rot_angle, *xy_shift))
+                          scale, rot_angle, xy_shift[0], xy_shift[1]))
 
-                xy_inframe, id_inframe = [], []
+                xy_all, id_all = [], []
                 if pars['match_mode'] != 'xyshift':
-                    # Remove reference stars located outside the limits of the
-                    # observed frame.
+                    # Assign nan to reference stars located outside the limits
+                    # of the observed frame.
                     for i, st in enumerate(xy_transf):
                         if 0. < st[0] < hdu_data.shape[1] and\
                                 0. < st[1] < hdu_data.shape[0]:
-                            xy_inframe.append(st)
-                            id_inframe.append(id_ref[i])
-                    xy_inframe = np.array(xy_inframe)
+                            xy_all.append(st)
+                            id_all.append(id_ref[i])
+                        else:
+                            xy_all.append([np.nan, np.nan])
+                            id_all.append(id_ref[i])
+                    xy_all = np.array(xy_all)
 
                     print("Re-center final coordinates.")
-                    xy_inframe = reCenter(hdu_data, xy_inframe, side=40)
+                    xy_all = reCenter(hdu_data, xy_all, side=40)
 
                     if pars['do_plots_C'] == 'y':
                         make_plot(
                             f_name, hdu_data, out_img, std_tr_match,
-                            obs_tr_match, xy_inframe, id_inframe,
+                            obs_tr_match, xy_all, id_all,
                             ref_field_img)
 
             else:
-                # TODO reference image values go here
+                # TODO reference image values.
                 xy_shift = [0., 0.]
-                id_inframe, xy_inframe = [], []
+                id_all, xy_all = [], []
 
             # Write final match file
             make_out_file(
-                pars['match_mode'], f_name, id_inframe, xy_inframe, img_id,
+                pars['match_mode'], f_name, id_all, xy_all, img_id,
                 ref_data, xy_shift, out_data_file)
 
     print("\nFinished.")
