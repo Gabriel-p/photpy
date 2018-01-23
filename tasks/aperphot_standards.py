@@ -123,6 +123,8 @@ def instrumMags(f_name, tfilt, hdu_data, exp_time, aper_rad, annulus_in,
     phot_table['flux_fit'] = phot_table['aperture_sum_0'] - bkg_sum
     phot_table = calibrate_magnitudes(phot_table, itime=exp_time)
 
+    # TODO this should not be necessary:
+    # https://github.com/astropy/photutils/issues/637
     # Change weird fluxes for sources outside the frame (-999.9, -999.9)
     # to 'nan'.
     for i, (x, y) in enumerate(phot_table['xcenter', 'ycenter']):
@@ -155,7 +157,7 @@ def writeAperPhot(out_path, filters):
     aper_phot = Table(
         vstack(tables),
         names=('Filt', 'Stnd_field', 'ID', 'file', 'exp_t', 'A', 'ZA_mag',
-               'Col', 'Mag'))
+               'Col_L', 'Mag_L'))
 
     ascii.write(
         aper_phot, out_path + '/stnd_aperphot.dat',
@@ -210,8 +212,9 @@ def main():
 
             # Extract data for this filter.
             stand_mag, stand_col = standardMagCol(tfilt, filt)
+
             # Group frames by filter.
-            # Filt  Stnd_field ID  file  exp_t  A  ZA_mag  Col  Mag
+            # Filt  Stnd_field ID  file  exp_t  A  ZA_mag  Col_L  Mag_L
             for i, ID in enumerate(tfilt['ID']):
                 filters[filt].append(
                     [filt, stnd_fl, ID, f_name, str(exp_time), airmass,
