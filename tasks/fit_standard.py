@@ -1,10 +1,10 @@
 
 import read_pars_file as rpf
 
-import os
-from os.path import join, isfile
+from os.path import join
 import sys
 import numpy as np
+from scipy.stats import linregress
 from scipy.optimize import leastsq, least_squares, curve_fit
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -37,12 +37,6 @@ def readData(in_out_path):
 
     # Group by filters
     f_grouped = stndData.group_by('Filt')
-    stars_per_filt = [len(_) for _ in f_grouped.groups]
-    if len(set(stars_per_filt)) != 1:
-        print("ERROR: not all filters contain the same number of stars.")
-        for i, filt in enumerate(f_grouped.groups.keys):
-            print(filt[0], stars_per_filt[i])
-        sys.exit()
 
     return f_grouped
 
@@ -95,7 +89,7 @@ def distPoint2Line(m, c, x, y, z):
 def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     """
     Perform a linear regression fit, rejecting outliers until the conditions
-    of abs(1 - red_chi)<chi_min_delta and RMSE<RMSE_max are met.
+    of R2>R2_min and RMSE<RMSE_max are met.
     """
     # Filter out nan values carried from ZA mag.
     x, y, z = x[~np.isnan(y)], y[~np.isnan(y)],\
@@ -107,10 +101,9 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     # TODO: finish reduced chi function
     # TODO: errors for fit coefficients?
 
-    from scipy.stats import linregress
     m, c, r_value, p_value, std_err = linregress(x, y)
     predictions = m * np.array(x) + c
-    red_chisq = redchisqg(y, predictions)
+    # red_chisq = redchisqg(y, predictions)
     R2, RMSE = r_value**2, rmse(y, predictions)
 
     x_accpt, y_accpt, z_accpt = x[:], y[:], z[:]
@@ -127,27 +120,27 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
 
         m, c, r_value, p_value, std_err = linregress(x_accpt, y_accpt)
         predictions = m * np.array(x_accpt) + c
-        red_chisq = redchisqg(y_accpt, predictions)
+        # red_chisq = redchisqg(y_accpt, predictions)
         # STD = np.std(y - predictions)
         R2, RMSE = r_value**2, rmse(y_accpt, predictions)
-    print("  N, m, c: {}, {:.3f}, {:.3f}".format(len(x_accpt), m, c))
-    print("  Red_Chi^2: {:.3f}".format(red_chisq))
+    print("linregress   : m={:.3f}, c={:.3f}".format(m, c))
     print("  R^2: {:.3f}".format(R2))
     print("  RMSE: {:.3f}".format(RMSE))
+    # print("  Red_Chi^2: {:.3f}".format(red_chisq))
 
     # TODO optional ways of fitting
     coeff0 = [1., 0.]
     coeff, cov, infodict, mesg, ier = leastsq(
         residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)),
         full_output=True)
-    print("leastsq: m={:.3f}, c={:.3f}".format(*coeff))
+    print("leastsq      : m={:.3f}, c={:.3f}".format(*coeff))
 
     sol = least_squares(
         residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)))
     print("least_squares: m={:.3f}, c={:.3f}".format(*sol.x))
 
     popt, pcov = curve_fit(f, x_accpt, y_accpt, coeff0)
-    print("curve_fit: m={:.3f}, c={:.3f}".format(*popt))
+    print("curve_fit    : m={:.3f}, c={:.3f}".format(*popt))
     # TODO optional ways of fitting
 
     if len(x_accpt) == 2:
@@ -163,7 +156,7 @@ def extractData(filters, f_id):
     """
     mask = filters.groups.keys['Filt'] == f_id
     f_dat = filters.groups[mask]
-    stand_mag, stand_col, instZA_mag = f_dat['Mag'], f_dat['Col'],\
+    stand_mag, stand_col, instZA_mag = f_dat['Mag_L'], f_dat['Col_L'],\
         f_dat['ZA_mag']
     # Flatten extra data used to identify rejected stars
     extra_data = [
@@ -177,50 +170,19 @@ def fitTransfEquations(filters):
     """
     Solve transformation equation to the Landolt system.
     """
-    # Assume that the 'V' filter was used.
-    stand_V, stand_BV, instZA_V, z = extractData(filters, 'V')
-    x_fit, y_fit = stand_BV, (stand_V - instZA_V)
-    # Find slope and/or intersection of linear regression.
-    print("\nFilter V")
-    V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE = regressRjctOutliers(
-        x_fit.flatten(), y_fit.flatten(), z)
-    filt_col_data = [["V", V_accpt, V_rjct, Vm, Vc, Vchi, VRMSE]]
-
-    if 'B' in filters['Filt']:
-        _, stand_BV, instZA_B, z = extractData(filters, 'B')
-        x_fit, y_fit = (instZA_B - instZA_V), stand_BV
-        print("\nFilter B")
-        BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE = regressRjctOutliers(
-            x_fit.flatten(), y_fit.flatten(), z)
-        filt_col_data.append(
-            ["BV", BV_accpt, BV_rjct, BVm, BVc, BVchi, BVRMSE])
-
-        if 'U' in filters['Filt']:
-            _, stand_UB, instZA_U, z = extractData(filters, 'U')
-            x_fit, y_fit = (instZA_U - instZA_B), stand_UB
-            print("\nFilter U")
-            UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE = regressRjctOutliers(
+    filt_col_data = []
+    for filt in ['U', 'B', 'V', 'R', 'I']:
+        if filt in filters['Filt']:
+            print("\nFilter {}".format(filt))
+            # Assume that the 'V' filter was used.
+            stand_mag, stand_col, instZA_mag, z = extractData(filters, filt)
+            x_fit, y_fit = stand_col, (stand_mag - instZA_mag)
+            # Find slope and/or intersection of linear regression.
+            st_accpt, st_rjct, m, c, R2, RMSE = regressRjctOutliers(
                 x_fit.flatten(), y_fit.flatten(), z)
-            filt_col_data.append(
-                ["UB", UB_accpt, UB_rjct, UBm, UBc, UBchi, UBRMSE])
-
-    if 'I' in filters['Filt']:
-        _, stand_VI, instZA_I, z = extractData(filters, 'I')
-        x_fit, y_fit = (instZA_V - instZA_I), stand_VI
-        print("\nFilter I")
-        VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE = regressRjctOutliers(
-            x_fit.flatten(), y_fit.flatten(), z)
-        filt_col_data.append(
-            ["VI", VI_accpt, VI_rjct, VIm, VIc, VIchi, VIRMSE])
-
-    if 'R' in filters['Filt']:
-        _, stand_VR, instZA_R, z = extractData(filters, 'R')
-        x_fit, y_fit = (instZA_V - instZA_R), stand_VR
-        print("\nFilter R")
-        VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE = regressRjctOutliers(
-            x_fit.flatten(), y_fit.flatten(), z)
-        filt_col_data.append(
-            ["VR", VR_accpt, VR_rjct, VRm, VRc, VRchi, VRRMSE])
+            filt_col_data.append([filt, st_accpt, st_rjct, c, m, R2, RMSE])
+        else:
+            print("\nFilter missing {}".format(filt))
 
     return filt_col_data
 
@@ -231,12 +193,11 @@ def writeTransfCoeffs(mypath, filt_col_data):
     f_path = join(
         mypath.replace('tasks', 'output/standards'), 'fit_coeffs.dat')
     with open(f_path, 'w') as f:
-        hdr = """#\n# Instrumental zero airmass magnitude.\n# F_I^(0A) =""" +\
-            """ F_I  - K * X  ; X: airmass, K: extinction coefficient\n""" +\
-            """#\n# Standard color.\n# (F_1 - F_2)_L = c_1 """ +\
-            """(F_1 - F_2)_I^(0A) + c_2\n#\n# Standard magnitude.\n""" +\
-            """# V_L = V_I^(0A) + c_1 * (B - V)_L + c_2\n#\n# ID  N_a""" +\
-            """   N_r       c_1      c_2  R^2     RMSE\n"""
+        hdr = """#\n# Instrumental zero airmass magnitude.\n# m_I^(0A) =""" +\
+            """ m_I  - K * X  ; X: airmass, K: extinction coefficient\n""" +\
+            """#\n# Standard magnitude.\n""" +\
+            """# m_L = m_I^(0A) + c_1  + c_2 * col_L\n#\n# ID   N_a""" +\
+            """    N_r       c_1      c_2      R^2     RMSE\n"""
         f.write(hdr)
         for fc in filt_col_data:
             ln = "{:2}      {}     {}".format(
@@ -259,16 +220,16 @@ def make_plot(mypath, filt_col_data):
     for data in filt_col_data:
         if data[0] == "V":
             xlbl, ylbl = r'$(B-V)_L$', r'$(V_L-V^{0A}_{I})$'
-        elif data[0] == "BV":
-            xlbl, ylbl = r'$(B-V)^{0A}_{I}$', r'$(B-V)_L$'
-        elif data[0] == "UB":
-            xlbl, ylbl = r'$(U-B)^{0A}_{I}$', r'$(U-B)_L$'
-        elif data[0] == "VI":
-            xlbl, ylbl = r'$(V-I)^{0A}_{I}$', r'$(V-I)_L$'
-        elif data[0] == "VR":
-            xlbl, ylbl = r'$(V-R)^{0A}_{I}$', r'$(V-R)_L$'
+        elif data[0] == "B":
+            xlbl, ylbl = r'$(B-V)_L$', r'$(B_L-B^{0A}_{I})$'
+        elif data[0] == "U":
+            xlbl, ylbl = r'$(U-B)_L$', r'$(U_L-U^{0A}_{I})$'
+        elif data[0] == "I":
+            xlbl, ylbl = r'$(V-I)_L$', r'$(I_L-I^{0A}_{I})$'
+        elif data[0] == "R":
+            xlbl, ylbl = r'$(V-R)_L$', r'$(R_L-R^{0A}_{I})$'
 
-        X_accpt, X_rjct, m, c, chi, RMSE = data[1:]
+        X_accpt, X_rjct, c, m, chi, RMSE = data[1:]
         x_accpt, y_accpt = X_accpt
         x_rjct, y_rjct = X_rjct
 
@@ -276,9 +237,9 @@ def make_plot(mypath, filt_col_data):
         predictions = m * x_r + c
 
         ax = fig.add_subplot(gs[0 + i * 2])
-        sign = '+' if c >= 0. else '-'
-        ax.set_title("{} = {:.3f} {} {} {:.3f}".format(
-            ylbl, m, xlbl, sign, abs(c)), fontsize=9)
+        sign = '+' if m >= 0. else '-'
+        ax.set_title("{} = {:.3f} {} {:.3f} {}".format(
+            ylbl, c, sign, abs(m), xlbl), fontsize=9)
         plt.xlabel(xlbl)
         plt.ylabel(ylbl)
         ax.plot(x_r, predictions, 'b-', zorder=1)
@@ -294,10 +255,7 @@ def make_plot(mypath, filt_col_data):
         ax.add_artist(txt)
 
         ax = fig.add_subplot(gs[1 + i * 2])
-        if data[0] == "V":
-            xlbl, x_scatter = ylbl, y_accpt
-        else:
-            x_scatter = x_accpt
+        xlbl, x_scatter = ylbl, y_accpt
         plt.xlabel(xlbl)
         plt.ylabel("residuals (Landolt - pred)")
         resid_accpt = y_accpt - (m * np.asarray(x_accpt) + c)
