@@ -134,20 +134,6 @@ def instrumMags(f_name, tfilt, hdu_data, exp_time, aper_rad, annulus_in,
     return phot_table
 
 
-def zeroAirmass(phot_table, extin_coeffs, filt, airmass):
-    """
-    Correct for airmass, i.e. instrumental magnitude at zero airmass.
-    """
-    # Identify correct index for this filter's extinction coefficient.
-    f_idx = extin_coeffs.index(filt) + 1
-    # Extinction coefficient.
-    ext = float(extin_coeffs[f_idx])
-    # Obtain zero airmass instrumental magnitude for this filter.
-    phot_table['instZA'] = phot_table['cal_mags'] - (ext * airmass) * u.mag
-
-    return phot_table
-
-
 def writeAperPhot(out_path, filters):
     """
     """
@@ -156,12 +142,12 @@ def writeAperPhot(out_path, filters):
         tables.append(Table(zip(*v)))
     aper_phot = Table(
         vstack(tables),
-        names=('Filt', 'Stnd_field', 'ID', 'file', 'exp_t', 'A', 'ZA_mag',
+        names=('Filt', 'Stnd_field', 'ID', 'file', 'exp_t', 'A', 'mag',
                'Col_L', 'Mag_L'))
 
     ascii.write(
         aper_phot, out_path + '/stnd_aperphot.dat',
-        format='fixed_width', delimiter=' ', formats={'ZA_mag': '%10.4f'},
+        format='fixed_width', delimiter=' ', formats={'mag': '%10.4f'},
         fill_values=[(ascii.masked, 'nan')], overwrite=True)
 
 
@@ -207,18 +193,15 @@ def main():
                 float(pars['aperture']), float(pars['annulus_in']),
                 float(pars['annulus_out']))
 
-            print("  Correct instrumental magnitudes for zero airmass.")
-            photu = zeroAirmass(photu, pars['extin_coeffs'][0], filt, airmass)
-
             # Extract data for this filter.
             stand_mag, stand_col = standardMagCol(tfilt, filt)
 
             # Group frames by filter.
-            # Filt  Stnd_field ID  file  exp_t  A  ZA_mag  Col_L  Mag_L
+            # Filt  Stnd_field ID  file  exp_t  A   mag  Col_L  Mag_L
             for i, ID in enumerate(tfilt['ID']):
                 filters[filt].append(
                     [filt, stnd_fl, ID, f_name, str(exp_time), airmass,
-                     photu['instZA'][i].value, stand_col[i], stand_mag[i]])
+                     photu['cal_mags'][i].value, stand_col[i], stand_mag[i]])
 
     # Remove not observed filters from dictionary.
     filters = {k: v for k, v in filters.iteritems() if v}

@@ -4,12 +4,10 @@ import read_pars_file as rpf
 from os.path import join
 import sys
 import numpy as np
-from scipy.stats import linregress
-from scipy.optimize import leastsq, least_squares, curve_fit
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.offsetbox import AnchoredText
-
+import astropy.units as u
 from astropy.io import ascii
 
 
@@ -30,15 +28,28 @@ def readData(in_out_path):
     f = join(in_out_path, "stnd_aperphot.dat")
     stndData = ascii.read(f)
 
-    for f_id in ['V', 'B']:
-        if f_id not in stndData['Filt']:
-            print("Filter {} is missing.".format(f_id))
-            sys.exit()
-
     # Group by filters
     f_grouped = stndData.group_by('Filt')
 
     return f_grouped
+
+
+def zeroAirmass(phot_table, extin_coeffs):
+    """
+    Correct for airmass, i.e. instrumental magnitude at zero airmass.
+    """
+    # Identify correct index for this filter's extinction coefficient.
+    ext = []
+    for filt in phot_table['Filt']:
+        f_idx = extin_coeffs.index(filt) + 1
+        # Extinction coefficient.
+        ext.append(float(extin_coeffs[f_idx]))
+
+    # Obtain zero airmass instrumental magnitude for this filter.
+    phot_table['ZA_mag'] = (
+        phot_table['mag'] - (ext * phot_table['A'])) * u.mag
+
+    return phot_table
 
 
 def rmse(targets, predictions):
@@ -63,12 +74,19 @@ def redchisqg(ydata, ymod, deg=2, sd=.01):
     return chisq / nu
 
 
-def f(x, a, b):
+def linearFunc(p, x):
+    """Linear model."""
+    a, b = p
+    return a * x + b
+
+
+def linear_func(x, a, b):
+    """Linear model."""
     return a * x + b
 
 
 def residual(p, x, y):
-    return y - f(x, *p)
+    return y - linear_func(x, *p)
 
 
 def distPoint2Line(m, c, x, y, z):
@@ -101,6 +119,7 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     # TODO: finish reduced chi function
     # TODO: errors for fit coefficients?
 
+    from scipy.stats import linregress
     m, c, r_value, p_value, std_err = linregress(x, y)
     predictions = m * np.array(x) + c
     # red_chisq = redchisqg(y, predictions)
@@ -129,18 +148,53 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     # print("  Red_Chi^2: {:.3f}".format(red_chisq))
 
     # TODO optional ways of fitting
+
+    from scipy.optimize import leastsq
     coeff0 = [1., 0.]
     coeff, cov, infodict, mesg, ier = leastsq(
         residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)),
         full_output=True)
     print("leastsq      : m={:.3f}, c={:.3f}".format(*coeff))
 
+    from scipy.optimize import least_squares
     sol = least_squares(
         residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)))
     print("least_squares: m={:.3f}, c={:.3f}".format(*sol.x))
 
-    popt, pcov = curve_fit(f, x_accpt, y_accpt, coeff0)
+    from scipy.optimize import curve_fit
+    popt, pcov = curve_fit(linear_func, x_accpt, y_accpt, coeff0)
     print("curve_fit    : m={:.3f}, c={:.3f}".format(*popt))
+
+    from scipy.odr import Model, RealData, ODR
+    # Create a model for fitting.
+    linear_model = Model(linearFunc)
+    # Create a RealData object using our initiated data from above.
+    data = RealData(x_accpt, y_accpt)  # , sx=xerr, sy=yerr)
+    # Set up ODR with the model and data.
+    odr = ODR(data, linear_model, beta0=[0., 1.])
+    # Run the regression.
+    out = odr.run()
+    # Estimated parameter values
+    beta = out.beta
+    print("ODR          : m={:.3f}, c={:.3f}".format(*beta))
+    # Standard errors of the estimated parameters
+    std = out.sd_beta
+    print(" Standard errors: {}, {}".format(*std))
+    # Covariance matrix of the estimated parameters
+    cov = out.cov_beta
+    stddev = np.sqrt(np.diag(cov))
+    print(" Squared diagonal covariance: {}".format(stddev))
+
+    import statsmodels.formula.api as smf
+    from astropy.table import Table
+    df = Table([x_accpt, y_accpt], names=('x', 'y'))
+    mod = smf.ols(formula='y ~ x', data=df)
+    res = mod.fit()
+    print("OLS          : m={:.3f}, c={:.3f}".format(
+        res.params['x'], res.params['Intercept']))
+    print(" Standard errors: {}, {}".format(
+        res.bse['x'], res.bse['Intercept']))
+
     # TODO optional ways of fitting
 
     if len(x_accpt) == 2:
@@ -285,6 +339,9 @@ def main():
     pars, in_out_path = in_params()
 
     filters = readData(in_out_path)
+
+    print("  Correct instrumental magnitudes for zero airmass.")
+    filters = zeroAirmass(filters, pars['extin_coeffs'][0])
 
     print("Obtain transformation coefficients.")
     filt_col_data = fitTransfEquations(filters)
