@@ -340,7 +340,7 @@ def main():
 
     filters = readData(in_out_path)
 
-    print("  Correct instrumental magnitudes for zero airmass.")
+    print("Correct instrumental magnitudes for zero airmass.")
     filters = zeroAirmass(filters, pars['extin_coeffs'][0])
 
     print("Obtain transformation coefficients.")
