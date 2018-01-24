@@ -24,6 +24,9 @@ def in_params():
     in_path = join(pars['mypath'].replace('tasks', 'input'))
     out_path = in_path.replace('input', 'output')
 
+    # Path to final output file.
+    out_file = join(out_path, pars['aper_file_out'])
+
     landolt_fld, match_fldr = [], []
     for line in pars['stnd_obs_fields']:
         landolt_fld.append(line[0])
@@ -31,11 +34,15 @@ def in_params():
     pars['landolt_fld'], pars['match_fldr'] = landolt_fld, match_fldr
 
     # Generate list of fits files for each input folder.
-    fits_list = []
+    fits_list, mch_path = [], []
     for folder in pars['match_fldr']:
         folder = folder[1:] if folder.startswith('/') else folder
-        f_path = join(pars['mypath'].replace('tasks', 'input'), folder)
 
+        # Path to input .mch files (in ../output/.. folder)
+        mch_path.append(join(out_path, folder))
+
+        # Path to input .fits files.
+        f_path = join(in_path, folder)
         list_temp = []
         if os.path.isdir(f_path):
             for file in os.listdir(f_path):
@@ -54,16 +61,16 @@ def in_params():
             print(" * {}".format(fit.replace(f_path, '')[1:]))
         fits_list.append(list_temp)
 
-    return pars, fits_list, in_path, out_path
+    return pars, fits_list, mch_path, out_file
 
 
-def read_standard_coo(in_path, landolt_fld):
+def read_standard_coo(out_path, landolt_fld):
     """
     Read _match.coo file created by 'match', with calibrated photometric
     data on Landolt standard stars, and their coordinates in the system of
     the observed frame.
     """
-    f = join(in_path, landolt_fld + '.mch')
+    f = join(out_path, landolt_fld + '.mch')
     # Change 'nan' values for '-999.9' for sources not detected.
     landolt_fl = ascii.read(f, fill_values=[('nan', '0', 'x_obs', 'y_obs')])
     landolt_fl['x_obs'].fill_value = -999.9
@@ -134,7 +141,7 @@ def instrumMags(f_name, tfilt, hdu_data, exp_time, aper_rad, annulus_in,
     return phot_table
 
 
-def writeAperPhot(out_path, filters):
+def writeAperPhot(out_file, filters):
     """
     """
     tables = []
@@ -146,7 +153,7 @@ def writeAperPhot(out_path, filters):
                'Col_L', 'Mag_L'))
 
     ascii.write(
-        aper_phot, out_path + '/stnd_aperphot.dat',
+        aper_phot, out_file,
         format='fixed_width', delimiter=' ', formats={'mag': '%10.4f'},
         fill_values=[(ascii.masked, 'nan')], overwrite=True)
 
@@ -159,7 +166,7 @@ def main():
 
     Returns zero airmass corrected instrumental magnitudes for each filter.
     """
-    pars, fits_list, in_path, out_path = in_params()
+    pars, fits_list, mch_path, out_file = in_params()
 
     filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
 
@@ -168,7 +175,7 @@ def main():
               "equations for the standard field: {}\n".format(stnd_fl))
 
         # Read data for this Landolt field, from '.mch' file.
-        landolt_fl = read_standard_coo(out_path, stnd_fl)
+        landolt_fl = read_standard_coo(mch_path[proc_gr], stnd_fl)
 
         # For each observed .fits standard file.
         for fr in fits_list[proc_gr]:
@@ -178,7 +185,7 @@ def main():
             print("Aperture photometry on: {}".format(f_name))
 
             # Load .fits file.
-            hdulist = fits.open(join(in_path, fr))
+            hdulist = fits.open(fr)
             # Extract header and data.
             hdr, hdu_data = hdulist[0].header, hdulist[0].data
             filt, exp_time, airmass = hdr[pars['filter_key']],\
@@ -211,7 +218,7 @@ def main():
             print("  WARNING: Filter B is missing.")
 
     print("\nWrite final aperture photometry to output file.")
-    writeAperPhot(out_path, filters)
+    writeAperPhot(out_file, filters)
 
 
 if __name__ == '__main__':
