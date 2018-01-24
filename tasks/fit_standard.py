@@ -1,14 +1,18 @@
 
 import read_pars_file as rpf
 
+import os
 from os.path import join
-import sys
 import numpy as np
+from scipy.stats import linregress
+from sklearn import linear_model
+from sklearn.metrics import r2_score, mean_squared_error
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.offsetbox import AnchoredText
 import astropy.units as u
 from astropy.io import ascii
+from astropy.table import Table
 
 
 def in_params():
@@ -17,17 +21,21 @@ def in_params():
     """
     pars = rpf.main()
 
-    in_out_path = pars['mypath'].replace('tasks', 'output/')
+    # This output path is assumed (hardcoded)
+    out_path = pars['mypath'].replace('tasks', 'output/')
+    apert_file = join(out_path, pars['apert_file_in'])
+    file_out = join(out_path, pars['fit_file_out'])
+    # Final image path+name
+    file_out_ext = file_out.split('/')[-1].split('.')[-1]
+    img_out = file_out.replace(file_out_ext, 'png')
 
-    return pars, in_out_path
+    return pars, apert_file, file_out, img_out
 
 
-def readData(in_out_path):
+def readData(apert_file):
     """
     """
-    f = join(in_out_path, "stnd_aperphot.dat")
-    stndData = ascii.read(f)
-
+    stndData = ascii.read(apert_file)
     # Group by filters
     f_grouped = stndData.group_by('Filt')
 
@@ -104,7 +112,7 @@ def distPoint2Line(m, c, x, y, z):
     return x, y, z
 
 
-def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
+def regressRjctOutliers(x, y, z, mode, R2_min, RMSE_max):
     """
     Perform a linear regression fit, rejecting outliers until the conditions
     of R2>R2_min and RMSE<RMSE_max are met.
@@ -115,87 +123,115 @@ def regressRjctOutliers(x, y, z, R2_min=.97, RMSE_max=.03):
     x, y, z = x[~np.isnan(x)], y[~np.isnan(x)],\
         np.array(z)[~np.isnan(x)].tolist()
 
-    # TODO: read chi_min and RMSE_max
-    # TODO: finish reduced chi function
-    # TODO: errors for fit coefficients?
+    if mode == 'linregress':
+        # TODO: read chi_min and RMSE_max
+        # TODO: finish reduced chi function
+        # TODO: errors for fit coefficients?
 
-    from scipy.stats import linregress
-    m, c, r_value, p_value, std_err = linregress(x, y)
-    predictions = m * np.array(x) + c
-    # red_chisq = redchisqg(y, predictions)
-    R2, RMSE = r_value**2, rmse(y, predictions)
+        m, c, r_value, p_value, std_err = linregress(x, y)
+        predictions = m * np.array(x) + c
+        # red_chisq = redchisqg(y, predictions)
+        R2, RMSE = r_value**2, rmse(y, predictions)
 
-    x_accpt, y_accpt, z_accpt = x[:], y[:], z[:]
-    x_rjct, y_rjct, z_rjct = [], [], []
-    while R2 < R2_min or RMSE > RMSE_max:
-        x_dsort, y_dsort, z_dsort = distPoint2Line(
-            m, c, x_accpt, y_accpt, z_accpt)
-        x_accpt, y_accpt, z_accpt = x_dsort[:-1], y_dsort[:-1], z_dsort[:-1]
-        x_rjct.append(x_dsort[-1])
-        y_rjct.append(y_dsort[-1])
-        z_rjct.append(z_dsort[-1])
-        print("   Rjct: {}, ({:.3f}, {:.3f})".format(
-            z_dsort[-1], x_dsort[-1], y_dsort[-1]))
+        x_accpt, y_accpt, z_accpt = x[:], y[:], z[:]
+        x_rjct, y_rjct, z_rjct = [], [], []
+        while R2 <= R2_min or RMSE >= RMSE_max:
+            x_dsort, y_dsort, z_dsort = distPoint2Line(
+                m, c, x_accpt, y_accpt, z_accpt)
+            x_accpt, y_accpt, z_accpt = x_dsort[:-1], y_dsort[:-1],\
+                z_dsort[:-1]
+            x_rjct.append(x_dsort[-1])
+            y_rjct.append(y_dsort[-1])
+            z_rjct.append(z_dsort[-1])
+            print("   Rjct: {}, ({:.3f}, {:.3f})".format(
+                z_dsort[-1], x_dsort[-1], y_dsort[-1]))
 
-        m, c, r_value, p_value, std_err = linregress(x_accpt, y_accpt)
-        predictions = m * np.array(x_accpt) + c
-        # red_chisq = redchisqg(y_accpt, predictions)
-        # STD = np.std(y - predictions)
-        R2, RMSE = r_value**2, rmse(y_accpt, predictions)
-    print("linregress   : m={:.3f}, c={:.3f}".format(m, c))
+            m, c, r_value, p_value, std_err = linregress(x_accpt, y_accpt)
+            predictions = m * np.array(x_accpt) + c
+            # red_chisq = redchisqg(y_accpt, predictions)
+            # STD = np.std(y - predictions)
+            R2, RMSE = r_value**2, rmse(y_accpt, predictions)
+        # print("  Red_Chi^2: {:.3f}".format(red_chisq))
+
+        # TODO other ways of fitting
+
+        from scipy.optimize import leastsq
+        coeff0 = [1., 0.]
+        coeff, cov, infodict, mesg, ier = leastsq(
+            residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)),
+            full_output=True)
+        print("leastsq      : m={:.3f}, c={:.3f}".format(*coeff))
+
+        from scipy.optimize import least_squares
+        sol = least_squares(
+            residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)))
+        print("least_squares: m={:.3f}, c={:.3f}".format(*sol.x))
+
+        from scipy.optimize import curve_fit
+        popt, pcov = curve_fit(linear_func, x_accpt, y_accpt, coeff0)
+        print("curve_fit    : m={:.3f}, c={:.3f}".format(*popt))
+
+        from scipy.odr import Model, RealData, ODR
+        # Create a model for fitting.
+        linModel = Model(linearFunc)
+        # Create a RealData object using our initiated data from above.
+        data = RealData(x_accpt, y_accpt)  # , sx=xerr, sy=yerr)
+        # Set up ODR with the model and data.
+        odr = ODR(data, linModel, beta0=[0., 1.])
+        # Run the regression.
+        out = odr.run()
+        # Estimated parameter values
+        beta = out.beta
+        print("ODR          : m={:.3f}, c={:.3f}".format(*beta))
+        # Standard errors of the estimated parameters
+        std = out.sd_beta
+        print(" Standard errors: {}, {}".format(*std))
+        # Covariance matrix of the estimated parameters
+        cov = out.cov_beta
+        stddev = np.sqrt(np.diag(cov))
+        print(" Squared diagonal covariance: {}".format(stddev))
+
+        import statsmodels.formula.api as smf
+        from astropy.table import Table
+        df = Table([x_accpt, y_accpt], names=('x', 'y'))
+        mod = smf.ols(formula='y ~ x', data=df)
+        res = mod.fit()
+        print("OLS          : m={:.3f}, c={:.3f}".format(
+            res.params['x'], res.params['Intercept']))
+        print(" Standard errors: {}, {}".format(
+            res.bse['x'], res.bse['Intercept']))
+
+        # TODO other ways of fitting
+
+    elif mode == 'RANSAC':
+        x, y = np.array(x).reshape(-1, 1), np.array(y).reshape(-1, 1)
+        # Robustly fit linear model with RANSAC algorithm
+        ransac = linear_model.RANSACRegressor()
+        R2, RMSE, _iter, iter_max = R2_min * .5, RMSE_max * 2., 0, 1000
+        res, R2_old = [], R2
+        while (R2 <= R2_min or RMSE >= RMSE_max) and _iter < iter_max:
+            ransac.fit(x, y)
+            # Estimated coefficients
+            m, c = float(ransac.estimator_.coef_),\
+                float(ransac.estimator_.intercept_)
+            inlier_mask = ransac.inlier_mask_
+            outlier_mask = np.logical_not(inlier_mask)
+            x_accpt, y_accpt = x[inlier_mask], y[inlier_mask]
+            x_rjct, y_rjct = x[outlier_mask], y[outlier_mask]
+            y_predict = m * x_accpt + c
+            R2 = r2_score(y_accpt, y_predict)
+            RMSE = np.sqrt(mean_squared_error(y_accpt, y_predict))
+            if R2 > R2_old:
+                res = [m, c, x_accpt, y_accpt, x_rjct, y_rjct, R2, RMSE]
+                R2_old = R2
+            _iter += 1
+        if _iter == iter_max:
+            print(" WARNING: R2 and/or RMSE precision was not achieved.")
+            m, c, x_accpt, y_accpt, x_rjct, y_rjct, R2, RMSE = res
+
+    print("m={:.3f}, c={:.3f}".format(m, c))
     print("  R^2: {:.3f}".format(R2))
     print("  RMSE: {:.3f}".format(RMSE))
-    # print("  Red_Chi^2: {:.3f}".format(red_chisq))
-
-    # TODO optional ways of fitting
-
-    from scipy.optimize import leastsq
-    coeff0 = [1., 0.]
-    coeff, cov, infodict, mesg, ier = leastsq(
-        residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)),
-        full_output=True)
-    print("leastsq      : m={:.3f}, c={:.3f}".format(*coeff))
-
-    from scipy.optimize import least_squares
-    sol = least_squares(
-        residual, coeff0, args=(np.array(x_accpt), np.array(y_accpt)))
-    print("least_squares: m={:.3f}, c={:.3f}".format(*sol.x))
-
-    from scipy.optimize import curve_fit
-    popt, pcov = curve_fit(linear_func, x_accpt, y_accpt, coeff0)
-    print("curve_fit    : m={:.3f}, c={:.3f}".format(*popt))
-
-    from scipy.odr import Model, RealData, ODR
-    # Create a model for fitting.
-    linear_model = Model(linearFunc)
-    # Create a RealData object using our initiated data from above.
-    data = RealData(x_accpt, y_accpt)  # , sx=xerr, sy=yerr)
-    # Set up ODR with the model and data.
-    odr = ODR(data, linear_model, beta0=[0., 1.])
-    # Run the regression.
-    out = odr.run()
-    # Estimated parameter values
-    beta = out.beta
-    print("ODR          : m={:.3f}, c={:.3f}".format(*beta))
-    # Standard errors of the estimated parameters
-    std = out.sd_beta
-    print(" Standard errors: {}, {}".format(*std))
-    # Covariance matrix of the estimated parameters
-    cov = out.cov_beta
-    stddev = np.sqrt(np.diag(cov))
-    print(" Squared diagonal covariance: {}".format(stddev))
-
-    import statsmodels.formula.api as smf
-    from astropy.table import Table
-    df = Table([x_accpt, y_accpt], names=('x', 'y'))
-    mod = smf.ols(formula='y ~ x', data=df)
-    res = mod.fit()
-    print("OLS          : m={:.3f}, c={:.3f}".format(
-        res.params['x'], res.params['Intercept']))
-    print(" Standard errors: {}, {}".format(
-        res.bse['x'], res.bse['Intercept']))
-
-    # TODO optional ways of fitting
 
     if len(x_accpt) == 2:
         print("  WARNING: only two stars were used in the fit.")
@@ -220,7 +256,7 @@ def extractData(filters, f_id):
     return stand_mag, stand_col, instZA_mag, extra_data
 
 
-def fitTransfEquations(filters):
+def fitTransfEquations(filters, mode, R2_min, RMSE_max):
     """
     Solve transformation equation to the Landolt system.
     """
@@ -233,7 +269,7 @@ def fitTransfEquations(filters):
             x_fit, y_fit = stand_col, (stand_mag - instZA_mag)
             # Find slope and/or intersection of linear regression.
             st_accpt, st_rjct, m, c, R2, RMSE = regressRjctOutliers(
-                x_fit.flatten(), y_fit.flatten(), z)
+                x_fit.flatten(), y_fit.flatten(), z, mode, R2_min, RMSE_max)
             filt_col_data.append([filt, st_accpt, st_rjct, c, m, R2, RMSE])
         else:
             print("\nFilter missing {}".format(filt))
@@ -241,27 +277,33 @@ def fitTransfEquations(filters):
     return filt_col_data
 
 
-def writeTransfCoeffs(mypath, filt_col_data):
+def writeTransfCoeffs(file_out, filt_col_data):
     """
     """
-    f_path = join(
-        mypath.replace('tasks', 'output/standards'), 'fit_coeffs.dat')
-    with open(f_path, 'w') as f:
+    with open(file_out, 'w') as f:
         hdr = """#\n# Instrumental zero airmass magnitude.\n# m_I^(0A) =""" +\
             """ m_I  - K * X  ; X: airmass, K: extinction coefficient\n""" +\
             """#\n# Standard magnitude.\n""" +\
-            """# m_L = m_I^(0A) + c_1  + c_2 * col_L\n#\n# ID   N_a""" +\
-            """    N_r       c_1      c_2      R^2     RMSE\n"""
+            """# m_L = m_I^(0A) + c_1  + c_2 * col_L\n#\n"""
         f.write(hdr)
-        for fc in filt_col_data:
-            ln = "{:2}      {}     {}".format(
-                fc[0], len(fc[1][0]), len(fc[2][0]))
-            ln += "    {:6.3f}   {:6.3f}   {:6.3f}   {:6.3f}\n".format(
-                *map(float, fc[3:]))
-            f.write(ln)
+
+    with open(file_out, mode='a') as f:
+        t_data = []
+        for data in filt_col_data:
+            filt, accpt, rjct, c, m, r2, RMSE = data
+            t_data.append([filt, len(accpt[0]), len(rjct[0]), c, m, r2, RMSE])
+
+        tt = Table(zip(*t_data),
+                   names=('ID', 'N_a', 'N_r', 'c_1', 'c_2', 'R^2', 'RMSE'))
+        f.seek(0, os.SEEK_END)
+        ascii.write(
+            tt, f, format='fixed_width', delimiter='',
+            formats={
+                'c_1': '%8.3f', 'c_2': '%8.3f', 'R^2': '%8.3f',
+                'RMSE': '%8.3f'})
 
 
-def make_plot(mypath, filt_col_data):
+def make_plot(img_out, filt_col_data):
     """
     """
     print("\nPlotting.")
@@ -283,7 +325,7 @@ def make_plot(mypath, filt_col_data):
         elif data[0] == "R":
             xlbl, ylbl = r'$(V-R)_L$', r'$(R_L-R^{0A}_{I})$'
 
-        X_accpt, X_rjct, c, m, chi, RMSE = data[1:]
+        X_accpt, X_rjct, c, m, r2, RMSE = data[1:]
         x_accpt, y_accpt = X_accpt
         x_rjct, y_rjct = X_rjct
 
@@ -301,10 +343,11 @@ def make_plot(mypath, filt_col_data):
         plt.scatter(x_rjct, y_rjct, c='r', marker='x', zorder=4)
 
         # t1 = "m, c: {:.3f}, {:.3f}\n".format(m, c)
-        t1 = r"$R^{{2}}={:.3f}$".format(chi) + "\n"
-        t2 = r"$RMSE={:.3f}$".format(RMSE)
+        t1 = r"$R^{{2}}={:.3f}$".format(r2) + "\n"
+        t2 = r"$RMSE={:.3f}$".format(RMSE) + "\n"
+        t3 = r"$N_a={:.0f},\;N_r={:.0f}$".format(len(x_accpt), len(x_rjct))
         loc = 2 if i != 0 else 3
-        txt = AnchoredText(t1 + t2, loc=loc, prop=dict(size=9))
+        txt = AnchoredText(t1 + t2 + t3, loc=loc, prop=dict(size=9))
         txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
         ax.add_artist(txt)
 
@@ -323,8 +366,7 @@ def make_plot(mypath, filt_col_data):
         i += 1
 
     fig.tight_layout()
-    fn = join(mypath.replace('tasks', 'output/standards'), 'fitstand.png')
-    plt.savefig(fn, dpi=150, bbox_inches='tight')
+    plt.savefig(img_out, dpi=150, bbox_inches='tight')
     # Close to release memory.
     plt.clf()
     plt.close()
@@ -336,21 +378,23 @@ def main():
     !!! --> Assumes that the V and B filters are present. <-- !!!
 
     """
-    pars, in_out_path = in_params()
+    pars, apert_file, file_out, img_out = in_params()
 
-    filters = readData(in_out_path)
+    filters = readData(apert_file)
 
     print("Correct instrumental magnitudes for zero airmass.")
     filters = zeroAirmass(filters, pars['extin_coeffs'][0])
 
-    print("Obtain transformation coefficients.")
-    filt_col_data = fitTransfEquations(filters)
+    mode = pars['fit_mode']
+    print("Obtain transformation coefficients ({}).".format(mode))
+    R2_min, RMSE_max = map(float, [pars['R^2_min'], pars['RMSE_max']])
+    filt_col_data = fitTransfEquations(filters, mode, R2_min, RMSE_max)
 
-    print("Write 'fit_coeffs.dat' output file.")
-    writeTransfCoeffs(pars['mypath'], filt_col_data)
+    print("\nWrite output file.")
+    writeTransfCoeffs(file_out, filt_col_data)
 
     if pars['do_plots_E'] == 'y':
-        make_plot(pars['mypath'], filt_col_data)
+        make_plot(img_out, filt_col_data)
 
     print("\nFinished.")
 
