@@ -1,113 +1,152 @@
 
 import read_pars_file as rpf
-from aperphot_standards import read_standard_coo, instrumMags
 
-import os
-from os.path import join, isfile
+from astropy.io import ascii
+from astropy.table import Column
+from os.path import join
 import numpy as np
 from scipy.stats import linregress
 import matplotlib.pyplot as plt
-from astropy.io import fits
+import matplotlib.gridspec as gridspec
 
 
-def in_params(in_fold, ldlt_fold):
+def in_params(apert_fl):
     """
     Read and prepare input parameter values.
     """
     pars = rpf.main()
-
-    in_path = pars['mypath'].replace('tasks', 'input/' + in_fold)
-    stnd_path = pars['mypath'].replace('tasks', ldlt_fold)
-
-    fits_list = []
-    for file in os.listdir(in_path):
-        f = join(in_path, file)
-        if isfile(f):
-            if f.endswith('.fits'):
-                fits_list.append(f)
-
-    return pars, in_path, stnd_path, fits_list
+    apert_fl = join(pars['mypath'].replace('tasks', 'output/'), apert_fl)
+    return apert_fl
 
 
-def main(in_fold, ldlt_fold, stnd_fl):
+def readPhot(apert_fl):
+    """
+    """
+    phot = ascii.read(apert_fl)
+
+    filts = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
+    for f in filts.keys():
+        # Select stars for this filter.
+        mask = phot['Filt'] == f
+        f_phot = phot[mask]
+        # Remove nan magnitudes
+        mask = ~np.isnan(f_phot['mag'])
+        f_phot = f_phot[mask]
+        # Combine 'Stnd_field' and 'ID' for unique ids
+        c = Column(
+            [_ + f_phot['ID'][i] for i, _ in enumerate(f_phot['Stnd_field'])])
+        f_phot.add_column(c, name='Unq_ID')
+        # Use set() to extract unique ids
+        unq_stars = list(set(f_phot['Unq_ID']))
+
+        for st in unq_stars:
+            # Isolate this star in this filter.
+            mask = f_phot['Unq_ID'] == st
+            filts[f].append([f_phot[mask]['A'], f_phot[mask]['mag'], st])
+
+    return filts
+
+
+def reject_outliers(data, m=2.):
+    """
+    https://stackoverflow.com/a/16562028/1391441
+    """
+    # distance from data median
+    d = np.abs(data - np.median(data))
+    # median of distances to data median
+    mdev = np.median(d)
+    s = d / mdev if mdev else 0.
+    mask = s < m
+    return np.array(mask)
+
+
+def main(apert_fl):
     """
     Rough sketch of script to determine extinction coefficients.
     """
-    pars, in_path, stnd_path, fits_list = in_params(in_fold, ldlt_fold)
-    f_key, exp_key, air_key = pars['filter_key'], pars['exposure_key'],\
-        pars['airmass_key']
+    apert_fl = in_params(apert_fl)
 
-    print("Obtain standard stars coordinates from: {}".format(stnd_fl))
-    # Read data for this Landolt field.
-    landolt_fl = read_standard_coo(stnd_path, stnd_fl)
+    # Read aperture photometry for each matched star.
+    filters = readPhot(apert_fl)
 
-    filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
-    for imname in fits_list:
-        f_name = imname.split('/')[-1].split('.')[0]
-
-        # Load .fits file.
-        hdulist = fits.open(imname)
-        # Extract header and data.
-        hdr, hdu_data = hdulist[0].header, hdulist[0].data
-        filt, exp_time, airmass = hdr[f_key], hdr[exp_key], hdr[air_key]
-
-        print("Aperture photometry on: {}".format(f_name))
-        photu = instrumMags(
-            f_name, landolt_fl, hdu_data, exp_time, float(pars['aperture']),
-            float(pars['annulus_in']), float(pars['annulus_out']))
-
-        stars = []
-        for i, inst_mag in enumerate(photu['cal_mags'].value):
-            print(filt, landolt_fl['ID'][i], airmass, inst_mag)
-            stars.append([airmass, inst_mag, landolt_fl['ID'][i]])
-
-        # Group frames by filter.
-        filters[filt].append(stars)
+    fig = plt.figure(figsize=(10, 10))
+    gs = gridspec.GridSpec(2, 2)
+    f_sbp = {'U': 0, 'B': 1, 'V': 2, 'I': 3}
+    i = 0
 
     for filt, fdata in filters.iteritems():
         if fdata:
-            print("Filter {}".format(filt))
+            n_stars = sum([1. for _ in fdata if len(_) > 1.])
+            print("Filter {}, N_stars={:.0f}".format(filt, n_stars))
+            K_median_outl = []
+            outliers_lims = np.arange(1., 5., .5)
+            for m_outliers in outliers_lims:
+                plt.style.use('seaborn-darkgrid')
+                slopes = []
+                for st in fdata:
 
-            # airm, mag = [], []
-            # for f in fdata:
-            #     airm += [_[0] for _ in f]
-            #     mag += [_[1] for _ in f]
+                    # If this star was detected more than once.
+                    if len(st[1]) > 1:
+                        mask = reject_outliers(st[1], m=m_outliers)
+                        # If there's more than one star after outlier rejection
+                        if sum(mask) > 1:
+                            X, Y = st[0][mask], st[1][mask]
+                        else:
+                            X, Y = st[0], st[1]
 
-            # m = linregress(airm, mag)[0]
-            # print(" K: {:.3f}".format(m))
+                        m, c, r_value, p_value, m_err = linregress(X, Y)
+                        slopes.append(m)
+                        # print("  Star {}, K={:.3f}".format(st[2], m))
 
-            # if not np.isnan(m):
-            #     plt.style.use('seaborn-darkgrid')
-            #     plt.title("Filter {}".format(filt))
-            #     plt.scatter(airm, mag)
-            #     plt.show()
+                    # # Plot
+                    # plt.title("{}: K={:.3f}, m_err={:.3f}".format(
+                    #     st[2], m, m_err))
+                    # plt.xlabel('airmass')
+                    # plt.ylabel('instrumental mag')
+                    # plt.scatter(st[0][mask], st[1][mask])
+                    # plt.scatter(st[0][~mask], st[1][~mask], c='r')
+                    # fit_fn = np.poly1d([m, c])
+                    # X = [min(st[0]), max(st[0])]
+                    # plt.plot(X, fit_fn(X), '--k')
+                    # plt.gca().invert_yaxis()
+                    # plt.show()
 
-            # Transform list into into:
-            # airm_mag = [st1, st2, st3, ...]
-            # stX = [airmass, instrum_magnitudes]
-            airm_mag = [[y for y in zip(*x)] for x in zip(*fdata)]
+                # Obtain median of extinction coefficients for this filter.
+                median_K = np.nanmedian(slopes)
+                print("  m_out: {:.1f} median K: {:.3f}".format(
+                    m_outliers, median_K))
+                # # Plot coefficients.
+                # if not np.isnan(median_K):
+                #     plt.title("Filter {}, med={:.3f}".format(filt, median_K))
+                #     plt.ylim(0., 2 * median_K)
+                #     slopes = np.array(slopes)
+                #     slopes = slopes[~np.isnan(slopes)]
+                #     plt.scatter(range(len(slopes)), slopes)
+                #     plt.axhline(y=median_K, color='r')
+                #     plt.show()
 
-            plt.style.use('seaborn-darkgrid')
-            slopes = []
-            for st in airm_mag:
-                m, c, r_value, p_value, std_err = linregress(st[0], st[1])
-                slopes.append(m)
-                print("  Star {}, K={:.3f}".format(st[2][0], m))
-                plt.scatter(st[0], st[1])
-                plt.show()
+                K_median_outl.append(median_K)
 
             # Obtain median of extinction coefficients for this filter.
-            median_K = np.nanmedian(slopes)
-            print("Filter {}, median K: {:.3f}".format(filt, median_K))
+            K_median = np.nanmedian(K_median_outl)
+            print(" K_{}: {:.3f}".format(filt, K_median))
+
             # Plot coefficients.
-            if not np.isnan(median_K):
-                plt.title("Filter {}".format(filt))
-                plt.ylim(0., 2 * median_K)
-                slopes = np.array(slopes)
-                slopes = slopes[~np.isnan(slopes)]
-                plt.scatter(range(len(slopes)), slopes)
-                plt.axhline(y=median_K, color='r')
-                plt.show()
+            fig.add_subplot(gs[f_sbp[filt]])
+            i += 1
+            plt.title(r"$K_{}={:.3f}\;(N_{{stars}}={})$".format(
+                filt, K_median, int(n_stars)), y=.93)
+            plt.xlabel("Outlier detection threshold")
+            plt.ylabel("median(K_outl)")
+            plt.ylim(0., 2 * K_median)
+            K_median_outl = np.array(K_median_outl)
+            K_median_outl = K_median_outl[~np.isnan(K_median_outl)]
+            plt.scatter(outliers_lims, K_median_outl)
+            plt.axhline(y=K_median, color='r')
+            # plt.show()
+
+    fig.tight_layout()
+    plt.savefig('ext_coeffs.png', dpi=150, bbox_inches='tight')
 
 
 if __name__ == '__main__':
@@ -116,13 +155,10 @@ if __name__ == '__main__':
     with different airmass values.
     """
 
-    # Name of the Landolt frame.
-    stnd_fl = 'SA95'
-    # Path of folder where .fits files are stored.
-    in_path = 'standards_95'
-    # Path to the _match.coo file for this frame.
-    ldlt_fold = 'output'
-    main(in_path, ldlt_fold, stnd_fl)
+    # Name of the .apert file containing the matched stars and their aperture
+    # photometry.
+    apert_fl = 'k_coeffs.apert'
+    main(apert_fl)
 
 # https://arxiv.org/PS_cache/arxiv/pdf/0906/0906.3014v1.pdf
 # v3 = +0.16, b3 = +0.25, i3 = +0.08, u3 = +0.45
