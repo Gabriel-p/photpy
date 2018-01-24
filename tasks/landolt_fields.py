@@ -24,11 +24,11 @@ def main(field):
     # e_RI   e_VI
 
     data_pg1323 = [
-        ('86', 211., 158.3, 13.481, -0.14, -0.681, -0.048, -0.078, -0.127, 0.0019, 0.0022, 0.0026, 0.0018, 0.0045, 0.0045),
-        ('86A', 162.5, 137.5, 13.591, 0.393, -0.019, 0.252, 0.252, 0.506, 0.0257, 0.0022, 0.0045, 0.0027, 0.0047, 0.006),
-        ('86B', 158.1, 128., 13.406, 0.761, 0.265, 0.426, 0.407, 0.833, 0.0019, 0.0029, 0.0042, 0.0023, 0.0023, 0.0031),
-        ('86C', 160.1, 171.2, 14.003, 0.707, 0.245, 0.395, 0.363, 0.759, 0.0031, 0.0028, 0.0077, 0.0024, 0.0041, 0.0049),
-        ('86D', 89.6, 133.7, 12.080, 0.587, 0.005, 0.346, 0.335, 0.684, 0.0023, 0.0018, 0.0036, 0.0013, 0.0026, 0.0031)]
+        ('086', 211., 158.3, 13.481, -0.14, -0.681, -0.048, -0.078, -0.127, 0.0019, 0.0022, 0.0026, 0.0018, 0.0045, 0.0045),
+        ('086A', 162.5, 137.5, 13.591, 0.393, -0.019, 0.252, 0.252, 0.506, 0.0257, 0.0022, 0.0045, 0.0027, 0.0047, 0.006),
+        ('086B', 158.1, 128., 13.406, 0.761, 0.265, 0.426, 0.407, 0.833, 0.0019, 0.0029, 0.0042, 0.0023, 0.0023, 0.0031),
+        ('086C', 160.1, 171.2, 14.003, 0.707, 0.245, 0.395, 0.363, 0.759, 0.0031, 0.0028, 0.0077, 0.0024, 0.0041, 0.0049),
+        ('086D', 89.6, 133.7, 12.080, 0.587, 0.005, 0.346, 0.335, 0.684, 0.0023, 0.0018, 0.0036, 0.0013, 0.0026, 0.0031)]
     PG1323 = getTable(data_pg1323)
 
     data_SA98 = [
@@ -137,15 +137,26 @@ def main(field):
         ('G', 143.24054939516193, 281.38237147177455, 10.44, 1.546, 1.915, 0.934, 1.085, 2.025, 0.0005, 0.0013, 0.0036, 0.0005, 0.0009, 0.0009)]
     TPHE = getTable(data_tphe)
 
+    data_pg0231 = [
+        ('051', 211.04169802799942, 149.54697143609812, 16.11, -0.329, -1.192, -0.162, -0.371, -0.534, 0.0068, 0.0083, 0.0045, 0.0276, 0.1066, 0.1221),
+        ('051A', 217.44364368508209, 130.05377606126737, 12.77, 0.710, 0.270, 0.405, 0.394, 0.799, 0.0008, 0.0015, 0.003, 0.0011, 0.003, 0.003),
+        ('051B', 191.63169878067143, 127.60419332379936, 14.74, 1.448, 1.342, 0.954, 0.998, 1.951, 0.003, 0.0072, 0.0178, 0.0034, 0.0027, 0.0057),
+        ('051C', 178.0913649706458, 183.90766478812262, 13.70, 0.671, 0.114, 0.399, 0.385, 0.783, 0.0014, 0.0078, 0.0149, 0.0028, 0.0064, 0.0085),
+        ('051D', 247.52112185759444, 165.85425095024812, 14.03, 1.088, 1.046, 0.675, 0.586, 1.256, 0.0029, 0.0075, 0.0312, 0.0081, 0.0064, 0.011),
+        ('051E', 270.56229301520398, 170.98958842954951, 13.80, 0.677, 0.201, 0.390, 0.369, 0.757, 0.0046, 0.004, 0.0075, 0.0035, 0.0017, 0.0023)]
+    PG0231 = getTable(data_pg0231)
+
     # # Check that stars are properly placed over the field
     # import matplotlib.pyplot as plt
     # fig, ax = plt.subplots()
     # ax.imshow(plt.imread("landolt/" + field + ".gif"))
     # max_y = ax.get_ylim()[0]
-    # ax.scatter(TPHE['x'], max_y - TPHE['y'])
+    # ax.scatter(PG0231['x'], max_y - PG0231['y'])
     # plt.show()
 
-    all_fields = {'PG1323': PG1323, 'SA98': SA98, 'SA95': SA95, 'TPHE': TPHE}
+    all_fields = {
+        'PG1323': PG1323, 'SA98': SA98, 'SA95': SA95, 'TPHE': TPHE,
+        'PG0231': PG0231}
 
     return all_fields[field]
 
@@ -156,28 +167,28 @@ if __name__ == '__main__':
     to screen on mouse click.
     """
 
-    field = 'SA98'
+    field = 'PG0231'
 
-    # Load Landolt standard file. Notice that y axis is inverted.
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.imshow(plt.imread("landolt/" + field + ".gif"))
+    # # Load Landolt standard file. Notice that y axis is inverted.
+    # import matplotlib.pyplot as plt
+    # fig, ax = plt.subplots()
+    # ax.imshow(plt.imread("landolt/" + field + ".gif"))
 
-    max_y = ax.get_ylim()[0]
+    # max_y = ax.get_ylim()[0]
 
-    def onclick(event):
-        if event.button == 1:
-            # Write to figure
-            circ = plt.Circle(
-                (event.xdata, event.ydata), radius=1, color='g')
-            ax.add_patch(circ)
-            ax.figure.canvas.draw()
-            print(event.xdata, max_y - event.ydata)
-        else:
-            pass
+    # def onclick(event):
+    #     if event.button == 1:
+    #         # Write to figure
+    #         circ = plt.Circle(
+    #             (event.xdata, event.ydata), radius=1, color='g')
+    #         ax.add_patch(circ)
+    #         ax.figure.canvas.draw()
+    #         print(event.xdata, max_y - event.ydata)
+    #     else:
+    #         pass
 
-    fig.canvas.mpl_connect('scroll_event', lambda event: zoom(event, [ax]))
-    fig.canvas.mpl_connect('button_press_event', onclick)
-    plt.show()
+    # fig.canvas.mpl_connect('scroll_event', lambda event: zoom(event, [ax]))
+    # fig.canvas.mpl_connect('button_press_event', onclick)
+    # plt.show()
 
     main(field)

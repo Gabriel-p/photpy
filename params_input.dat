@@ -53,29 +53,35 @@ do_plots_B       y
 # nothing), reference frame's name, and the folder where the fits files for
 # this group are located.
 #
-#ref_fld_fldr     SA98, standards_98
-ref_fld_fldr     SA95, standards_95
-ref_fld_fldr     TPHE, standards_TPHE
-#ref_fld_fldr     stk1112.fits, field
+# match_mode: auto / manual / xyshift
+#
+ref_fld_fldr     SA96, sa96
+ref_fld_fldr     SA97, sa97
+ref_fld_fldr     PG0231, pg0231
+#ref_fld_fldr     stk3103.fits, field/filt_V
 match_mode       manual
-do_plots_C       y
-# Only used of 'auto' mode is selected.
-max_stars_match  100
+max_stars_match  10000
 min_x-max_x      min, max
 min_y-max_y      min, max
-match_toler      .5
-scale_min        .1
-scale_max        10.
+match_toler      1.
+scale_min        0.
+scale_max        .1
 rot_min          0.
-rot_max          5.0
+rot_max          0.5
+xtr_min-xtr_max  -150., 0.
+ytr_min-ytr_max  -50., 0.
+do_plots_C       y
 
 
 # 'aperphot_standards'
 #
-stnd_obs_fields  pg1323, stk_2082_crop.fits, stk_2127_crop.fits, stk_2129_crop.fits, stk_2131_crop.fits
-stnd_obs_fields  pg1323, stk_2149_crop.fits, stk_2142_crop.fits, stk_2153_crop.fits, stk_2146_crop.fits
-stnd_obs_fields  pg1323, stk_2150_crop.fits, stk_2126_crop.fits, stk_2128_crop.fits, stk_2130_crop.fits
-stnd_obs_fields  pg1323, stk_2081_crop.fits, stk_2083_crop.fits, stk_2084_crop.fits, stk_2148_crop.fits
+# The number of total filters processed must be equal. This mean we
+# should keep 
+#
+stnd_obs_fields  SA98, sa98
+stnd_obs_fields  SA95, sa95
+stnd_obs_fields  TPHE, tphe
+aper_file_out    4nights.apert
 aperture         15
 annulus_in       20
 annulus_out      25
@@ -84,11 +90,14 @@ do_plots_D       y
 
 # 'fit_standard'
 #
-R^2_min          0.98
+# mode: linregress / RANSAC
+#
+apert_file_in    4nights.apert
+fit_file_out     4nights.fit
+extin_coeffs     U .269, B .135, V .096, I .041
+fit_mode         RANSAC
+R^2_min          0.9
 RMSE_max         0.05
-#extin_coeffs     U .45, B .25, V .16, I .08
-#extin_coeffs     U .49, B .27, V .12, I .02
-extin_coeffs     U .442, B .232, V .136, I .048
 do_plots_E       y
 
 ###############################################################################
