@@ -380,8 +380,7 @@ def make_plot(img_out, filt_col_data):
         t1 = r"$R^{{2}}={:.3f}$".format(r2) + "\n"
         t2 = r"$RMSE={:.3f}$".format(RMSE) + "\n"
         t3 = r"$N_a={:.0f},\;N_r={:.0f}$".format(len(x_accpt), len(x_rjct))
-        loc = 2 if i != 0 else 3
-        txt = AnchoredText(t1 + t2 + t3, loc=loc, prop=dict(size=9))
+        txt = AnchoredText(t1 + t2 + t3, loc=2, prop=dict(size=9))
         txt.patch.set(boxstyle='square,pad=0.', alpha=0.75)
         ax.add_artist(txt)
 
