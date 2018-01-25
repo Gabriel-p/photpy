@@ -152,7 +152,8 @@ def rotatePoints(center, xy, angle):
     return np.asarray(xy_rot)
 
 
-def standard2observed(xy_ref, scale, rot_angle, ref_cent, obs_cent):
+def standard2observed(
+        xy_ref, scale, rot_angle, ref_cent, obs_cent, obs_tr_match):
     """
     Transform standard stars coordinates to the observed frame coordinates.
     """
@@ -168,18 +169,19 @@ def standard2observed(xy_ref, scale, rot_angle, ref_cent, obs_cent):
 
     # Rotate standard stars. Check both possible rotation angles.
     xy_rot1 = rotatePoints(obs_cent, ref_obs, rot_angle)
+    xy_rot2 = rotatePoints(obs_cent, ref_obs, -rot_angle)
 
-    # TODO is this necessary?
-    # xy_rot2 = rotatePoints(obs_cent, ref_obs, 360. - rot_angle)
+    # Find the rotation angle that produces the minimum summed distance of
+    # the rotated stars to the three manually selected stars.
+    d1 = np.min(cdist(obs_tr_match, zip(*xy_rot1)), axis=1).sum()
+    d2 = np.min(cdist(obs_tr_match, zip(*xy_rot2)), axis=1).sum()
 
-    # # Find the rotation angle that produces the minimum summed distance of
-    # # the rotated stars to the standard stars.
-    # d1 = np.min(cdist(xy_ref, zip(*xy_rot1)), axis=1).sum()
-    # d2 = np.min(cdist(xy_ref, zip(*xy_rot2)), axis=1).sum()
-    # # Select rotated standard stars.
-    # xy_rot = xy_rot1 if d1 < d2 else xy_rot2
+    # Select rotated standard stars.
+    xy_rot = xy_rot1 if d1 < d2 else xy_rot2
+    # Pass proper rotation angle.
+    rot_angle = rot_angle if d1 < d2 else -rot_angle
 
-    return xy_rot1.T
+    return xy_rot.T, rot_angle
 
 
 def scaleTransRot(
@@ -233,8 +235,8 @@ def scaleTransRot(
 
                 # Apply translation, scaling, and rotation to reference
                 # coordinates.
-                xy_transf = standard2observed(
-                    A_pts, scale, rot_angle, ref_cent, obs_cent)
+                xy_transf, rot_angle = standard2observed(
+                    A_pts, scale, rot_angle, ref_cent, obs_cent, B_tr_match)
 
                 # Mean distance between detected sources in the observed
                 # frame, and the closest transformed standard stars.
@@ -278,9 +280,11 @@ def scaleTransRot(
                     break
 
     if match_flag is False:
+        # TODO pass values when no match passed the filters above.
         print("  WARNING: no match found within minimum mean match distance.")
 
-    return A_tr_match_f, B_tr_match_f, scale_f, rot_angle_f, xy_transf_f
+    return A_tr_match_f, B_tr_match_f, scale_f, rot_angle_f, [tr_x, tr_y],\
+        xy_transf_f
 
 
 def triangleMatch(A_pts, B_pts, mtoler, scale_range, rot_range, trans_range, hdu_data):
@@ -302,13 +306,13 @@ def triangleMatch(A_pts, B_pts, mtoler, scale_range, rot_range, trans_range, hdu
     # Index of the (A, B) triangles with the smallest difference.
     print("Find best matching triangles ({} vs {}).".format(
         len(A_triang), len(B_triang)))
-    A_tr_match, B_tr_match, scale, rot_angle, xy_transf =\
+    A_tr_match, B_tr_match, scale, rot_angle, xy_shift, xy_transf =\
         scaleTransRot(
             A_pts, B_pts, A_combs, B_combs, A_triang, A_tr_not_scaled,
             B_triang, B_tr_not_scaled, mtoler, scale_range, rot_range,
             trans_range, hdu_data)
 
-    return A_tr_match, B_tr_match, scale, rot_angle, xy_transf
+    return A_tr_match, B_tr_match, scale, rot_angle, xy_shift, xy_transf
 
 
 def xyTrans(max_shift, xy_ref, xy_selec, mtoler):
