@@ -24,25 +24,13 @@ def in_params():
     in_path = join(pars['mypath'].replace('tasks', 'input'))
     out_path = in_path.replace('input', 'output')
 
-    # Path to final output file.
+    # Path to final output file in 'output/' folder.
     out_file = join(out_path, pars['aper_file_out'])
 
-    landolt_fld, match_fldr = [], []
+    fits_list, mch_files = [], []
     for line in pars['stnd_obs_fields']:
-        landolt_fld.append(line[0])
-        match_fldr.append(line[1])
-    pars['landolt_fld'], pars['match_fldr'] = landolt_fld, match_fldr
-
-    # Generate list of fits files for each input folder.
-    fits_list, mch_path = [], []
-    for folder in pars['match_fldr']:
-        folder = folder[1:] if folder.startswith('/') else folder
-
-        # Path to input .mch files (in ../output/.. folder)
-        mch_path.append(join(out_path, folder))
-
         # Path to input .fits files.
-        f_path = join(in_path, folder)
+        f_path = join(in_path, line[0])
         list_temp = []
         if os.path.isdir(f_path):
             for file in os.listdir(f_path):
@@ -56,23 +44,26 @@ def in_params():
             sys.exit()
 
         # Store list for this folder.
-        print("Files found in '{}' folder:".format(folder))
+        print("Files found in '{}/' folder:".format(line[0].strip('/')))
         for fit in list_temp:
             print(" * {}".format(fit.replace(f_path, '')[1:]))
         fits_list.append(list_temp)
 
-    return pars, fits_list, mch_path, out_file
+        # Path to input .mch files (in ../output/.. folder)
+        mch_files.append(join(out_path, line[1]))
+
+    return pars, fits_list, mch_files, out_file
 
 
-def read_standard_coo(out_path, landolt_fld):
+def read_standard_coo(mch_f):
     """
     Read _match.coo file created by 'match', with calibrated photometric
     data on Landolt standard stars, and their coordinates in the system of
     the observed frame.
     """
-    f = join(out_path, landolt_fld + '.mch')
     # Change 'nan' values for '-999.9' for sources not detected.
-    landolt_fl = ascii.read(f, fill_values=[('nan', '0', 'x_obs', 'y_obs')])
+    landolt_fl = ascii.read(
+        mch_f, fill_values=[('nan', '0', 'x_obs', 'y_obs')])
     landolt_fl['x_obs'].fill_value = -999.9
     landolt_fl['y_obs'].fill_value = -999.9
     landolt_fl = landolt_fl.filled()
@@ -166,23 +157,25 @@ def main():
 
     Returns zero airmass corrected instrumental magnitudes for each filter.
     """
-    pars, fits_list, mch_path, out_file = in_params()
+    pars, fits_list, mch_files, out_file = in_params()
 
     filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
+    num_stars = {'U': 0, 'B': 0, 'V': 0, 'R': 0, 'I': 0}
 
-    for proc_gr, stnd_fl in enumerate(pars['landolt_fld']):
-        print("\nPerform aperture photometry and fit transformation\n"
-              "equations for the standard field: {}\n".format(stnd_fl))
+    for proc_gr, mch_file in enumerate(mch_files):
+
+        stnd_fl = mch_file.split('/')[-1].split('.')[0]
+        print("\nAperture photometry and fit transformation\n"
+              "equations for the standard field: {}".format(stnd_fl))
 
         # Read data for this Landolt field, from '.mch' file.
-        landolt_fl = read_standard_coo(mch_path[proc_gr], stnd_fl)
+        landolt_fl = read_standard_coo(mch_file)
 
+        N_star_fld = {'U': 0, 'B': 0, 'V': 0, 'R': 0, 'I': 0}
         # For each observed .fits standard file.
         for fr in fits_list[proc_gr]:
             f_name = fr.split('/')[-1].split('.')[0]
             tfilt = landolt_fl[landolt_fl['frame'] == f_name]
-
-            print("Aperture photometry on: {}".format(f_name))
 
             # Load .fits file.
             hdulist = fits.open(fr)
@@ -190,8 +183,6 @@ def main():
             hdr, hdu_data = hdulist[0].header, hdulist[0].data
             filt, exp_time, airmass = hdr[pars['filter_key']],\
                 hdr[pars['exposure_key']], hdr[pars['airmass_key']]
-            print("  Filter {}, Exp time {}, Airmass {}".format(
-                filt, exp_time, airmass))
 
             # Obtain instrumental magnitudes for the standard stars in the
             # defined Landolt field, in this observed frame.
@@ -200,7 +191,16 @@ def main():
                 float(pars['aperture']), float(pars['annulus_in']),
                 float(pars['annulus_out']))
 
+            N_star = sum(~np.isnan(photu['cal_mags']))
+            # Increase number of observed stars.
+            num_stars[filt] += N_star
+            N_star_fld[filt] += N_star
+            print(" {} (F: {}, t: {}, A: {}, N_strs: {}"
+                  ")".format(f_name, filt, exp_time, airmass, N_star))
+
             # Extract data for this filter.
+            # TODO HARDCODED: the color terms used in the transformation
+            # equations are decided here.
             stand_mag, stand_col = standardMagCol(tfilt, filt)
 
             # Group frames by filter.
@@ -210,12 +210,23 @@ def main():
                     [filt, stnd_fl, ID, f_name, str(exp_time), airmass,
                      photu['cal_mags'][i].value, stand_col[i], stand_mag[i]])
 
+        N_star_sum = sum([_ for _ in N_star_fld.values()])
+        print("Stars processed for this field: {}".format(N_star_sum))
+        for f, Nf in [(a, b) for a, b in N_star_fld.iteritems()]:
+            if Nf > 0:
+                print(" Filter {}, stars: {}".format(f, Nf))
+
     # Remove not observed filters from dictionary.
     filters = {k: v for k, v in filters.iteritems() if v}
     if 'V' not in filters.keys():
         print("  WARNING: Filter V is missing.")
         if 'B' not in filters.keys():
             print("  WARNING: Filter B is missing.")
+
+    print(" ")
+    for f, Nf in [(a, b) for a, b in num_stars.iteritems()]:
+        if Nf > 0:
+            print("Filter {}, processed stars: {}".format(f, Nf))
 
     print("\nWrite final aperture photometry to output file.")
     writeAperPhot(out_file, filters)
