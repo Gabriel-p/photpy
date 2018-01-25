@@ -81,6 +81,9 @@ do_plots_C       y
 stnd_obs_fields  SA98, sa98
 stnd_obs_fields  SA95, sa95
 stnd_obs_fields  TPHE, tphe
+stnd_obs_fields  SA96, sa96
+stnd_obs_fields  SA97, sa97
+stnd_obs_fields  PG0231, pg0231
 aper_file_out    4nights.apert
 aperture         15
 annulus_in       20
@@ -90,12 +93,12 @@ do_plots_D       y
 
 # 'fit_standard'
 #
-# mode: linregress / RANSAC
+# mode: linregress / RANSAC / theilsen
 #
-apert_file_in    4nights.apert
+apert_file_in    k_coeffs.apert
 fit_file_out     4nights.fit
 extin_coeffs     U .269, B .135, V .096, I .041
-fit_mode         RANSAC
+fit_mode         linregress
 R^2_min          0.9
 RMSE_max         0.05
 do_plots_E       y

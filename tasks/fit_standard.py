@@ -5,7 +5,7 @@ import os
 from os.path import join
 import numpy as np
 from scipy.stats import linregress
-from sklearn import linear_model
+from sklearn.linear_model import RANSACRegressor, TheilSenRegressor
 from sklearn.metrics import r2_score, mean_squared_error
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -64,22 +64,28 @@ def rmse(targets, predictions):
     return np.sqrt(((predictions - targets) ** 2).mean())
 
 
-def redchisqg(ydata, ymod, deg=2, sd=.01):
+def redchisq(ydata, ymod, sd=None, deg=2):
     """
-    Returns the reduced chi-square error statistic for an arbitrary model,
-    chisq/nu, where nu is the number of degrees of freedom. If individual
-    standard deviations (array sd) are supplied, then the chi-square error
-    statistic is computed as the sum of squared errors divided by the standard
-    deviations. See http://en.wikipedia.org/wiki/Goodness_of_fit for reference.
+    Returns the squared root of the reduced chi-square error statistic
+    chisq/nu, where nu is the number of degrees of freedom.
+
+    See http://en.wikipedia.org/wiki/Goodness_of_fit for reference.
+    Source: http://astropython.blogspot.com.ar/2012/02/
+    computing-chi-squared-and-reduced-chi.html
+
     ydata : data
     ymod : model evaluated at the same x points as ydata
     """
-    chisq = np.sum(((ydata - ymod) / sd) ** 2)
+    if sd is None:
+        chisq = np.nansum(((ydata - ymod)) ** 2)
+    else:
+        chisq = np.nansum(((ydata - ymod) / sd) ** 2)
 
-    # Number of degrees of freedom assuming 2 free parameters
-    nu = len(ydata) - deg
+    # Number of degrees of freedom assuming 'deg' free parameters
+    non_nans = (~np.isnan(ydata + ymod)).sum()
+    nu = non_nans - deg
 
-    return chisq / nu
+    return np.sqrt(chisq / nu)
 
 
 def linearFunc(p, x):
@@ -97,25 +103,31 @@ def residual(p, x, y):
     return y - linear_func(x, *p)
 
 
-def distPoint2Line(m, c, x, y, z):
+def distPoint2Line(m, c, x, y):
     """
     Distance from (x, y) point, to line with equation:
 
     y = m*x + c
 
     http://mathworld.wolfram.com/Point-LineDistance2-Dimensional.html
-    """
-    d = abs(m * np.array(x) + c - np.array(y)) / np.sqrt(m ** 2 + 1.)
-    d_sort = sorted(zip(d, x, y, z))
-    x, y, z = zip(*d_sort)[1:]
 
-    return x, y, z
+    The ravel() is necessary for the 'theilsen' mode.
+
+    Returns the index of the element with largest distance.
+    """
+    d = abs(m * np.array(x).ravel() +
+            c - np.array(y).ravel()) / np.sqrt(m ** 2 + 1.)
+    return d.argmax()
 
 
 def regressRjctOutliers(x, y, z, mode, R2_min, RMSE_max):
     """
     Perform a linear regression fit, rejecting outliers until the conditions
     of R2>R2_min and RMSE<RMSE_max are met.
+
+    # TODO errors for fit coefficients
+    # TODO finish reduced chi value
+
     """
     # Filter out nan values carried from ZA mag.
     x, y, z = x[~np.isnan(y)], y[~np.isnan(y)],\
@@ -124,34 +136,28 @@ def regressRjctOutliers(x, y, z, mode, R2_min, RMSE_max):
         np.array(z)[~np.isnan(x)].tolist()
 
     if mode == 'linregress':
-        # TODO: read chi_min and RMSE_max
-        # TODO: finish reduced chi function
-        # TODO: errors for fit coefficients?
-
         m, c, r_value, p_value, std_err = linregress(x, y)
         predictions = m * np.array(x) + c
-        # red_chisq = redchisqg(y, predictions)
+        red_chisq = redchisq(y, predictions)
         R2, RMSE = r_value**2, rmse(y, predictions)
 
-        x_accpt, y_accpt, z_accpt = x[:], y[:], z[:]
+        x_accpt, y_accpt, z_accpt = x.tolist()[:], y.tolist()[:], z[:]
         x_rjct, y_rjct, z_rjct = [], [], []
         while R2 <= R2_min or RMSE >= RMSE_max:
-            x_dsort, y_dsort, z_dsort = distPoint2Line(
-                m, c, x_accpt, y_accpt, z_accpt)
-            x_accpt, y_accpt, z_accpt = x_dsort[:-1], y_dsort[:-1],\
-                z_dsort[:-1]
-            x_rjct.append(x_dsort[-1])
-            y_rjct.append(y_dsort[-1])
-            z_rjct.append(z_dsort[-1])
-            print("   Rjct: {}, ({:.3f}, {:.3f})".format(
-                z_dsort[-1], x_dsort[-1], y_dsort[-1]))
+            idx_rm = distPoint2Line(m, c, x_accpt, y_accpt)
+            x_rjct.append(x_accpt[idx_rm])
+            y_rjct.append(y_accpt[idx_rm])
+            z_rjct.append(z_accpt[idx_rm])
+            # print("   Rjct: {}, ({:.3f}, {:.3f})".format(
+            #     z_accpt[idx_rm], x_accpt[idx_rm], y_accpt[idx_rm]))
+            del x_accpt[idx_rm]
+            del y_accpt[idx_rm]
+            del z_accpt[idx_rm]
 
             m, c, r_value, p_value, std_err = linregress(x_accpt, y_accpt)
             predictions = m * np.array(x_accpt) + c
-            # red_chisq = redchisqg(y_accpt, predictions)
-            # STD = np.std(y - predictions)
+            red_chisq = redchisq(y_accpt, predictions)
             R2, RMSE = r_value**2, rmse(y_accpt, predictions)
-        # print("  Red_Chi^2: {:.3f}".format(red_chisq))
 
         # TODO other ways of fitting
 
@@ -206,7 +212,7 @@ def regressRjctOutliers(x, y, z, mode, R2_min, RMSE_max):
     elif mode == 'RANSAC':
         x, y = np.array(x).reshape(-1, 1), np.array(y).reshape(-1, 1)
         # Robustly fit linear model with RANSAC algorithm
-        ransac = linear_model.RANSACRegressor()
+        ransac = RANSACRegressor()
         R2, RMSE, _iter, iter_max = R2_min * .5, RMSE_max * 2., 0, 1000
         res, R2_old = [], R2
         while (R2 <= R2_min or RMSE >= RMSE_max) and _iter < iter_max:
@@ -219,6 +225,7 @@ def regressRjctOutliers(x, y, z, mode, R2_min, RMSE_max):
             x_accpt, y_accpt = x[inlier_mask], y[inlier_mask]
             x_rjct, y_rjct = x[outlier_mask], y[outlier_mask]
             y_predict = m * x_accpt + c
+            red_chisq = redchisq(y_accpt, y_predict)
             R2 = r2_score(y_accpt, y_predict)
             RMSE = np.sqrt(mean_squared_error(y_accpt, y_predict))
             if R2 > R2_old:
@@ -229,7 +236,34 @@ def regressRjctOutliers(x, y, z, mode, R2_min, RMSE_max):
             print(" WARNING: R2 and/or RMSE precision was not achieved.")
             m, c, x_accpt, y_accpt, x_rjct, y_rjct, R2, RMSE = res
 
+    elif mode == 'theilsen':
+        theilsen = TheilSenRegressor()
+        x, y = np.array(x).reshape(-1, 1), y.ravel()
+        x_accpt, y_accpt = x.tolist()[:], y.tolist()[:]
+        x_rjct, y_rjct = [], []
+        R2, RMSE, _iter, iter_max = R2_min * .5, RMSE_max * 2., 0, 1000
+        res, R2_old = [], R2
+        while (R2 <= R2_min or RMSE >= RMSE_max) and _iter < iter_max:
+            theilsen.fit(x_accpt, y_accpt)
+            # Estimated coefficients
+            m, c = float(theilsen.coef_), float(theilsen.intercept_)
+            # Remove point furthest away from fit line
+            idx_rm = distPoint2Line(m, c, x_accpt, y_accpt)
+            x_rjct.append(x_accpt[idx_rm][0])
+            y_rjct.append(y_accpt[idx_rm])
+            del x_accpt[idx_rm]
+            del y_accpt[idx_rm]
+            # Stats
+            y_predict = m * np.array(x_accpt) + c
+            red_chisq = redchisq(y_accpt, y_predict)
+            R2 = r2_score(y_accpt, y_predict)
+            RMSE = np.sqrt(mean_squared_error(y_accpt, y_predict))
+
+        # Flatten list before storing.
+        x_accpt = [_[0] for _ in x_accpt]
+
     print("m={:.3f}, c={:.3f}".format(m, c))
+    # print("  red_chi: {:.3f}".format(red_chisq))
     print("  R^2: {:.3f}".format(R2))
     print("  RMSE: {:.3f}".format(RMSE))
 
