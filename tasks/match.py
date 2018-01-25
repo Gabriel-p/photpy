@@ -16,7 +16,6 @@ from hlpr import bckg_data, st_fwhm_select
 
 from astropy.table import Table, hstack
 from astropy.io import ascii, fits
-# from photutils import centroid_2dg
 from photutils.utils import cutout_footprint
 from photutils import detect_threshold, detect_sources
 from photutils import source_properties
@@ -102,23 +101,6 @@ def reCenter(hdu_data, positions, side=30):
         if 0. < x0 < hdu_data.shape[1] and 0. < y0 < hdu_data.shape[0]:
             crop = cutout_footprint(hdu_data, (x0, y0), side)[0]
 
-            # fig, (ax1, ax2) = plt.subplots(1, 2)
-            # print('')
-            # print('orig', x0, y0)
-            # median, std = np.median(crop), np.std(crop)
-            # ax1.imshow(
-            #     crop, cmap='viridis', aspect=1, interpolation='nearest',
-            #     origin='lower', vmin=0., vmax=median + std)
-            # # PLot center.
-            # # ax1.scatter(side / 2., side / 2., c='r')
-
-            # xy0 = centroid_2dg(crop)
-            # x, y = (x0 + xy0[0] - side * .5, y0 + xy0[1] - side * .5)
-            # print(xy0)
-            # print('0', x, y)
-            # ax1.scatter(*xy0, c='g', marker='x')
-
-            # 1st way of obtaining center
             threshold = detect_threshold(crop, snr=10)
             sigma = 3.0 / (2.0 * np.sqrt(2.0 * np.log(2.0)))   # FWHM = 3
             kernel = Gaussian2DKernel(sigma)
@@ -153,49 +135,6 @@ def reCenter(hdu_data, positions, side=30):
                 # "SourceCatalog contains no sources" may happen when no
                 # stars are found within the cropped region.
                 x, y = x0, y0
-
-            # print(xy1)
-            # print('1', x, y)
-            # ax1.scatter(*xy1, c='r', marker='*')
-
-            # # 2nd way of obatining center
-            # centers, crops, sh = [], [], side / 4.
-            # xy_shifts = [(0., 0.), (sh, 0.), (0., -sh), (-sh, 0.), (sh, sh)]
-            # for (xs, ys) in xy_shifts:
-            #     crop = cutout_footprint(hdu_data, (x0 + xs, y0 + ys), side)[0]
-            #     crops.append(crop)
-            #     centers.append(centroid_2dg(crop))
-            # idx = np.array(
-            #     [np.sqrt(
-            #         (xs + sh - _[0]) ** 2 + (ys + xs - _[1]) ** 2)
-            #         for _ in centers]).argmin()
-            # xy2 = centers[idx]
-            # x, y = (x0 + xy2[0] - side * .5, y0 + xy2[1] - side * .5)
-            # print(xy2)
-            # print('2', x, y)
-
-            # # Third way of obtaining center
-            # runs, xy3 = 0, (side * 2., side * 2.)
-            # x, y = 1. * x0, 1. * y0
-            # while 0. > xy3[0] or xy3[0] > side or 0 > xy3[1] or xy3[1] > side\
-            #         and runs < 5:
-            #     crop = cutout_footprint(hdu_data, (x, y), side)[0]
-            #     xy3 = centroid_2dg(crop)
-            #     x, y = (x0 + xy3[0] - side * .5, y0 + xy3[1] - side * .5)
-            #     runs += 1
-            # print(xy3)
-            # print('3', x, y)
-            # ax1.scatter(*xy3, c='r', marker='^')
-
-            # median, std = np.median(crops[idx]), np.std(crops[idx])
-            # ax2.imshow(
-            #     crops[idx], cmap='viridis', aspect=1, interpolation='nearest',
-            #     origin='lower', vmin=0., vmax=median + std)
-            # # PLot new center.
-            # ax2.scatter(*xy2, c='r', marker='+')
-            # plt.title("{}".format(xy_shifts[idx]))
-            # plt.show()
-
         else:
             x, y = x0, y0
 
