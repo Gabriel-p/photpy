@@ -24,6 +24,7 @@ from astropy.convolution import Gaussian2DKernel
 from astropy.visualization import ZScaleInterval
 from photutils import CircularAperture
 import matplotlib.pyplot as plt
+import time
 import matplotlib.gridspec as gridspec
 
 
@@ -164,10 +165,16 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
             xy = reCenter(hdu_data, xy, side=40).tolist()
 
             # Manual selection of reference stars in the observed frame.
-            fig, ax = plt.subplots()
+            landolt_field_img = join(
+                pars['mypath'], 'landolt',
+                pars['landolt_fld'][proc_grps] + '.gif')
+            # Manual selection of reference stars in the observed frame.
+            fig, (ax1, ax2) = plt.subplots(1, 2)
+            ax1.imshow(plt.imread(landolt_field_img))
+            # fig, ax = plt.subplots()
             interval = ZScaleInterval()
             zmin, zmax = interval.get_limits(hdu_data)
-            ax.imshow(
+            ax2.imshow(
                 hdu_data, cmap='Greys', aspect=1, interpolation='nearest',
                 origin='lower', vmin=zmin, vmax=zmax)
             apertures = CircularAperture(xy, r=10.)
@@ -178,14 +185,14 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
             for j, txt in enumerate(id_selec[i]):
                 xtxt, ytxt = xy[j][0] + .01 * xmax,\
                     xy[j][1] + .01 * ymax
-                ax.annotate(
+                ax2.annotate(
                     txt, xy=(xy[j][0], xy[j][1]),
                     xytext=(xtxt, ytxt),
                     fontsize=15, color='r', arrowprops=dict(
                         arrowstyle="-", color='b',
                         connectionstyle="angle3,angleA=90,angleB=0"))
             fig.canvas.mpl_connect(
-                'scroll_event', lambda event: zoom(event, [ax]))
+                'scroll_event', lambda event: zoom(event, [ax1, ax2]))
             plt.show()
             plt.close('all')
 
@@ -238,8 +245,13 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
             stars_filter = stars_filter[:int(pars['max_stars_match'])]
 
             zip_stars_filter = np.array(zip(*stars_filter))
-            xy_selec = list(zip(*zip_stars_filter[:2]))
-            id_selec = [str(_) for _ in range(int(pars['max_stars_match']))]
+            xy_cent = list(zip(*zip_stars_filter[:2]))
+            id_pick = [str(_) for _ in range(int(pars['max_stars_match']))]
+
+            # Select latest coordinates.
+            idx_choice = -1
+            id_selec.append(id_pick)
+            xy_selec.append(xy_cent)
 
         else:
             id_pick, xy_pick = [], []
@@ -249,41 +261,52 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
                 pars['landolt_fld'][proc_grps] + '.gif')
             # Manual selection of reference stars in the observed frame.
             fig, (ax1, ax2) = plt.subplots(1, 2)
+            ax1.imshow(plt.imread(landolt_field_img))
             interval = ZScaleInterval()
             zmin, zmax = interval.get_limits(hdu_data)
-            ax1.imshow(plt.imread(landolt_field_img))
             ax2.imshow(
                 hdu_data, cmap='Greys', aspect=1, interpolation='nearest',
                 origin='lower', vmin=zmin, vmax=zmax)
 
             def onclick(event, ax):
-                if event.button == 1:
-                    apertures = CircularAperture(
-                        (event.xdata, event.ydata), r=10.)
-                    apertures.plot(color='green', lw=1.)
-                    ax.figure.canvas.draw()
-                    ref_id = raw_input(" ID of selected star: ").strip()
-                    print(" {} added to list: ({:.2f}, {:.2f})".format(
-                        ref_id, event.xdata, event.ydata))
-                    id_pick.append(ref_id)
-                    xy_pick.append((event.xdata, event.ydata))
-                    if len(id_pick) == 3:
-                        # Exit when 3 stars have been identified
-                        plt.close()
-                elif event.button == 2:
-                    print("scroll click")
-                elif event.button == 3:
-                    print("right click")
-                else:
-                    pass
+                ax.time_onclick = time.time()
+
+            def onrelease(event, ax):
+                # Only clicks inside this axis.
+                if event.inaxes == ax:
+                    if event.button == 1 and\
+                            ((time.time() - ax.time_onclick) < .1):
+                        apertures = CircularAperture(
+                            (event.xdata, event.ydata), r=10.)
+                        apertures.plot(color='green', lw=1.)
+                        ax.figure.canvas.draw()
+                        ref_id = raw_input(" ID of selected star: ").strip()
+                        print(" {} added to list: ({:.2f}, {:.2f})".format(
+                            ref_id, event.xdata, event.ydata))
+                        id_pick.append(ref_id)
+                        xy_pick.append((event.xdata, event.ydata))
+                        if len(id_pick) == 3:
+                            # Exit when 3 stars have been identified
+                            plt.close()
+                    elif event.button == 2:
+                        print("scroll click")
+                    elif event.button == 3:
+                        print("right click")
+                    else:
+                        pass
 
             # Mouse click / scroll zoom events.
             fig.canvas.mpl_connect(
                 'scroll_event', lambda event: zoom(event, [ax1, ax2]))
+            # fig.canvas.mpl_connect(
+            #     'button_press_event', lambda event: onclick(event, ax2))
             fig.canvas.mpl_connect(
                 'button_press_event', lambda event: onclick(event, ax2))
-            print("Select three reference stars covering "
-                  "as much frame as possible.")
+            fig.canvas.mpl_connect(
+                'button_release_event', lambda event: onrelease(event, ax2))
+
+            print(" (Select three reference stars covering\n"
+                  "  as much frame as possible)")
             plt.show()
             plt.close('all')
 
@@ -311,9 +334,10 @@ def outFileHeader(out_data_file, ref_id):
         if ref_id != '--':
             with open(out_data_file, mode='w') as f:
                 f.write(
-                    "# frame       x_obs      y_obs   ref    ID          x"
-                    "          y      V      BV      UB     VR     RI     VI"
-                    "     e_V    e_BV    e_UB    e_VR    e_RI    e_VI\n")
+                    "# frame       x_obs      y_obs       ref        ID"
+                    "          x          y      V     BV      UB     VR"
+                    "     RI     VI     e_V    e_BV    e_UB    e_VR    e_RI"
+                    "    e_VI\n")
         else:
             with open(out_data_file, mode='w') as f:
                 f.write(
@@ -332,7 +356,7 @@ def make_out_file(
             i = ref_data['ID'].tolist().index(r_id)
             landolt_in.add_row(ref_data[i])
 
-        landolt_f = Table({'reference': [img_id for _ in landolt_in['ID']]})
+        landolt_f = Table({'ref': [img_id for _ in landolt_in['ID']]})
         ref_transf = [[f_name, xy[0], xy[1]] for xy in xy_all]
         obs_tbl = Table(zip(*ref_transf), names=('frame', 'x_obs', 'y_obs'))
         tt = hstack([obs_tbl, landolt_f, landolt_in])
@@ -343,8 +367,8 @@ def make_out_file(
             f.seek(0, os.SEEK_END)
             ascii.write(
                 tt, f, format='fixed_width_no_header', delimiter='',
-                formats={'x_obs': '%9.3f', 'y_obs': '%9.3f', 'x': '%9.3f',
-                         'y': '%9.3f'})
+                formats={'x_obs': '%9.3f', 'y_obs': '%9.3f', 'ref': '%8s',
+                         'ID': '%8s', 'x': '%9.3f', 'y': '%9.3f'})
 
     elif mode == 'xyshift':
         with open(out_data_file, mode='a') as f:
@@ -501,12 +525,14 @@ def main():
 
             print("\nLandolt field: {} ({} stars)".format(
                 pars['landolt_fld'][proc_grps], len(id_ref)))
+            print("IDs as: {}, {}, {}...".format(*id_ref[:3]))
 
         else:
             # TODO finish
             print("\nReference frame: {}".format(ref_frame.split('/')[-1]))
-            _, id_ref, xy_ref, _ = coo_ref_frame(
+            _, id_selec, xy_selec, idx_choice = coo_ref_frame(
                 ref_frame, id_selec, xy_selec, pars, proc_grps)
+            id_ref, xy_ref = id_selec[idx_choice], xy_selec[idx_choice]
             # ID for final image/file.
             img_id = ref_frame.split('/')[-1].split('.')[0]
             ref_field_img = ref_frame
@@ -562,14 +588,13 @@ def main():
                     mtoler = float(pars['match_toler'])
 
                     print("\nFinding scale, translation, and rotation.")
-                    std_tr_match, obs_tr_match, scale, rot_angle, xy_transf =\
-                        triangleMatch(
+                    std_tr_match, obs_tr_match, scale, rot_angle, xy_shift,\
+                        xy_transf = triangleMatch(
                             xy_ref, xy_choice, mtoler, scale_range,
                             rot_range, trans_range, hdu_data)
 
-                    # TODO add xy_shift
-
                 elif pars['match_mode'] == 'manual':
+
                     # Match selected reference stars to standard stars by
                     # the IDs given by the user.
                     xy_ref_sel = []
@@ -580,22 +605,41 @@ def main():
                     # Matched stars in ref and obs
                     std_tr_match, obs_tr_match = xy_ref_sel, xy_choice
 
-                    _, A_tr_not_scaled = getTriangles(xy_ref_sel, [(0, 1, 2)])
-                    _, B_tr_not_scaled = getTriangles(xy_choice, [(0, 1, 2)])
+                    if len(idx_choice) < 3:
+                        print("  WARNING: Less than 3 stars selected,\n"
+                              "  no match can be performed.")
+                        xy_transf = []
+                        for st_id in id_ref:
+                            if st_id in idx_choice:
+                                i = idx_choice.index(st_id)
+                                xy_transf.append(
+                                    [xy_choice[i][0], xy_choice[i][1]])
+                            else:
+                                xy_transf.append([np.nan, np.nan])
 
-                    # Obtain scale.
-                    scale = np.mean(
-                        np.array(B_tr_not_scaled[0]) / A_tr_not_scaled[0])
-                    # Rotation angle between triangles.
-                    rot_angle, ref_cent, obs_cent = findRotAngle(
-                        xy_ref_sel, xy_choice)
+                        scale, rot_angle, xy_shift = np.nan, np.nan,\
+                            [np.nan, np.nan]
 
-                    # Apply translation, scaling, and rotation to reference
-                    # coordinates.
-                    xy_transf = standard2observed(
-                        xy_ref, scale, rot_angle, ref_cent, obs_cent)
+                    else:
+                        _, A_tr_not_scaled = getTriangles(
+                            xy_ref_sel, [(0, 1, 2)])
+                        _, B_tr_not_scaled = getTriangles(
+                            xy_choice, [(0, 1, 2)])
 
-                    xy_shift = ref_cent - obs_cent
+                        # Obtain scale.
+                        scale = np.mean(
+                            np.array(B_tr_not_scaled[0]) / A_tr_not_scaled[0])
+                        # Rotation angle between triangles.
+                        rot_angle, ref_cent, obs_cent = findRotAngle(
+                            xy_ref_sel, xy_choice)
+
+                        # Apply translation, scaling, and rotation to reference
+                        # coordinates.
+                        xy_transf, rot_angle = standard2observed(
+                            xy_ref, scale, rot_angle, ref_cent, obs_cent,
+                            obs_tr_match)
+
+                        xy_shift = ref_cent - obs_cent
 
                 print("Scale: {:.2f}, Rot: {:.2f}, "
                       "Trans: ({:.2f}, {:.2f})".format(
