@@ -10,17 +10,23 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 
-def in_params(apert_fl):
+def in_params():
     """
     Read and prepare input parameter values.
     """
     pars = rpf.main()
-    apert_fl = join(pars['mypath'].replace('tasks', 'output/'), apert_fl)
-    return apert_fl
+    out_path = pars['mypath'].replace('tasks', 'output/')
+
+    # Name of the .apert file containing the matched stars and their aperture
+    # photometry.
+    apert_fl = join(out_path, pars['apert_file_ext'])
+
+    return pars, apert_fl, out_path
 
 
 def readPhot(apert_fl):
     """
+    Read input .apert file with aperture photometry.
     """
     phot = ascii.read(apert_fl)
 
@@ -40,7 +46,7 @@ def readPhot(apert_fl):
         unq_stars = list(set(f_phot['Unq_ID']))
 
         for st in unq_stars:
-            # Isolate this star in this filter.
+            # Isolate this star in this filter and store.
             mask = f_phot['Unq_ID'] == st
             filts[f].append([f_phot[mask]['A'], f_phot[mask]['mag'], st])
 
@@ -60,43 +66,95 @@ def reject_outliers(data, m=2.):
     return np.array(mask)
 
 
-def main(apert_fl):
+def makePlot(filters, out_path):
     """
-    Rough sketch of script to determine extinction coefficients.
     """
-    apert_fl = in_params(apert_fl)
-
-    # Read aperture photometry for each matched star.
-    filters = readPhot(apert_fl)
 
     fig = plt.figure(figsize=(10, 10))
     gs = gridspec.GridSpec(2, 2)
-    f_sbp = {'U': 0, 'B': 1, 'V': 2, 'I': 3}
-    i = 0
+    plt.style.use('seaborn-darkgrid')
 
-    for filt, fdata in filters.iteritems():
+    f_sbp = {'U': 0, 'B': 1, 'V': 2, 'I': 3}
+    for filt, data in filters.iteritems():
+        n_stars, outliers_lims, K_median_outl, K_median, filt_slopes = data
+        fig.add_subplot(gs[f_sbp[filt]])
+
+        plt.title(r"$K_{}={:.3f}\;(N_{{stars}}={})$".format(
+            filt, K_median, int(n_stars)), y=.93)
+
+        if len(outliers_lims) > 1:
+            fig.suptitle('Outlier rejection')
+            # Plot coefficients.
+            plt.xlabel("Outlier detection threshold")
+            plt.ylabel(r"$K_{median}^{outl}$")
+            plt.ylim(0., 2 * K_median)
+            K_median_outl = np.array(K_median_outl)
+            K_median_outl = K_median_outl[~np.isnan(K_median_outl)]
+            plt.scatter(outliers_lims, K_median_outl)
+            plt.axhline(y=K_median, color='r')
+
+            f = join(out_path, 'ext_coeffs.png')
+        else:
+            fig.suptitle('No outlier rejection')
+            plt.xlabel("Unique stars")
+            plt.ylabel(r"$K_{median}$")
+            std = np.std(filt_slopes[filt])
+            plt.ylim(K_median - std, K_median + std)
+            plt.scatter(range(len(filt_slopes[filt])), filt_slopes[filt])
+            plt.axhline(y=K_median, color='r')
+
+            f = join(out_path, 'ext_coeffs_no_outlier.png')
+
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.95)
+    plt.savefig(f, dpi=150, bbox_inches='tight')
+
+
+def main():
+    """
+    Determine extinction coefficients from an existing aperture photometry
+    file.
+    """
+    pars, apert_fl, out_path = in_params()
+
+    # Read aperture photometry for each matched star.
+    phot_data = readPhot(apert_fl)
+
+    filters = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
+    for filt, fdata in phot_data.iteritems():
         if fdata:
             n_stars = sum([1. for _ in fdata if len(_) > 1.])
-            print("Filter {}, N_stars={:.0f}".format(filt, n_stars))
+            print("Filter {}, N unique stars={:.0f}".format(filt, n_stars))
+
+            if pars['outlier_reject'] == 'yes':
+                outl_vals = map(float, pars['outliers_lims'][0])
+                outliers_lims = np.arange(*outl_vals)
+            else:
+                outliers_lims = [np.inf]
+
+            filt_slopes = {'U': [], 'B': [], 'V': [], 'R': [], 'I': []}
             K_median_outl = []
-            outliers_lims = np.arange(1., 5., .5)
-            for m_outliers in outliers_lims:
-                plt.style.use('seaborn-darkgrid')
+            for i, m_outliers in enumerate(outliers_lims):
                 slopes = []
                 for st in fdata:
 
                     # If this star was detected more than once.
                     if len(st[1]) > 1:
+
+                        X, Y = st[0], st[1]
                         mask = reject_outliers(st[1], m=m_outliers)
-                        # If there's more than one star after outlier rejection
+                        # If there's more than one star after outlier
+                        # rejection
                         if sum(mask) > 1:
                             X, Y = st[0][mask], st[1][mask]
-                        else:
-                            X, Y = st[0], st[1]
 
                         m, c, r_value, p_value, m_err = linregress(X, Y)
                         slopes.append(m)
                         # print("  Star {}, K={:.3f}".format(st[2], m))
+                    else:
+                        if i == 0:
+                            print("  Single detection for star: {}".format(
+                                st[2]))
 
                     # # Plot
                     # plt.title("{}: K={:.3f}, m_err={:.3f}".format(
@@ -113,55 +171,23 @@ def main(apert_fl):
 
                 # Obtain median of extinction coefficients for this filter.
                 median_K = np.nanmedian(slopes)
-                print("  m_out: {:.1f} median K: {:.3f}".format(
+                print(" m_out: {:.1f} median K: {:.3f}".format(
                     m_outliers, median_K))
-                # # Plot coefficients.
-                # if not np.isnan(median_K):
-                #     plt.title("Filter {}, med={:.3f}".format(filt, median_K))
-                #     plt.ylim(0., 2 * median_K)
-                #     slopes = np.array(slopes)
-                #     slopes = slopes[~np.isnan(slopes)]
-                #     plt.scatter(range(len(slopes)), slopes)
-                #     plt.axhline(y=median_K, color='r')
-                #     plt.show()
+                filt_slopes[filt] = slopes
 
                 K_median_outl.append(median_K)
 
             # Obtain median of extinction coefficients for this filter.
             K_median = np.nanmedian(K_median_outl)
             print(" K_{}: {:.3f}".format(filt, K_median))
+            # Store data for plotting.
+            filters[filt] = [
+                n_stars, outliers_lims, K_median_outl, K_median, filt_slopes]
 
-            # Plot coefficients.
-            fig.add_subplot(gs[f_sbp[filt]])
-            i += 1
-            plt.title(r"$K_{}={:.3f}\;(N_{{stars}}={})$".format(
-                filt, K_median, int(n_stars)), y=.93)
-            plt.xlabel("Outlier detection threshold")
-            plt.ylabel("median(K_outl)")
-            plt.ylim(0., 2 * K_median)
-            K_median_outl = np.array(K_median_outl)
-            K_median_outl = K_median_outl[~np.isnan(K_median_outl)]
-            plt.scatter(outliers_lims, K_median_outl)
-            plt.axhline(y=K_median, color='r')
-            # plt.show()
-
-    fig.tight_layout()
-    plt.savefig('ext_coeffs.png', dpi=150, bbox_inches='tight')
+    # Remove not observed filters from dictionary.
+    filters = {k: v for k, v in filters.iteritems() if v}
+    makePlot(filters, out_path)
 
 
 if __name__ == '__main__':
-    """
-    To run this script we need *at least* two observations for each filter
-    with different airmass values.
-    """
-
-    # Name of the .apert file containing the matched stars and their aperture
-    # photometry.
-    apert_fl = 'k_coeffs.apert'
-    main(apert_fl)
-
-# https://arxiv.org/PS_cache/arxiv/pdf/0906/0906.3014v1.pdf
-# v3 = +0.16, b3 = +0.25, i3 = +0.08, u3 = +0.45
-
-# From an old 'noche.ans' file when BO14 was processed.
-# U .49, B .27, V .12, I .02
+    main()

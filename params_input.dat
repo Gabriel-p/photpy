@@ -90,6 +90,13 @@ annulus_out      25
 do_plots_D       y
 
 
+# 'ext_coeffs'
+#
+apert_file_ext   4nights.apert
+outlier_reject   yes
+outliers_lims    1., 5., .5
+
+
 # 'fit_standard'
 #
 # mode: linregress / RANSAC / theilsen
