@@ -1,8 +1,8 @@
 
 import read_pars_file as rpf
 from match_funcs import triangleMatch, getTriangles, findRotAngle,\
-    standard2observed, xyTrans
-from plot_events import zoom
+    standard2observed, xyTrans, reCenter, autoSrcDetect
+from plot_events import refDisplay, refStrSlct, drawCirclesIDs
 
 import landolt_fields
 import os
@@ -12,19 +12,10 @@ import sys
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from hlpr import bckg_data, st_fwhm_select
-
 from astropy.table import Table, hstack
 from astropy.io import ascii, fits
-from photutils.utils import cutout_footprint
-from photutils import detect_threshold, detect_sources
-from photutils import source_properties
-from astropy.convolution import Gaussian2DKernel
-
 from astropy.visualization import ZScaleInterval
-from photutils import CircularAperture
 import matplotlib.pyplot as plt
-import time
 import matplotlib.gridspec as gridspec
 
 
@@ -92,117 +83,29 @@ def in_params():
     return pars, fits_list, out_path
 
 
-def reCenter(hdu_data, positions, side=30):
+def srcSelect(
+    f_name, hdu_data, ref_field_img, id_ref, xy_ref, id_selec, xy_selec):
     """
-    Find better center coordinates for selected stars.
+    Manually mark sources on 'fr' fits file.
     """
-    xy_cent = []
-    for x0, y0 in positions:
-        # Check that position falls inside of the observed frame.
-        if 0. < x0 < hdu_data.shape[1] and 0. < y0 < hdu_data.shape[0]:
-            crop = cutout_footprint(hdu_data, (x0, y0), side)[0]
-
-            threshold = detect_threshold(crop, snr=10)
-            sigma = 3.0 / (2.0 * np.sqrt(2.0 * np.log(2.0)))   # FWHM = 3
-            kernel = Gaussian2DKernel(sigma)
-            kernel.normalize()
-            segm = detect_sources(crop, threshold, npixels=5,
-                                  filter_kernel=kernel)
-            try:
-                tbl = source_properties(crop, segm).to_table()
-                # Index of the brightest detected source
-                idx_b = tbl['source_sum'].argmax()
-                # Index of the closest source.
-                sh, d_old, idx_c = side / 2., 1.e6, 0
-                for i, xy1 in enumerate(tbl['xcentroid', 'ycentroid']):
-                    x, y = xy1[0].value, xy1[1].value
-                    d = np.sqrt((sh - x) ** 2 + (sh - y) ** 2)
-                    tbl['source_sum']
-                    if d < d_old:
-                        idx_c = i
-                        d_old = 1. * d
-                # Choose the brightest star except when its distance to the
-                # center of the region is N or more that of the closest star.
-                N = 4.
-                if np.sqrt(
-                        (sh - tbl['xcentroid'][idx_b].value) ** 2 +
-                        (sh - tbl['ycentroid'][idx_b].value) ** 2) > N * d_old:
-                    idx = idx_c
-                else:
-                    idx = idx_b
-                xy1 = tbl['xcentroid'][idx].value, tbl['ycentroid'][idx].value
-                x, y = (x0 + xy1[0] - side * .5, y0 + xy1[1] - side * .5)
-            except ValueError:
-                # "SourceCatalog contains no sources" may happen when no
-                # stars are found within the cropped region.
-                x, y = x0, y0
-        else:
-            x, y = x0, y0
-
-        xy_cent.append((x, y))
-
-    return np.asarray(xy_cent)
-
-
-def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
-    """
-    Mark sources on 'fr' fits file. This uses parameter values from other
-    tasks:
-
-    General: gain_key, rdnoise_key, dmax
-    fitstats: sky_method, fwhm_init, thresh_fit
-
-    """
-    # Load .fits file.
-    hdulist = fits.open(fr)
-    hdu_data = hdulist[0].data
-
-    answ, idx_choice = 'n', 0
-    if id_selec and pars['match_mode'] != 'xyshift':
+    answ = 'n'
+    if id_selec:
 
         for i, xy in enumerate(xy_selec):
             # Re-center coordinates.
             xy = reCenter(hdu_data, xy, side=40).tolist()
-
-            # Manual selection of reference stars in the observed frame.
-            landolt_field_img = join(
-                pars['mypath'], 'landolt',
-                pars['landolt_fld'][proc_grps] + '.gif')
-            # Manual selection of reference stars in the observed frame.
-            fig, (ax1, ax2) = plt.subplots(1, 2)
-            ax1.imshow(plt.imread(landolt_field_img))
-            # fig, ax = plt.subplots()
-            interval = ZScaleInterval()
-            zmin, zmax = interval.get_limits(hdu_data)
-            ax2.imshow(
-                hdu_data, cmap='Greys', aspect=1, interpolation='nearest',
-                origin='lower', vmin=zmin, vmax=zmax)
-            apertures = CircularAperture(xy, r=10.)
-            apertures.plot(color='red', lw=1.)
-            plt.title("Coordinates ({}) over {}".format(
-                i, fr.split('/')[-1].split('.')[0]))
-            xmax, ymax = hdu_data.shape[1], hdu_data.shape[0]
-            for j, txt in enumerate(id_selec[i]):
-                xtxt, ytxt = xy[j][0] + .01 * xmax,\
-                    xy[j][1] + .01 * ymax
-                ax2.annotate(
-                    txt, xy=(xy[j][0], xy[j][1]),
-                    xytext=(xtxt, ytxt),
-                    fontsize=15, color='r', arrowprops=dict(
-                        arrowstyle="-", color='b',
-                        connectionstyle="angle3,angleA=90,angleB=0"))
-            fig.canvas.mpl_connect(
-                'scroll_event', lambda event: zoom(event, [ax1, ax2]))
-            plt.show()
-            plt.close('all')
+            # Display frames.
+            refDisplay(
+                ref_field_img, f_name, hdu_data, id_ref, xy_ref, id_selec[i],
+                xy)
 
             while True:
                 answ = raw_input(
                     "Use coordinates ({})? (y/n): ".format(i)).strip()
                 if answ == 'y':
-                    idx_choice = i
-                    # Re-write wit re-centered coordinates.
-                    xy_selec[idx_choice] = xy
+                    idx_c = i
+                    # Re-write with re-centered coordinates.
+                    xy_selec[idx_c] = xy
                     break
                 elif answ == 'n':
                     break
@@ -211,119 +114,31 @@ def coo_ref_frame(fr, id_selec, xy_selec, pars, proc_grps):
 
     # Select new coordinates
     if answ != 'y':
+        while True:
+            # Manually pick three reference stars.
+            id_pick, xy_pick = refStrSlct(
+                ref_field_img, f_name, hdu_data, id_ref, xy_ref)
+            if len(id_pick) < 1:
+                print("ERROR: at least one star must be selected.")
+            elif '' in id_pick:
+                print("ERROR: all stars must be identified. Try again.")
+            else:
+                break
 
-        if pars['match_mode'] in ['auto', 'xyshift']:
+        # Re-center coordinates.
+        xy_cent = reCenter(hdu_data, xy_pick, side=20).tolist()
 
-            # Background estimation.
-            hdr = hdulist[0].header
-            sky_mean, sky_median, sky_std = bckg_data(
-                hdr, hdu_data, pars['gain_key'], pars['rdnoise_key'],
-                pars['sky_method'])
+        # Select latest coordinates.
+        idx_c = -1
+        id_selec.append(id_pick)
+        xy_selec.append(xy_cent)
 
-            # Stars selection.
-            psf_select = st_fwhm_select(
-                float(pars['dmax']), 1000000, float(pars['thresh_fit']),
-                float(pars['fwhm_init']), sky_std, hdu_data)[0]
+        print(id_pick)
+        print(xy_cent)
 
-            # Filter by min/max x,y limits.
-            xmi, xma = pars['min_x-max_x'][0]
-            ymi, yma = pars['min_y-max_y'][0]
-            xmi = float(xmi) if xmi != 'min' else min(psf_select['xcentroid'])
-            xma = float(xma) if xma != 'max' else max(psf_select['xcentroid'])
-            ymi = float(ymi) if ymi != 'min' else min(psf_select['ycentroid'])
-            yma = float(yma) if yma != 'max' else max(psf_select['ycentroid'])
-            print(" Selection (x,y) limits: "
-                  "({:.0f}, {:.0f}) ; ({:.0f}, {:.0f})".format(
-                      xmi, xma, ymi, yma))
-            stars_filter = []
-            for st in psf_select:
-                if xmi <= st['xcentroid'] <= xma and\
-                        ymi <= st['ycentroid'] <= yma:
-                    stars_filter.append(
-                        [st['xcentroid'], st['ycentroid'], st['flux']])
-            # Filter by max number of stars.
-            stars_filter = stars_filter[:int(pars['max_stars_match'])]
+    print(" Stars selected for match: {}".format(len(xy_selec[idx_c])))
 
-            zip_stars_filter = np.array(zip(*stars_filter))
-            xy_cent = list(zip(*zip_stars_filter[:2]))
-            id_pick = [str(_) for _ in range(int(pars['max_stars_match']))]
-
-            # Select latest coordinates.
-            idx_choice = -1
-            id_selec.append(id_pick)
-            xy_selec.append(xy_cent)
-
-        else:
-            id_pick, xy_pick = [], []
-            # Ref stars selection
-            landolt_field_img = join(
-                pars['mypath'], 'landolt',
-                pars['landolt_fld'][proc_grps] + '.gif')
-            # Manual selection of reference stars in the observed frame.
-            fig, (ax1, ax2) = plt.subplots(1, 2)
-            ax1.imshow(plt.imread(landolt_field_img))
-            interval = ZScaleInterval()
-            zmin, zmax = interval.get_limits(hdu_data)
-            ax2.imshow(
-                hdu_data, cmap='Greys', aspect=1, interpolation='nearest',
-                origin='lower', vmin=zmin, vmax=zmax)
-
-            def onclick(event, ax):
-                ax.time_onclick = time.time()
-
-            def onrelease(event, ax):
-                # Only clicks inside this axis.
-                if event.inaxes == ax:
-                    if event.button == 1 and\
-                            ((time.time() - ax.time_onclick) < .1):
-                        apertures = CircularAperture(
-                            (event.xdata, event.ydata), r=10.)
-                        apertures.plot(color='green', lw=1.)
-                        ax.figure.canvas.draw()
-                        ref_id = raw_input(" ID of selected star: ").strip()
-                        print(" {} added to list: ({:.2f}, {:.2f})".format(
-                            ref_id, event.xdata, event.ydata))
-                        id_pick.append(ref_id)
-                        xy_pick.append((event.xdata, event.ydata))
-                        if len(id_pick) == 3:
-                            # Exit when 3 stars have been identified
-                            plt.close()
-                    elif event.button == 2:
-                        print("scroll click")
-                    elif event.button == 3:
-                        print("right click")
-                    else:
-                        pass
-
-            # Mouse click / scroll zoom events.
-            fig.canvas.mpl_connect(
-                'scroll_event', lambda event: zoom(event, [ax1, ax2]))
-            # fig.canvas.mpl_connect(
-            #     'button_press_event', lambda event: onclick(event, ax2))
-            fig.canvas.mpl_connect(
-                'button_press_event', lambda event: onclick(event, ax2))
-            fig.canvas.mpl_connect(
-                'button_release_event', lambda event: onrelease(event, ax2))
-
-            print(" (Select three reference stars covering\n"
-                  "  as much frame as possible)")
-            plt.show()
-            plt.close('all')
-
-            # Re-center coordinates.
-            xy_cent = reCenter(hdu_data, xy_pick, side=20).tolist()
-
-            # Select latest coordinates.
-            idx_choice = -1
-            id_selec.append(id_pick)
-            xy_selec.append(xy_cent)
-
-            print(id_pick)
-            print(xy_cent)
-
-    print(" Stars selected for match: {}".format(len(xy_selec[idx_choice])))
-
-    return hdu_data, id_selec, xy_selec, idx_choice
+    return id_selec, xy_selec, idx_c
 
 
 def outFileHeader(out_data_file, ref_id):
@@ -346,11 +161,12 @@ def outFileHeader(out_data_file, ref_id):
 
 
 def make_out_file(
-    mode, f_name, id_all, xy_all, img_id, ref_data, xy_shift, out_data_file):
+    mode, f_name, ref_id, ref_data, id_all, xy_all, img_id, scale, rot_angle,
+    xy_shift, out_data_file):
     """
     Write coordinates of reference stars in the observed frame system.
     """
-    if mode == 'manual':
+    if mode == 'manual' and ref_id != '--':
         landolt_in = Table(dtype=ref_data.dtype)
         for r_id in id_all:
             i = ref_data['ID'].tolist().index(r_id)
@@ -369,6 +185,18 @@ def make_out_file(
                 tt, f, format='fixed_width_no_header', delimiter='',
                 formats={'x_obs': '%9.3f', 'y_obs': '%9.3f', 'ref': '%8s',
                          'ID': '%8s', 'x': '%9.3f', 'y': '%9.3f'})
+
+    elif mode == 'manual' and ref_id == '--':
+        # TODO transform scale and rotation to C, D E F values.
+        with open(out_data_file, mode='a') as f:
+            tt = Table(zip([f_name, xy_shift[0], xy_shift[1], 1., 0., 0., 1.]),
+                       names=('frame', 'A', 'B', 'C', 'D', 'E', 'F'))
+            f.seek(0, os.SEEK_END)
+            ascii.write(
+                tt, f, format='fixed_width_no_header', delimiter='',
+                formats={
+                    'A': '%8.2f', 'B': '%8.2f', 'C': '%8.2f',
+                    'D': '%8.2f', 'E': '%8.2f', 'F': '%8.2f'})
 
     elif mode == 'xyshift':
         with open(out_data_file, mode='a') as f:
@@ -433,7 +261,7 @@ def posFinder(xy_inframe, max_x, min_x, max_y, min_y):
 
 def make_plot(
     f_name, hdu_data, out_plot_file, std_tr_match, obs_tr_match,
-    xy_all, id_all, landolt_field_img):
+    id_ref, xy_ref, xy_all, id_all, ref_field_img):
     """
     Make plots.
     """
@@ -447,16 +275,28 @@ def make_plot(
     print("Plotting.")
     fig = plt.figure(figsize=(20, 20))
     gs = gridspec.GridSpec(10, 10)
+    interval = ZScaleInterval()
 
     ax1 = plt.subplot(gs[0:4, 0:4])
     ax1.set_title("Standard/Reference frame")
-    land_img = ax1.imshow(plt.imread(landolt_field_img))
-    # Extract maximum y axis value
-    max_y = float(len(land_img.get_array()))
-    x, y = zip(*std_tr_match)
-    y_inv = max_y - np.array(y)
-    ax1.scatter(x, y_inv, marker='s', edgecolor='r', facecolor='', lw=1.,
-                s=60)
+
+    if ref_field_img.endswith('.fits'):
+        # Load .fits file.
+        hdulist = fits.open(ref_field_img)
+        hdu_data_ref = hdulist[0].data
+        zmin, zmax = interval.get_limits(hdu_data_ref)
+        ax1.imshow(
+            hdu_data_ref, cmap='Greys', aspect=1, interpolation='nearest',
+            origin='lower', vmin=zmin, vmax=zmax)
+        drawCirclesIDs(ax1, hdu_data_ref, id_ref, xy_ref)
+    else:
+        land_img = ax1.imshow(plt.imread(ref_field_img))
+        # Extract maximum y axis value
+        max_y = float(len(land_img.get_array()))
+        x, y = zip(*std_tr_match)
+        y_inv = max_y - np.array(y)
+        ax1.scatter(x, y_inv, marker='s', edgecolor='r', facecolor='', lw=1.,
+                    s=60)
 
     ax2 = plt.subplot(gs[0:4, 4:8])
     ax2.set_aspect('auto')
@@ -470,7 +310,6 @@ def make_plot(
     ax2.set_ylim(ymin_e, ymax_e)
     ax2.set_title("Observed frame ({})".format(f_name))
     ax2.grid(lw=1., ls='--', color='grey', zorder=1)
-    interval = ZScaleInterval()
     zmin, zmax = interval.get_limits(hdu_data)
     ax2.imshow(hdu_data, cmap='Greys', aspect=1, interpolation='nearest',
                origin='lower', vmin=zmin, vmax=zmax)
@@ -504,38 +343,37 @@ def main():
 
     # Process each defined group.
     for proc_grps, ref_frame in enumerate(pars['ref_frame']):
+        # Identify if this is a Landolt or an observed frame.
+        ref_id = pars['landolt_fld'][proc_grps]
 
         id_selec, xy_selec = [], []
 
-        if pars['landolt_fld'][proc_grps] != '--':
+        if ref_id != '--':
             # Selected standard field.
-            ref_data = landolt_fields.main(pars['landolt_fld'][proc_grps])
+            ref_data = landolt_fields.main(ref_id)
             # Sort putting brightest stars at the top.
             ref_data.sort('V')
             # Extract (x,y) coords and IDs.
             xy_ref = zip(*[ref_data['x'], ref_data['y']])
-            id_ref = ref_data['ID']
+            id_ref = ref_data['ID'].tolist()
 
             # Path to Landolt image.
-            ref_field_img = join(
-                pars['mypath'], 'landolt',
-                pars['landolt_fld'][proc_grps] + '.gif')
+            ref_field_img = join(pars['mypath'], 'landolt', ref_id + '.gif')
             # ID for final image
-            img_id = pars['landolt_fld'][proc_grps]
+            img_id = ref_id
 
             print("\nLandolt field: {} ({} stars)".format(
                 pars['landolt_fld'][proc_grps], len(id_ref)))
             print("IDs as: {}, {}, {}...".format(*id_ref[:3]))
 
         else:
-            # TODO finish
             print("\nReference frame: {}".format(ref_frame.split('/')[-1]))
-            _, id_selec, xy_selec, idx_choice = coo_ref_frame(
-                ref_frame, id_selec, xy_selec, pars, proc_grps)
-            id_ref, xy_ref = id_selec[idx_choice], xy_selec[idx_choice]
+            hdulist = fits.open(ref_frame)
+            id_ref, xy_ref, xy_mags_ref = autoSrcDetect(pars, hdulist)
+
+            ref_field_img = ref_frame
             # ID for final image/file.
             img_id = ref_frame.split('/')[-1].split('.')[0]
-            ref_field_img = ref_frame
             # Dummy lists
             ref_data = []
 
@@ -546,7 +384,7 @@ def main():
 
         # Write output file header
         out_data_file = join(out_folder, img_id + ".mch")
-        outFileHeader(out_data_file, pars['landolt_fld'][proc_grps])
+        outFileHeader(out_data_file, ref_id)
 
         # Process each fits file in list.
         for fr in fits_list[proc_grps]:
@@ -557,26 +395,13 @@ def main():
             # Skip reference frame.
             if f_name != img_id:
 
+                # Load .fits file.
+                hdulist = fits.open(fr)
+                hdu_data = hdulist[0].data
+
                 print("\nMatching frame: {}".format(f_name))
 
-                # Coordinates from observed frame.
-                hdu_data, id_selec, xy_selec, idx_choice = coo_ref_frame(
-                    fr, id_selec, xy_selec, pars, proc_grps)
-
-                # Selected coordinates.
-                idx_choice, xy_choice = id_selec[idx_choice],\
-                    xy_selec[idx_choice]
-
-                if pars['match_mode'] == 'xyshift':
-                    xmi, xma = map(float, pars['xtr_min-xtr_max'][0])
-                    ymi, yma = map(float, pars['ytr_min-ytr_max'][0])
-                    max_shift = [[xmi, xma], [ymi, yma]]
-                    mtoler = float(pars['match_toler'])
-                    xy_shift = xyTrans(max_shift, xy_ref, xy_choice, mtoler)
-
-                    scale, rot_angle = np.nan, np.nan
-
-                elif pars['match_mode'] == 'auto':
+                if pars['match_mode'] == 'auto':
                     # Scale and rotation ranges, and match tolerance.
                     scale_range = (
                         float(pars['scale_min']), float(pars['scale_max']))
@@ -587,31 +412,56 @@ def main():
                         map(float, pars['ytr_min-ytr_max'][0]))
                     mtoler = float(pars['match_toler'])
 
+                    _, xy_choice, mags_dtct = autoSrcDetect(
+                        pars, hdulist)
+
                     print("\nFinding scale, translation, and rotation.")
                     std_tr_match, obs_tr_match, scale, rot_angle, xy_shift,\
                         xy_transf = triangleMatch(
                             xy_ref, xy_choice, mtoler, scale_range,
                             rot_range, trans_range, hdu_data)
 
+                elif pars['match_mode'] == 'xyshift':
+
+                    id_dtct, xy_choice, mags_dtct = autoSrcDetect(
+                        pars, hdulist)
+
+                    xmi, xma = map(float, pars['xtr_min-xtr_max'][0])
+                    ymi, yma = map(float, pars['ytr_min-ytr_max'][0])
+                    max_shift = [[xmi, xma], [ymi, yma]]
+                    mtoler = float(pars['match_toler'])
+                    xy_shift = xyTrans(max_shift, xy_ref, xy_choice, mtoler)
+
+                    scale, rot_angle = np.nan, np.nan
+
                 elif pars['match_mode'] == 'manual':
+
+                    # Coordinates from observed frame.
+                    id_selec, xy_selec, idx_c =\
+                        srcSelect(
+                            f_name, hdu_data, ref_field_img, id_ref, xy_ref,
+                            id_selec, xy_selec)
+
+                    # Selected IDs and coordinates.
+                    id_choice, xy_choice = id_selec[idx_c], xy_selec[idx_c]
 
                     # Match selected reference stars to standard stars by
                     # the IDs given by the user.
                     xy_ref_sel = []
-                    for r_id in idx_choice:
-                        i = id_ref.tolist().index(r_id)
+                    for r_id in id_choice:
+                        i = id_ref.index(r_id)
                         xy_ref_sel.append(xy_ref[i])
 
                     # Matched stars in ref and obs
                     std_tr_match, obs_tr_match = xy_ref_sel, xy_choice
 
-                    if len(idx_choice) < 3:
-                        print("  WARNING: Less than 3 stars selected,\n"
-                              "  no match can be performed.")
+                    if len(id_choice) < 3:
+                        print("  WARNING: Less than 3 stars selected,"
+                              " no match can be performed.")
                         xy_transf = []
                         for st_id in id_ref:
-                            if st_id in idx_choice:
-                                i = idx_choice.index(st_id)
+                            if st_id in id_choice:
+                                i = id_choice.index(st_id)
                                 xy_transf.append(
                                     [xy_choice[i][0], xy_choice[i][1]])
                             else:
@@ -666,7 +516,7 @@ def main():
                     if pars['do_plots_C'] == 'y':
                         make_plot(
                             f_name, hdu_data, out_img, std_tr_match,
-                            obs_tr_match, xy_all, id_all,
+                            obs_tr_match, id_ref, xy_ref, xy_all, id_all,
                             ref_field_img)
 
             else:
@@ -676,8 +526,8 @@ def main():
 
             # Write final match file
             make_out_file(
-                pars['match_mode'], f_name, id_all, xy_all, img_id,
-                ref_data, xy_shift, out_data_file)
+                pars['match_mode'], f_name, ref_id, ref_data, id_all, xy_all,
+                img_id, scale, rot_angle, xy_shift, out_data_file)
 
     print("\nFinished.")
 

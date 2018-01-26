@@ -1,11 +1,18 @@
 
+from hlpr import bckg_data, st_fwhm_select
+from aperphot_standards import calibrate_magnitudes
+
 import numpy as np
 import itertools
 import math
 import functools
 from scipy.spatial.distance import pdist, cdist
 from scipy.spatial import cKDTree
-from scipy.stats import sigmaclip
+
+from photutils.utils import cutout_footprint
+from photutils import detect_threshold, detect_sources
+from photutils import source_properties
+from astropy.convolution import Gaussian2DKernel
 
 
 def getTriangles(set_X, X_combs):
@@ -379,3 +386,101 @@ def xyTrans(max_shift, xy_ref, xy_selec, mtoler):
     # print("Reg shifted by: {:.2f}, {:.2f}".format(*xy_shift))
 
     return xy_shift
+
+
+def reCenter(hdu_data, positions, side=30):
+    """
+    Find better center coordinates for selected stars.
+    """
+    xy_cent = []
+    for x0, y0 in positions:
+        # Check that position falls inside of the observed frame.
+        if 0. < x0 < hdu_data.shape[1] and 0. < y0 < hdu_data.shape[0]:
+            crop = cutout_footprint(hdu_data, (x0, y0), side)[0]
+
+            threshold = detect_threshold(crop, snr=10)
+            sigma = 3.0 / (2.0 * np.sqrt(2.0 * np.log(2.0)))   # FWHM = 3
+            kernel = Gaussian2DKernel(sigma)
+            kernel.normalize()
+            segm = detect_sources(crop, threshold, npixels=5,
+                                  filter_kernel=kernel)
+            try:
+                tbl = source_properties(crop, segm).to_table()
+                # Index of the brightest detected source
+                idx_b = tbl['source_sum'].argmax()
+                # Index of the closest source.
+                sh, d_old, idx_c = side / 2., 1.e6, 0
+                for i, xy1 in enumerate(tbl['xcentroid', 'ycentroid']):
+                    x, y = xy1[0].value, xy1[1].value
+                    d = np.sqrt((sh - x) ** 2 + (sh - y) ** 2)
+                    tbl['source_sum']
+                    if d < d_old:
+                        idx_c = i
+                        d_old = 1. * d
+                # Choose the brightest star except when its distance to the
+                # center of the region is N or more that of the closest star.
+                N = 4.
+                if np.sqrt(
+                        (sh - tbl['xcentroid'][idx_b].value) ** 2 +
+                        (sh - tbl['ycentroid'][idx_b].value) ** 2) > N * d_old:
+                    idx = idx_c
+                else:
+                    idx = idx_b
+                xy1 = tbl['xcentroid'][idx].value, tbl['ycentroid'][idx].value
+                x, y = (x0 + xy1[0] - side * .5, y0 + xy1[1] - side * .5)
+            except ValueError:
+                # "SourceCatalog contains no sources" may happen when no
+                # stars are found within the cropped region.
+                x, y = x0, y0
+        else:
+            x, y = x0, y0
+
+        xy_cent.append((x, y))
+
+    return np.asarray(xy_cent)
+
+
+def autoSrcDetect(pars, hdulist):
+    """
+    """
+    # Background estimation.
+    hdu_data = hdulist[0].data
+    hdr = hdulist[0].header
+    sky_mean, sky_median, sky_std = bckg_data(
+        hdr, hdu_data, pars['gain_key'], pars['rdnoise_key'],
+        pars['sky_method'])
+
+    # Stars selection.
+    psf_select = st_fwhm_select(
+        float(pars['dmax']), 1000000, float(pars['thresh_fit']),
+        float(pars['fwhm_init']), sky_std, hdu_data)[0]
+
+    psf_select.rename_column('flux', 'flux_fit')
+    psf_select = calibrate_magnitudes(psf_select, hdr[pars['exposure_key']])
+
+    # Filter by min/max x,y limits.
+    xmi, xma = pars['min_x-max_x'][0]
+    ymi, yma = pars['min_y-max_y'][0]
+    xmi = float(xmi) if xmi != 'min' else min(psf_select['xcentroid'])
+    xma = float(xma) if xma != 'max' else max(psf_select['xcentroid'])
+    ymi = float(ymi) if ymi != 'min' else min(psf_select['ycentroid'])
+    yma = float(yma) if yma != 'max' else max(psf_select['ycentroid'])
+
+    print(" Selection (x,y) limits: "
+          "({:.0f}, {:.0f}) ; ({:.0f}, {:.0f})".format(
+              xmi, xma, ymi, yma))
+    stars_filter = []
+    for st in psf_select:
+        if xmi <= st['xcentroid'] <= xma and\
+                ymi <= st['ycentroid'] <= yma:
+            stars_filter.append(
+                [st['xcentroid'], st['ycentroid'], st['cal_mags']])
+    # Filter by max number of stars.
+    stars_filter = stars_filter[:int(pars['max_stars_match'])]
+
+    id_pick = [str(_) for _ in range(int(pars['max_stars_match']))]
+    zip_stars_filter = np.array(zip(*stars_filter))
+    xy_cent = list(zip(*zip_stars_filter[:2]))
+    xy_mags = list(zip_stars_filter[2])
+
+    return id_pick, xy_cent, xy_mags

@@ -55,9 +55,10 @@ do_plots_B       y
 #
 # match_mode: auto / manual / xyshift
 #
+#ref_fld_fldr     SA96, standards/sa96/
 ref_fld_fldr     stk3103.fits, field/filt_V
 match_mode       manual
-max_stars_match  10
+max_stars_match  100
 min_x-max_x      min, max
 min_y-max_y      min, max
 match_toler      1.
@@ -103,8 +104,8 @@ outliers_lims    1., 5., .5
 #
 apert_file_in    4nights.apert
 fit_file_out     4nights.fit
-extin_coeffs     U .269, B .135, V .096, I .041
-fit_mode         linregress
+extin_coeffs     U .326, B .170, V .108, I .052
+fit_mode         theilsen
 R^2_min          0.9
 RMSE_max         0.05
 do_plots_E       y
