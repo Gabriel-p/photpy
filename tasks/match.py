@@ -358,7 +358,7 @@ def main():
         else:
             print("\nReference frame: {}".format(ref_frame.split('/')[-1]))
             hdulist = fits.open(ref_frame)
-            id_ref, xy_ref, xy_mags_ref = autoSrcDetect(pars, hdulist)
+            id_ref, xy_ref, mags_ref = autoSrcDetect(pars, hdulist)
 
             ref_field_img = ref_frame
             # ID for final image/file.
@@ -401,8 +401,7 @@ def main():
                         map(float, pars['ytr_min-ytr_max'][0]))
                     mtoler = float(pars['match_toler'])
 
-                    _, xy_choice, mags_dtct = autoSrcDetect(
-                        pars, hdulist)
+                    _, xy_choice, _ = autoSrcDetect(pars, hdulist)
 
                     print("\nFinding scale, translation, and rotation.")
                     std_tr_match, obs_tr_match, scale, rot_angle, xy_shift,\
@@ -412,14 +411,16 @@ def main():
 
                 elif pars['match_mode'] == 'xyshift':
 
-                    id_dtct, xy_choice, mags_dtct = autoSrcDetect(
+                    id_dtct, xy_dtct, mags_dtct = autoSrcDetect(
                         pars, hdulist)
 
                     xmi, xma = map(float, pars['xtr_min-xtr_max'][0])
                     ymi, yma = map(float, pars['ytr_min-ytr_max'][0])
                     max_shift = [[xmi, xma], [ymi, yma]]
                     mtoler = float(pars['match_toler'])
-                    xy_shift = xyTrans(max_shift, xy_ref, xy_choice, mtoler)
+                    xy_shift = xyTrans(
+                        max_shift, xy_ref, mags_ref, xy_dtct, mags_dtct,
+                        mtoler)
 
                     scale, rot_angle = np.nan, np.nan
 

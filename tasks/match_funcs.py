@@ -326,9 +326,9 @@ def triangleMatch(A_pts, B_pts, mtoler, scale_range, rot_range, trans_range, hdu
     return A_tr_match, B_tr_match, scale, rot_angle, xy_shift, xy_transf
 
 
-def xyTrans(max_shift, xy_ref, xy_selec, mtoler):
+def xyTrans(max_shift, xy_ref, mags_ref, xy_dtct, mags_dtct, mtoler):
     """
-    Average minimal (Euclidean) distance from points in 'xy_selec' to points in
+    Average minimal (Euclidean) distance from points in 'xy_dtct' to points in
     'xy_ref', until the stopping condition.
     """
     xmin, xmax = max_shift[0]
@@ -345,13 +345,24 @@ def xyTrans(max_shift, xy_ref, xy_selec, mtoler):
             for sy in np.linspace(ymin, ymax, li):
                 # Apply possible x,y translation
                 xy_shifted = np.array([
-                    np.array(xy_selec)[:, 0] + sx + x0,
-                    np.array(xy_selec)[:, 1] + sy + y0]).T
-                # Median minimal distance for each star in xy_selec
-                # (shifted) to the closest star in xy_ref.
-                d = np.median(cKDTree(xy_ref).query(xy_shifted, 1)[0])
+                    np.array(xy_dtct)[:, 0] + sx + x0,
+                    np.array(xy_dtct)[:, 1] + sy + y0]).T
+
+                # Minimum distance for each star in xy_dtct (shifted) to the
+                # closest star in xy_ref. The indexes are in the sense:
+                # xy_ref[min_dist_idx[IDX]] ~ xy_shifted[IDX] (closest star)
+                min_dists, min_dist_idx = cKDTree(xy_ref).query(xy_shifted, 1)
+
+                # Median distance in pixels.
+                d = np.median(min_dists)
+
+                mag_dist = []
+                for i, m_d in enumerate(mags_dtct):
+                    mag_dist.append(abs(m_d - mags_ref[min_dist_idx[i]]))
+                d_mag = np.median(mag_dist)
+
                 # Store x,y shift values, and the average minimal distance.
-                dists.append([sx + x0, sy + y0, d])
+                dists.append([sx + x0, sy + y0, d + d_mag])
 
         # Index of the x,y shifts that resulted in the median minimal
         # distance.

@@ -57,8 +57,8 @@ do_plots_B       y
 #
 #ref_fld_fldr     PG0231, standards/pg0231/
 ref_fld_fldr     stk3103.fits, field/filt_V
-match_mode       auto
-max_stars_match  30
+match_mode       xyshift
+max_stars_match  1000000
 min_x-max_x      min, max
 min_y-max_y      min, max
 match_toler      1.
@@ -66,8 +66,8 @@ scale_min        1.
 scale_max        10.
 rot_min          0.
 rot_max          3.
-xtr_min-xtr_max  -1000., 1000.
-ytr_min-ytr_max  -1000., 1000.
+xtr_min-xtr_max  -100., 0.
+ytr_min-ytr_max  -100., 0.
 do_plots_C       y
 
 
