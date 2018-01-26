@@ -55,17 +55,17 @@ do_plots_B       y
 #
 # match_mode: auto / manual / xyshift
 #
-#ref_fld_fldr     SA96, standards/sa96/
+#ref_fld_fldr     PG0231, standards/pg0231/
 ref_fld_fldr     stk3103.fits, field/filt_V
-match_mode       manual
-max_stars_match  100
+match_mode       auto
+max_stars_match  30
 min_x-max_x      min, max
 min_y-max_y      min, max
 match_toler      1.
-scale_min        0.
+scale_min        1.
 scale_max        10.
 rot_min          0.
-rot_max          5.
+rot_max          3.
 xtr_min-xtr_max  -1000., 1000.
 ytr_min-ytr_max  -1000., 1000.
 do_plots_C       y

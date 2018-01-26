@@ -208,9 +208,7 @@ def scaleTransRot(
     tr_sum = tr_sum[tr_sum[:, 0].argsort()]
 
     mdist_old = 1.e6
-    A_tr_match_f, B_tr_match_f, scale_f, rot_angle_f, xy_transf_f =\
-        [], [], 0., 0., []
-    match_flag = False
+    match_flag = None
     for i, tr_sij in enumerate(tr_sum):
         # Index of the triangles in A and B.
         A_idx, B_idx = int(tr_sij[1]), int(tr_sij[2])
@@ -257,6 +255,7 @@ def scaleTransRot(
                     A_tr_match_f, B_tr_match_f, scale_f, rot_angle_f,\
                         xy_transf_f = A_tr_match, B_tr_match, scale,\
                         rot_angle, xy_transf
+                    match_flag = False
 
                 # Accept mtoler error for each matched star.
                 if mdist < mtoler * len(xy_transf):
@@ -286,9 +285,14 @@ def scaleTransRot(
                     match_flag = True
                     break
 
-    if match_flag is False:
-        # TODO pass values when no match passed the filters above.
-        print("  WARNING: no match found within minimum mean match distance.")
+    if match_flag is None:
+        print("  WARNING: no match found within range limits.")
+        A_tr_match_f, B_tr_match_f, scale_f, rot_angle_f, tr_x, tr_y,\
+            xy_transf_f = [], [], np.nan, np.nan, np.nan, np.nan, []
+    elif match_flag is False:
+        print("  WARNING: match found is outside 'match_toler' value.")
+    elif match_flag is True:
+        pass
 
     return A_tr_match_f, B_tr_match_f, scale_f, rot_angle_f, [tr_x, tr_y],\
         xy_transf_f

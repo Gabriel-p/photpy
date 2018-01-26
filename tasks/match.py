@@ -160,54 +160,43 @@ def outFileHeader(out_data_file, ref_id):
                     "E         F\n")
 
 
-def make_out_file(
-    mode, f_name, ref_id, ref_data, id_all, xy_all, img_id, scale, rot_angle,
-    xy_shift, out_data_file):
+def outFileStandard(f_name, ref_data, id_all, xy_all, img_id, out_data_file):
     """
     Write coordinates of reference stars in the observed frame system.
     """
-    if mode == 'manual' and ref_id != '--':
-        landolt_in = Table(dtype=ref_data.dtype)
-        for r_id in id_all:
-            i = ref_data['ID'].tolist().index(r_id)
-            landolt_in.add_row(ref_data[i])
+    landolt_in = Table(dtype=ref_data.dtype)
+    for r_id in id_all:
+        i = ref_data['ID'].tolist().index(r_id)
+        landolt_in.add_row(ref_data[i])
 
-        landolt_f = Table({'ref': [img_id for _ in landolt_in['ID']]})
-        ref_transf = [[f_name, xy[0], xy[1]] for xy in xy_all]
-        obs_tbl = Table(zip(*ref_transf), names=('frame', 'x_obs', 'y_obs'))
-        tt = hstack([obs_tbl, landolt_f, landolt_in])
+    landolt_f = Table({'ref': [img_id for _ in landolt_in['ID']]})
+    ref_transf = [[f_name, xy[0], xy[1]] for xy in xy_all]
+    obs_tbl = Table(zip(*ref_transf), names=('frame', 'x_obs', 'y_obs'))
+    tt = hstack([obs_tbl, landolt_f, landolt_in])
 
-        with open(out_data_file, mode='a') as f:
-            # Some platforms don't automatically seek to end when files opened
-            # in append mode
-            f.seek(0, os.SEEK_END)
-            ascii.write(
-                tt, f, format='fixed_width_no_header', delimiter='',
-                formats={'x_obs': '%9.3f', 'y_obs': '%9.3f', 'ref': '%8s',
-                         'ID': '%8s', 'x': '%9.3f', 'y': '%9.3f'})
+    with open(out_data_file, mode='a') as f:
+        # Some platforms don't automatically seek to end when files opened
+        # in append mode
+        f.seek(0, os.SEEK_END)
+        ascii.write(
+            tt, f, format='fixed_width_no_header', delimiter='',
+            formats={'x_obs': '%9.3f', 'y_obs': '%9.3f', 'ref': '%8s',
+                     'ID': '%8s', 'x': '%9.3f', 'y': '%9.3f'})
 
-    elif mode == 'manual' and ref_id == '--':
-        # TODO transform scale and rotation to C, D E F values.
-        with open(out_data_file, mode='a') as f:
-            tt = Table(zip([f_name, xy_shift[0], xy_shift[1], 1., 0., 0., 1.]),
-                       names=('frame', 'A', 'B', 'C', 'D', 'E', 'F'))
-            f.seek(0, os.SEEK_END)
-            ascii.write(
-                tt, f, format='fixed_width_no_header', delimiter='',
-                formats={
-                    'A': '%8.2f', 'B': '%8.2f', 'C': '%8.2f',
-                    'D': '%8.2f', 'E': '%8.2f', 'F': '%8.2f'})
 
-    elif mode == 'xyshift':
-        with open(out_data_file, mode='a') as f:
-            tt = Table(zip([f_name, xy_shift[0], xy_shift[1], 1., 0., 0., 1.]),
-                       names=('frame', 'A', 'B', 'C', 'D', 'E', 'F'))
-            f.seek(0, os.SEEK_END)
-            ascii.write(
-                tt, f, format='fixed_width_no_header', delimiter='',
-                formats={
-                    'A': '%8.2f', 'B': '%8.2f', 'C': '%8.2f',
-                    'D': '%8.2f', 'E': '%8.2f', 'F': '%8.2f'})
+def outFileFrame(f_name, scale, rot_angle, xy_shift, out_data_file):
+    """
+    # TODO transform scale and rotation to C, D E F values.
+    """
+    with open(out_data_file, mode='a') as f:
+        tt = Table(zip([f_name, xy_shift[0], xy_shift[1], 1., 0., 0., 1.]),
+                   names=('frame', 'A', 'B', 'C', 'D', 'E', 'F'))
+        f.seek(0, os.SEEK_END)
+        ascii.write(
+            tt, f, format='fixed_width_no_header', delimiter='',
+            formats={
+                'A': '%8.2f', 'B': '%8.2f', 'C': '%8.2f',
+                'D': '%8.2f', 'E': '%8.2f', 'F': '%8.2f'})
 
 
 def posFinder(xy_inframe, max_x, min_x, max_y, min_y):
@@ -496,6 +485,7 @@ def main():
                           scale, rot_angle, xy_shift[0], xy_shift[1]))
 
                 xy_all, id_all = [], []
+                # TODO plot xyshift outcome
                 if pars['match_mode'] != 'xyshift':
 
                     print("Re-center final coordinates.")
@@ -513,21 +503,27 @@ def main():
                             id_all.append(id_ref[i])
                     xy_all = np.array(xy_all)
 
-                    if pars['do_plots_C'] == 'y':
-                        make_plot(
-                            f_name, hdu_data, out_img, std_tr_match,
-                            obs_tr_match, id_ref, xy_ref, xy_all, id_all,
-                            ref_field_img)
+                    if id_all:
+                        if pars['do_plots_C'] == 'y':
+                            make_plot(
+                                f_name, hdu_data, out_img, std_tr_match,
+                                obs_tr_match, id_ref, xy_ref, xy_all, id_all,
+                                ref_field_img)
+                    else:
+                        print("  ERROR: no stars could be matched.")
 
             else:
                 # TODO reference image values.
-                xy_shift = [0., 0.]
-                id_all, xy_all = [], []
+                xy_shift, scale, rot_angle = [0., 0.], 1., 0.
 
             # Write final match file
-            make_out_file(
-                pars['match_mode'], f_name, ref_id, ref_data, id_all, xy_all,
-                img_id, scale, rot_angle, xy_shift, out_data_file)
+            if ref_id != '--':
+                if id_all:
+                    outFileStandard(
+                        f_name, ref_data, id_all, xy_all, img_id,
+                        out_data_file)
+            else:
+                outFileFrame(f_name, scale, rot_angle, xy_shift, out_data_file)
 
     print("\nFinished.")
 
