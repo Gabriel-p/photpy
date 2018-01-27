@@ -331,76 +331,59 @@ def xyTrans(max_shift, xy_ref, mags_ref, xy_dtct, mags_dtct, mtoler):
     Average minimal (Euclidean) distance from points in 'xy_dtct' to points in
     'xy_ref', until the stopping condition.
     """
+    x_dtct, y_dtct = np.array(xy_dtct)[:, 0], np.array(xy_dtct)[:, 1]
     xmin, xmax = max_shift[0]
     ymin, ymax = max_shift[1]
-    x0, y0, mdist, loops, xy_shifts = 0., 0., 1.e6, 0, []
-    while mdist > mtoler and loops < 30:
+    x0, y0, x0_old, y0_old = 0., 0., np.inf, np.inf
 
-        # This parameter controls the resolution of the shift grid.
-        li = 20
-        # Shifts in x from xmin to xmax
-        dists = []
+    # The 'runs' value is tied to the 'tol' value so that after this
+    # many iterations, the limits will have been reduced by tol^runs%.
+    # 'li' is the resolution of the shift grid.
+    runs, tol, li = 25, .7, 10
+    for _ in range(runs):
+        # Inner 'for' block values.
+        x0_in, y0_in, d_in = x0, y0, np.inf
         for sx in np.linspace(xmin, xmax, li):
             # Shifts in y.
             for sy in np.linspace(ymin, ymax, li):
                 # Apply possible x,y translation
-                xy_shifted = np.array([
-                    np.array(xy_dtct)[:, 0] + sx + x0,
-                    np.array(xy_dtct)[:, 1] + sy + y0]).T
+                xy_shifted = np.array([x_dtct + sx + x0, y_dtct + sy + y0]).T
 
-                # Minimum distance for each star in xy_dtct (shifted) to the
+                # Minimum distance for each shifted star to the
                 # closest star in xy_ref. The indexes are in the sense:
                 # xy_ref[min_dist_idx[IDX]] ~ xy_shifted[IDX] (closest star)
                 min_dists, min_dist_idx = cKDTree(xy_ref).query(xy_shifted, 1)
 
-                # Median distance in pixels.
-                d = np.median(min_dists)
+                # Matched star's magnitudes absolute difference
+                d_mag = np.abs(mags_dtct - mags_ref[min_dist_idx])
+                # Pixel distances weighted by mag differences.
+                d = np.median(min_dists * d_mag)
 
-                mag_dist = []
-                for i, m_d in enumerate(mags_dtct):
-                    mag_dist.append(abs(m_d - mags_ref[min_dist_idx[i]]))
-                d_mag = np.median(mag_dist)
+                # Update inner 'for' block vars with better shifted values.
+                if d < d_in:
+                    x0_in, y0_in, d_in = sx + x0, sy + y0, d
 
-                # Store x,y shift values, and the average minimal distance.
-                dists.append([sx + x0, sy + y0, d + d_mag])
-
-        # Index of the x,y shifts that resulted in the median minimal
-        # distance.
-        min_idx = np.array(zip(*dists)[2]).argmin()
-        mdist = dists[min_idx][2]
-        # Update shifts.
-        x0, y0 = dists[min_idx][0], dists[min_idx][1]
-        # Decrease shift by X%
-        tol = .9
+        # Decrease shift limits by tol%
         xmin, xmax = xmin * tol, xmax * tol
         ymin, ymax = ymin * tol, ymax * tol
-        loops += 1
-        # print(mdist, dists[min_idx][0], dists[min_idx][1])
-        xy_shifts.append([dists[min_idx][0], dists[min_idx][1]])
 
-    if loops == 30:
+        # Update final values
+        x0, y0 = x0_in, y0_in
+        print("  Best x,y shift found: ({:.2f}, {:.2f})".format(x0, y0))
+        if abs(x0 - x0_old) < mtoler and abs(y0 - y0_old):
+            print("  Tolerance achieved.")
+            break
+        else:
+            x0_old, y0_old = x0, y0
+
+    if _ == runs:
         print("  WARNING: match did not converge to the requested tolerance.")
-        med = np.median(xy_shifts, axis=0)
-        xy_shift = []
-        if max_shift[0][0] < med[0] < max_shift[0][1]:
-            xy_shift.append(med[0])
-        else:
-            print("  WARNING: x shift found is outside the limits. Use mean.")
-            xy_shift.append(np.mean(max_shift[0]))
+    if not (max_shift[0][0] < x0 < max_shift[0][1]):
+        print("  WARNING: x shift found is outside the limits.")
+    if not (max_shift[1][0] < y0 < max_shift[1][1]):
+        print("  WARNING: y shift found is outside the limits.")
 
-        if max_shift[1][0] < med[1] < max_shift[1][1]:
-            xy_shift.append(med[1])
-        else:
-            print("  WARNING: y shift found is outside the limits. Use mean.")
-            xy_shift.append(np.mean(max_shift[1]))
-
-    else:
-        xy_shift = xy_shifts[-1]
-
-    print(" Median average distance: {:.2f}".format(dists[min_idx][2]))
-    # print("Reg shifted by: {:.2f}, {:.2f}".format(*xy_shift))
-
-    return xy_shift
+    return [x0, y0]
 
 
 def reCenter(hdu_data, positions, side=30):

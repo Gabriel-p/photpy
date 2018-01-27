@@ -409,20 +409,8 @@ def main():
                             xy_ref, xy_choice, mtoler, scale_range,
                             rot_range, trans_range, hdu_data)
 
-                elif pars['match_mode'] == 'xyshift':
-
-                    id_dtct, xy_dtct, mags_dtct = autoSrcDetect(
-                        pars, hdulist)
-
-                    xmi, xma = map(float, pars['xtr_min-xtr_max'][0])
-                    ymi, yma = map(float, pars['ytr_min-ytr_max'][0])
-                    max_shift = [[xmi, xma], [ymi, yma]]
-                    mtoler = float(pars['match_toler'])
-                    xy_shift = xyTrans(
-                        max_shift, xy_ref, mags_ref, xy_dtct, mags_dtct,
-                        mtoler)
-
-                    scale, rot_angle = np.nan, np.nan
+                    print("Re-center final coordinates.")
+                    xy_transf = reCenter(hdu_data, xy_transf, side=40)
 
                 elif pars['match_mode'] == 'manual':
 
@@ -481,6 +469,24 @@ def main():
 
                         xy_shift = ref_cent - obs_cent
 
+                    print("Re-center final coordinates.")
+                    xy_transf = reCenter(hdu_data, xy_transf, side=40)
+
+                elif pars['match_mode'] == 'xyshift':
+
+                    id_dtct, xy_dtct, mags_dtct = autoSrcDetect(
+                        pars, hdulist)
+
+                    xmi, xma = map(float, pars['xtr_min-xtr_max'][0])
+                    ymi, yma = map(float, pars['ytr_min-ytr_max'][0])
+                    max_shift = [[xmi, xma], [ymi, yma]]
+                    mtoler = float(pars['match_toler'])
+                    xy_shift = xyTrans(
+                        max_shift, xy_ref, np.array(mags_ref), xy_dtct,
+                        np.array(mags_dtct), mtoler)
+
+                    scale, rot_angle = np.nan, np.nan
+
                 print("Scale: {:.2f}, Rot: {:.2f}, "
                       "Trans: ({:.2f}, {:.2f})".format(
                           scale, rot_angle, xy_shift[0], xy_shift[1]))
@@ -488,9 +494,6 @@ def main():
                 xy_all, id_all = [], []
                 # TODO plot xyshift outcome
                 if pars['match_mode'] != 'xyshift':
-
-                    print("Re-center final coordinates.")
-                    xy_transf = reCenter(hdu_data, xy_transf, side=40)
 
                     # Assign nan to reference stars located outside the limits
                     # of the observed frame.
@@ -514,7 +517,7 @@ def main():
                         print("  ERROR: no stars could be matched.")
 
             else:
-                # TODO reference image values.
+                # Reference image values.
                 xy_shift, scale, rot_angle = [0., 0.], 1., 0.
 
             # Write final match file
