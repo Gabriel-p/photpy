@@ -1,4 +1,5 @@
 
+import numpy as np
 from match_funcs import triangleMatch, reCenter, autoSrcDetect
 
 
@@ -10,9 +11,15 @@ def main(pars, xy_ref, hdulist):
     # Scale and rotation ranges, and match tolerance.
     scale_range = (float(pars['scale_min']), float(pars['scale_max']))
     rot_range = (float(pars['rot_min']), float(pars['rot_max']))
-    trans_range = (
-        map(float, pars['xtr_min-xtr_max'][0]),
-        map(float, pars['ytr_min-ytr_max'][0]))
+
+    xtr, ytr = pars['xtr_min-xtr_max'][0], pars['ytr_min-ytr_max'][0]
+    none_list = ['none', 'None', 'NONE']
+    tr_x_min = float(xtr[0]) if xtr[0] not in none_list else -np.inf
+    tr_x_max = float(xtr[1]) if xtr[1] not in none_list else np.inf
+    tr_y_min = float(ytr[0]) if ytr[0] not in none_list else -np.inf
+    tr_y_max = float(ytr[1]) if ytr[1] not in none_list else np.inf
+    trans_range = ((tr_x_min, tr_x_max), (tr_y_min, tr_y_max))
+
     mtoler = float(pars['match_toler'])
 
     _, xy_choice, _ = autoSrcDetect(pars, hdulist)

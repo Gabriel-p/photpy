@@ -40,16 +40,20 @@ do_plots_A       y
 #ref_fld_fldr     PG0231, standards/pg0231/
 ref_fld_fldr     stk1115.fits, field/filt_I
 match_mode       xyshift
-max_stars_match  1000000
-min_x-max_x      min, max
-min_y-max_y      min, max
-match_toler      1.
+# Used by 'auto' mode.
 scale_min        1.
 scale_max        10.
 rot_min          0.
 rot_max          3.
-xtr_min-xtr_max  -500., 500.
-ytr_min-ytr_max  -500., 500.
+# Used by 'auto' and 'xyshift' modes.
+max_stars_match  300000
+# Region of frame where sources are detected.
+min_x-max_x      min, max
+min_y-max_y      min, max
+# xy shifts limits.
+xtr_min-xtr_max  none, none
+ytr_min-ytr_max  none, none
+match_toler      1.
 do_plots_C       y
 
 ###############################################################################

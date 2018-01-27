@@ -11,7 +11,6 @@ import landolt_fields
 import os
 from os.path import join, isfile, exists
 from pathlib2 import Path
-import sys
 import numpy as np
 from scipy.spatial.distance import cdist
 
@@ -37,6 +36,10 @@ def in_params():
         # Identify if this is a Landolt field or an observed frame.
         if not line[0].endswith(".fits"):
             # A Landolt field was set. We are matching standard frames.
+            if pars['match_mode'] == 'xyshift':
+                raise ValueError(
+                    "\n'xyshift' mode can not be used with Landolt fields.")
+
             landolt_fld.append(line[0])
             ref_frame.append('--')
             match_fldr.append(line[1])
@@ -53,9 +56,9 @@ def in_params():
         if ref_im != '--':
             ref_frame = join(in_path, pars['match_fldr'][i], ref_im)
             if not os.path.isfile(ref_frame):
-                print("{}\n Reference frame is not present. Exit.".format(
-                    ref_frame))
-                sys.exit()
+                raise ValueError(
+                    "{}\n Reference frame is not present. Exit.".format(
+                        ref_frame))
             else:
                 # Store full path.
                 pars['ref_frame'][i] = ref_frame
@@ -74,9 +77,9 @@ def in_params():
                     if f.endswith('.fits'):
                         list_temp.append(f)
         if not list_temp:
-            print("{}\n No .fits files found in match folder. Exit.".format(
-                in_path))
-            sys.exit()
+            raise ValueError(
+                "{}\n No .fits files found in match folder. Exit.".format(
+                    in_path))
 
         # Store list for this folder.
         print("Files found in '{}' folder:".format(folder))
