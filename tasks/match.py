@@ -1,8 +1,11 @@
 
 import read_pars_file as rpf
-from match_funcs import triangleMatch, getTriangles, findRotAngle,\
-    standard2observed, xyTrans, reCenter, autoSrcDetect
-from plot_events import refDisplay, refStrSlct, drawCirclesIDs
+from match_funcs import autoSrcDetect, allInFrame
+from plot_events import drawCirclesIDs
+
+import match_auto
+import match_manual
+import match_xyshift
 
 import landolt_fields
 import os
@@ -17,6 +20,7 @@ from astropy.io import ascii, fits
 from astropy.visualization import ZScaleInterval
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from photutils import CircularAperture
 
 
 def in_params():
@@ -81,64 +85,6 @@ def in_params():
         fits_list.append(list_temp)
 
     return pars, fits_list, out_path
-
-
-def srcSelect(
-    f_name, hdu_data, ref_field_img, id_ref, xy_ref, id_selec, xy_selec):
-    """
-    Manually mark sources on 'fr' fits file.
-    """
-    answ = 'n'
-    if id_selec:
-
-        for i, xy in enumerate(xy_selec):
-            # Re-center coordinates.
-            xy = reCenter(hdu_data, xy, side=40).tolist()
-            # Display frames.
-            refDisplay(
-                ref_field_img, f_name, hdu_data, id_ref, xy_ref, id_selec[i],
-                xy)
-
-            while True:
-                answ = raw_input(
-                    "Use coordinates ({})? (y/n): ".format(i)).strip()
-                if answ == 'y':
-                    idx_c = i
-                    # Re-write with re-centered coordinates.
-                    xy_selec[idx_c] = xy
-                    break
-                elif answ == 'n':
-                    break
-                else:
-                    print("Wrong answer. Try again.")
-
-    # Select new coordinates
-    if answ != 'y':
-        while True:
-            # Manually pick three reference stars.
-            id_pick, xy_pick = refStrSlct(
-                ref_field_img, f_name, hdu_data, id_ref, xy_ref)
-            if len(id_pick) < 1:
-                print("ERROR: at least one star must be selected.")
-            elif '' in id_pick:
-                print("ERROR: all stars must be identified. Try again.")
-            else:
-                break
-
-        # Re-center coordinates.
-        xy_cent = reCenter(hdu_data, xy_pick, side=20).tolist()
-
-        # Select latest coordinates.
-        idx_c = -1
-        id_selec.append(id_pick)
-        xy_selec.append(xy_cent)
-
-        print(id_pick)
-        print(xy_cent)
-
-    print(" Stars selected for match: {}".format(len(xy_selec[idx_c])))
-
-    return id_selec, xy_selec, idx_c
 
 
 def outFileHeader(out_data_file, ref_id):
@@ -248,11 +194,11 @@ def posFinder(xy_inframe, max_x, min_x, max_y, min_y):
     return xy_offset
 
 
-def make_plot(
-    f_name, hdu_data, out_plot_file, std_tr_match, obs_tr_match,
-    id_ref, xy_ref, xy_all, id_all, ref_field_img):
+def auto_manualPlot(
+    ref_field_img, id_ref, xy_ref, f_name, out_plot_file, hdu_data,
+    std_tr_match, obs_tr_match, xy_all, id_all):
     """
-    Make plots.
+    Make 'auto' and 'manual' mode plots.
     """
     id_inframe, xy_inframe = [], []
     for i, st in enumerate(xy_all):
@@ -324,6 +270,45 @@ def make_plot(
     plt.close('all')
 
 
+def xyshiftPlot(
+    rf_name, hdu_data_ref, out_plot_file, f_name, hdu_data, xy_shift, xy_dtct):
+    """
+    """
+    print("Plotting.")
+
+    # Plot 100 brightest stars (they are already sorted by brightest)
+    x_dtct, y_dtct = np.array(xy_dtct[:100])[:, 0],\
+        np.array(xy_dtct[:100])[:, 1]
+    x_shft, y_shft = x_dtct + xy_shift[0], y_dtct + xy_shift[1]
+
+    fig = plt.figure(figsize=(20, 20))
+    gs = gridspec.GridSpec(10, 10)
+    interval = ZScaleInterval()
+
+    ax1 = plt.subplot(gs[0:5, 0:5])
+    ax1.set_title("Reference frame {}".format(rf_name))
+    zmin, zmax = interval.get_limits(hdu_data_ref)
+    ax1.imshow(
+        hdu_data_ref, cmap='Greys', aspect=1, interpolation='nearest',
+        origin='lower', vmin=zmin, vmax=zmax)
+    apertures = CircularAperture(np.array([x_shft, y_shft]).T, r=10.)
+    apertures.plot(ax=ax1, color='red', lw=1.)
+
+    ax2 = plt.subplot(gs[0:5, 5:10])
+    ax2.set_title("Matched frame {}, shift: ({:.2f}, {:.2f})".format(
+        f_name, *xy_shift))
+    zmin, zmax = interval.get_limits(hdu_data)
+    ax2.imshow(hdu_data, cmap='Greys', aspect=1, interpolation='nearest',
+               origin='lower', vmin=zmin, vmax=zmax)
+    apertures = CircularAperture(np.array([x_dtct, y_dtct]).T, r=10.)
+    apertures.plot(ax=ax2, color='green', lw=1.)
+
+    fig.tight_layout()
+    plt.savefig(out_plot_file, dpi=150, bbox_inches='tight')
+    plt.clf()
+    plt.close('all')
+
+
 def main():
     """
     This algorithm expects at least three stars detected in the observed field.
@@ -356,8 +341,10 @@ def main():
             print("IDs as: {}, {}, {}...".format(*id_ref[:3]))
 
         else:
-            print("\nReference frame: {}".format(ref_frame.split('/')[-1]))
+            rf_name = ref_frame.split('/')[-1].split('.')[0]
+            print("\nReference frame: {}".format(rf_name))
             hdulist = fits.open(ref_frame)
+            hdu_data_ref = hdulist[0].data
             id_ref, xy_ref, mags_ref = autoSrcDetect(pars, hdulist)
 
             ref_field_img = ref_frame
@@ -391,130 +378,40 @@ def main():
                 print("\nMatching frame: {}".format(f_name))
 
                 if pars['match_mode'] == 'auto':
-                    # Scale and rotation ranges, and match tolerance.
-                    scale_range = (
-                        float(pars['scale_min']), float(pars['scale_max']))
-                    rot_range = (
-                        float(pars['rot_min']), float(pars['rot_max']))
-                    trans_range = (
-                        map(float, pars['xtr_min-xtr_max'][0]),
-                        map(float, pars['ytr_min-ytr_max'][0]))
-                    mtoler = float(pars['match_toler'])
-
-                    _, xy_choice, _ = autoSrcDetect(pars, hdulist)
-
-                    print("\nFinding scale, translation, and rotation.")
                     std_tr_match, obs_tr_match, scale, rot_angle, xy_shift,\
-                        xy_transf = triangleMatch(
-                            xy_ref, xy_choice, mtoler, scale_range,
-                            rot_range, trans_range, hdu_data)
+                        xy_transf = match_auto.main(pars, xy_ref, hdulist)
 
-                    print("Re-center final coordinates.")
-                    xy_transf = reCenter(hdu_data, xy_transf, side=40)
+                    id_all, xy_all = allInFrame(id_ref, hdu_data, xy_transf)
 
                 elif pars['match_mode'] == 'manual':
-
-                    # Coordinates from observed frame.
-                    id_selec, xy_selec, idx_c =\
-                        srcSelect(
+                    std_tr_match, obs_tr_match, scale, rot_angle, xy_shift,\
+                        xy_transf = match_manual.main(
                             f_name, hdu_data, ref_field_img, id_ref, xy_ref,
                             id_selec, xy_selec)
 
-                    # Selected IDs and coordinates.
-                    id_choice, xy_choice = id_selec[idx_c], xy_selec[idx_c]
-
-                    # Match selected reference stars to standard stars by
-                    # the IDs given by the user.
-                    xy_ref_sel = []
-                    for r_id in id_choice:
-                        i = id_ref.index(r_id)
-                        xy_ref_sel.append(xy_ref[i])
-
-                    # Matched stars in ref and obs
-                    std_tr_match, obs_tr_match = xy_ref_sel, xy_choice
-
-                    if len(id_choice) < 3:
-                        print("  WARNING: Less than 3 stars selected,"
-                              " no match can be performed.")
-                        xy_transf = []
-                        for st_id in id_ref:
-                            if st_id in id_choice:
-                                i = id_choice.index(st_id)
-                                xy_transf.append(
-                                    [xy_choice[i][0], xy_choice[i][1]])
-                            else:
-                                xy_transf.append([np.nan, np.nan])
-
-                        scale, rot_angle, xy_shift = np.nan, np.nan,\
-                            [np.nan, np.nan]
-
-                    else:
-                        _, A_tr_not_scaled = getTriangles(
-                            xy_ref_sel, [(0, 1, 2)])
-                        _, B_tr_not_scaled = getTriangles(
-                            xy_choice, [(0, 1, 2)])
-
-                        # Obtain scale.
-                        scale = np.mean(
-                            np.array(B_tr_not_scaled[0]) / A_tr_not_scaled[0])
-                        # Rotation angle between triangles.
-                        rot_angle, ref_cent, obs_cent = findRotAngle(
-                            xy_ref_sel, xy_choice)
-
-                        # Apply translation, scaling, and rotation to reference
-                        # coordinates.
-                        xy_transf, rot_angle = standard2observed(
-                            xy_ref, scale, rot_angle, ref_cent, obs_cent,
-                            obs_tr_match)
-
-                        xy_shift = ref_cent - obs_cent
-
-                    print("Re-center final coordinates.")
-                    xy_transf = reCenter(hdu_data, xy_transf, side=40)
+                    id_all, xy_all = allInFrame(id_ref, hdu_data, xy_transf)
 
                 elif pars['match_mode'] == 'xyshift':
-
-                    id_dtct, xy_dtct, mags_dtct = autoSrcDetect(
-                        pars, hdulist)
-
-                    xmi, xma = map(float, pars['xtr_min-xtr_max'][0])
-                    ymi, yma = map(float, pars['ytr_min-ytr_max'][0])
-                    max_shift = [[xmi, xma], [ymi, yma]]
-                    mtoler = float(pars['match_toler'])
-                    xy_shift = xyTrans(
-                        max_shift, xy_ref, np.array(mags_ref), xy_dtct,
-                        np.array(mags_dtct), mtoler)
-
-                    scale, rot_angle = np.nan, np.nan
+                    scale, rot_angle, xy_shift, xy_dtct =\
+                        match_xyshift.main(pars, hdulist, xy_ref, mags_ref)
 
                 print("Scale: {:.2f}, Rot: {:.2f}, "
                       "Trans: ({:.2f}, {:.2f})".format(
                           scale, rot_angle, xy_shift[0], xy_shift[1]))
 
-                xy_all, id_all = [], []
-                # TODO plot xyshift outcome
-                if pars['match_mode'] != 'xyshift':
-
-                    # Assign nan to reference stars located outside the limits
-                    # of the observed frame.
-                    for i, st in enumerate(xy_transf):
-                        if 0. < st[0] < hdu_data.shape[1] and\
-                                0. < st[1] < hdu_data.shape[0]:
-                            xy_all.append(st)
-                            id_all.append(id_ref[i])
+                if pars['do_plots_C'] == 'y':
+                    if pars['match_mode'] in ['auto', 'manual']:
+                        if id_all:
+                            auto_manualPlot(
+                                ref_field_img, id_ref, xy_ref, f_name, out_img,
+                                hdu_data, std_tr_match, obs_tr_match, xy_all,
+                                id_all)
                         else:
-                            xy_all.append([np.nan, np.nan])
-                            id_all.append(id_ref[i])
-                    xy_all = np.array(xy_all)
-
-                    if id_all:
-                        if pars['do_plots_C'] == 'y':
-                            make_plot(
-                                f_name, hdu_data, out_img, std_tr_match,
-                                obs_tr_match, id_ref, xy_ref, xy_all, id_all,
-                                ref_field_img)
+                            print("  ERROR: no stars could be matched.")
                     else:
-                        print("  ERROR: no stars could be matched.")
+                        xyshiftPlot(
+                            rf_name, hdu_data_ref, out_img, f_name,
+                            hdu_data, xy_shift, xy_dtct)
 
             else:
                 # Reference image values.

@@ -482,3 +482,22 @@ def autoSrcDetect(pars, hdulist):
     xy_mags = list(zip_stars_filter[2])
 
     return id_pick, xy_cent, xy_mags
+
+
+def allInFrame(id_ref, hdu_data, xy_transf):
+    """
+    Assign nan to reference stars located outside the limits
+    of the observed frame.
+    """
+    xy_all, id_all = [], []
+    for i, st in enumerate(xy_transf):
+        if 0. < st[0] < hdu_data.shape[1] and\
+                0. < st[1] < hdu_data.shape[0]:
+            xy_all.append(st)
+            id_all.append(id_ref[i])
+        else:
+            xy_all.append([np.nan, np.nan])
+            id_all.append(id_ref[i])
+    xy_all = np.array(xy_all)
+
+    return id_all, xy_all
