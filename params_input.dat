@@ -29,24 +29,6 @@ max_stars        100
 do_plots_A       y
 
 
-# 'align_crop'
-#
-in_folder_B      field
-ref_align        none
-crop_save        y
-x_init_shift     27.0
-y_init_shift     27.0
-max_shift        5.
-tolerance        0.05
-do_plots_B       y
-
-###############################################################################
-
-
-
-###############################################################################
-# Standard stars identification, aperture photometry, and transformations.
-
 # 'match'
 #
 # ref_fld_fldr: input Landolt frame ID if matching a standard frame (else
@@ -66,10 +48,16 @@ scale_min        1.
 scale_max        10.
 rot_min          0.
 rot_max          3.
-xtr_min-xtr_max  -100., 0.
-ytr_min-ytr_max  -100., 0.
+xtr_min-xtr_max  -500., 500.
+ytr_min-ytr_max  -500., 500.
 do_plots_C       y
 
+###############################################################################
+
+
+
+###############################################################################
+# Aperture photometry on standard stars, and transformations.
 
 # 'aperphot_standards'
 #
