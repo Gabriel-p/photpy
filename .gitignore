@@ -99,6 +99,7 @@ output/*
 !input/README.md
 pyraf/*
 tasks/pyraf/*
+IRAF_compare/pyraf/*
 uparm/*
 login.cl
 loginuser.cl

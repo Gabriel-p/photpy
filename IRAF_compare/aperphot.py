@@ -22,7 +22,7 @@ def load_data(imname):
     """
     mypath = realpath(join(os.getcwd(), dirname(__file__)))
     image_file = mypath + '/input/' + imname + '.fits'
-    coo_file = mypath + '/output/' + imname + '.coo.1'
+    coo_file = mypath + '/input/' + imname + '.coo.1'
     print("Fits: {}".format(image_file))
     print("Coordinates: {}".format(coo_file))
     # Load .fits file.
@@ -269,7 +269,7 @@ def main():
     Compare results from aperture photometry using IRAF's 'phot' and photutil's
     'CircularAperture'.
     """
-    imname = 'field/filt_V/stk1111'
+    imname = 'stk1111'
     image_file, coo_file, hdu_data, exp_time, gain, rdnoise = load_data(imname)
 
     aper_rad, dmax = 15., 60000.
