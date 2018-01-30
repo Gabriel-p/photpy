@@ -87,6 +87,17 @@ def in_params():
             print(" * {}".format(fit.replace(in_path, '')[1:]))
         fits_list.append(list_temp)
 
+    # Put reference frames to the front  of the lists for each group.
+    if pars['match_mode'] == 'xyshift':
+        for i, fit_group in enumerate(fits_list):
+            ref_f_gr = pars['ref_frame'][i]
+            # Index of the reference frame for this group.
+            j = fit_group.index(ref_f_gr)
+            # Bring ref frame to the front.
+            fit_group.insert(0, fit_group.pop(j))
+            # Update this group.
+            fits_list[i] = fit_group
+
     return pars, fits_list, out_path
 
 
