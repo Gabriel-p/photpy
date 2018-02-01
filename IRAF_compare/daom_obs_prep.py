@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import ascii
-# from astropy.table import Column
+from astropy.table import Column
 
 
 def makeHist(x, y):
@@ -14,79 +14,123 @@ def makeHist(x, y):
     H = np.flipud(H)
     # Mask pixels with a value of zero
     Hmasked = np.ma.masked_where(H == 0, H)
-    plt.pcolormesh(xedges, yedges, Hmasked)  # , vmin=0, vmax=150)
+    plt.pcolormesh(xedges, yedges, Hmasked, cmap='viridis')
 
 
-# xy density histograms of DAOMASTER's .mag matched filter files.
-ufilt = ascii.read('3_DAOM/ufilter.mag')
-xu, yu = ufilt['col2'], ufilt['col3']
-bfilt = ascii.read('3_DAOM/bfilter.mag')
-xb, yb = bfilt['col2'], bfilt['col3']
-vfilt = ascii.read('3_DAOM/vfilter.mag')
-xv, yv = vfilt['col2'], vfilt['col3']
-ifilt = ascii.read('3_DAOM/ifilter.mag')
-xi, yi = ifilt['col2'], ifilt['col3']
+def magAnalysis(f_id):
+    """
+    Analyze .mag files
+    """
+    # Read DAOMASTER .mag data.
+    print("U mag")
+    ufilt = ascii.read('input/' + f_id + '/ufilter.mag')
+    xu, yu = ufilt['col2'], ufilt['col3']
+    print("B mag")
+    bfilt = ascii.read('input/' + f_id + '/bfilter.mag')
+    xb, yb = bfilt['col2'], bfilt['col3']
+    print("V mag")
+    vfilt = ascii.read('input/' + f_id + '/vfilter.mag')
+    xv, yv = vfilt['col2'], vfilt['col3']
+    print("I mag")
+    ifilt = ascii.read('input/' + f_id + '/ifilter.mag')
+    xi, yi = ifilt['col2'], ifilt['col3']
 
-plt.subplot(221)
-plt.title("Filter U")
-makeHist(xu, yu)
-plt.subplot(222)
-plt.title("Filter B")
-makeHist(xb, yb)
-plt.subplot(223)
-plt.title("Filter V")
-makeHist(xv, yv)
-plt.subplot(224)
-plt.title("Filter I")
-makeHist(xi, yi)
-plt.show()
+    plt.style.use('seaborn-darkgrid')
+    fig = plt.figure(figsize=(10, 10))
 
-WT = '4'
-print("WT={}".format(WT))
+    # xy density histograms of DAOMASTER's .mag matched filter files.
+    plt.subplot(221)
+    plt.title("Filter U")
+    makeHist(xu, yu)
+    plt.subplot(222)
+    plt.title("Filter B")
+    makeHist(xb, yb)
+    plt.subplot(223)
+    plt.title("Filter V")
+    makeHist(xv, yv)
+    plt.subplot(224)
+    plt.title("Filter I")
+    makeHist(xi, yi)
 
-# Create 'daom.obs' file.
-# data = ascii.read('daom_' + WT + '.raw')
-# XV = Column(data=[1.075] * len(data), name='v')
-# XB = Column(data=[1.072] * len(data), name='b')
-# XU = Column(data=[1.092] * len(data), name='u')
-# XI = Column(data=[1.164] * len(data), name='i')
-# data.add_columns([XV, XB, XU, XI])
-# ascii.write(data, 'daom.obs', format='fixed_width', delimiter=' ',
-#             overwrite=True)
+    fig.tight_layout()
+    plt.savefig(
+        'output/' + f_id + '_filters_dens.png', dpi=300, bbox_inches='tight')
 
-# Explore 'daom.raw' photometry
-data = ascii.read('3_DAOM/daom_' + WT + '.raw', fill_values=('INDEF', np.nan))
-v, b, u, i = data['col4'], data['col6'], data['col8'], data['col10']
-v, b, u, i = np.array(v), np.array(b), np.array(u), np.array(i)
 
-N_vb = np.count_nonzero(~np.isnan(b - v))
-N_vi = np.count_nonzero(~np.isnan(v - i))
-N_ub = np.count_nonzero(~np.isnan(u - b))
-print("Non zero BV: {}".format(N_vb))
-print("Non zero VI: {}".format(N_vi))
-print("Non zero UB: {}".format(N_ub))
+def createObsfile(f_id, AU, AB, AV, AI):
+    """
+    Create 'daom.obs' file from 'daom.raw' file and longest exposure airmasses.
+    """
+    data = ascii.read('input/' + f_id + '/daom.raw')
+    XV = Column(data=[AV] * len(data), name='v')
+    XB = Column(data=[AB] * len(data), name='b')
+    XU = Column(data=[AU] * len(data), name='u')
+    XI = Column(data=[AI] * len(data), name='i')
+    data.add_columns([XV, XB, XU, XI])
+    ascii.write(
+        data, 'output/daom_' + f_id + '.obs', format='fixed_width_no_header',
+        delimiter=' ', overwrite=True)
 
-plt.style.use('seaborn-darkgrid')
-fig = plt.figure(figsize=(30, 10))
 
-plt.subplot(131)
-plt.xlim(-2., 4.)
-plt.ylim(25., 10.)
-plt.scatter(b - v, v, s=5)
-plt.title("N={}".format(N_vb))
+def plotRaw(f_id):
+    """
+    Plot 'daom.raw' photometry diagrams.
+    """
+    data = ascii.read(
+        'input/' + f_id + '/daom.raw', fill_values=('INDEF', np.nan))
+    v, b, u, i = data['col4'], data['col6'], data['col8'], data['col10']
+    v, b, u, i = np.array(v), np.array(b), np.array(u), np.array(i)
 
-plt.subplot(132)
-plt.xlim(0., 4.)
-plt.ylim(25., 10.)
-plt.scatter(v - i, v, s=5)
-plt.title("N={}".format(N_vi))
+    N_vb = np.count_nonzero(~np.isnan(b - v))
+    N_vi = np.count_nonzero(~np.isnan(v - i))
+    N_ub = np.count_nonzero(~np.isnan(u - b))
+    print("Non zero BV: {}".format(N_vb))
+    print("Non zero VI: {}".format(N_vi))
+    print("Non zero UB: {}".format(N_ub))
 
-plt.subplot(133)
-plt.xlim(.5, 2.5)
-plt.ylim(4., 2.)
-plt.scatter(b - v, u - b, s=5)
-plt.title("N={}".format(N_ub))
+    plt.style.use('seaborn-darkgrid')
+    fig = plt.figure(figsize=(30, 10))
 
-# plt.show()
-fig.tight_layout()
-plt.savefig('output/daomaster_wt_' + WT + '.png', dpi=300, bbox_inches='tight')
+    plt.subplot(131)
+    plt.xlabel("(B-V)")
+    plt.ylabel("V")
+    plt.scatter(b - v, v, s=5)
+    plt.gca().invert_yaxis()
+    plt.title("N={}".format(N_vb))
+
+    plt.subplot(132)
+    plt.xlabel("(V-I)")
+    plt.ylabel("V")
+    plt.scatter(v - i, v, s=5)
+    plt.gca().invert_yaxis()
+    plt.title("N={}".format(N_vi))
+
+    plt.subplot(133)
+    plt.xlabel("(B-V)")
+    plt.ylabel("U-B")
+    plt.scatter(b - v, u - b, s=5)
+    plt.gca().invert_yaxis()
+    plt.title("N={}".format(N_ub))
+
+    # plt.show()
+    fig.tight_layout()
+    plt.savefig('output/' + f_id + '_daom.png', dpi=300, bbox_inches='tight')
+
+
+def main():
+    """
+    """
+    # ID for this observation.
+    f_id = 'rup42'
+    magAnalysis(f_id)
+
+    # Airmasses of longest exposures (Rup42)
+    AU, AB, AV, AI = 1.003, 1.002, 1.057, 1.01
+
+    createObsfile(f_id, AU, AB, AV, AI)
+
+    plotRaw(f_id)
+
+
+if __name__ == '__main__':
+    main()

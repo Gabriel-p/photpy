@@ -19,6 +19,11 @@ the photometry obtained from APASS. Creates the `apass_compare.png` image.
 Compares the magnitude and magnitude error of the `phot` task versus photutils.
 
 
+## als_2_txt
+
+Convert `.als.1` files to the `.txt` files necessary to feed `DAOMASTER`.
+
+
 ## daom_obs_prep
 
 Checks the star density in each .mag file output by DAOMASTER, and generates

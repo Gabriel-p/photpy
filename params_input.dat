@@ -38,7 +38,7 @@ do_plots_A       y
 # match_mode: auto / manual / xyshift
 #
 #ref_fld_fldr     PG0231, standards/pg0231/
-ref_fld_fldr     stk1115.fits, field/filt_I
+ref_fld_fldr     stk3103.fits, master
 match_mode       xyshift
 # Used by 'auto' mode.
 scale_min        1.
@@ -46,7 +46,7 @@ scale_max        10.
 rot_min          0.
 rot_max          3.
 # Used by 'auto' and 'xyshift' modes.
-max_stars_match  300000
+max_stars_match  5000
 # Region of frame where sources are detected.
 min_x-max_x      min, max
 min_y-max_y      min, max
@@ -68,15 +68,15 @@ do_plots_C       y
 # stnd_obs_fields : folder_fits/, folder_mch/
 #
 # folder_fits/ : fits files folder in 'input/'
-# file_mch/  : mch file in 'output/'
+# folder_mch/  : mch files folder in 'output/'
 #
-stnd_obs_fields  sa98/, stands_mch/SA98.mch
-stnd_obs_fields  sa95/, stands_mch/SA95.mch
-stnd_obs_fields  tphe/, stands_mch/TPHE.mch
-stnd_obs_fields  sa96/, stands_mch/SA96.mch
-stnd_obs_fields  sa97/, stands_mch/SA97.mch
-stnd_obs_fields  pg0231/, stands_mch/PG0231.mch
-aper_file_out    4nights.apert
+stnd_obs_fields  standards/sa98/, night1_mch/SA98_1.mch
+stnd_obs_fields  standards/sa95/, night1_mch/SA95_1.mch
+stnd_obs_fields  standards/tphe/, night1_mch/TPHE_1.mch
+#stnd_obs_fields  sa96/, stands_mch/SA96.mch
+#stnd_obs_fields  sa97/, stands_mch/SA97.mch
+#stnd_obs_fields  pg0231/, stands_mch/PG0231.mch
+aper_file_out    night1.apert
 aperture         15
 annulus_in       20
 annulus_out      25
@@ -94,10 +94,10 @@ outliers_lims    1., 5., .5
 #
 # mode: linregress / RANSAC / theilsen
 #
-apert_file_in    4nights.apert
-fit_file_out     4nights.fit
+apert_file_in    night1.apert
+fit_file_out     night1.fit
 extin_coeffs     U .326, B .170, V .108, I .052
-fit_mode         theilsen
+fit_mode         linregress
 R^2_min          0.9
 RMSE_max         0.05
 do_plots_E       y

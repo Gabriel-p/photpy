@@ -6,115 +6,134 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from astropy.io import ascii
 from astropy.io import fits
+from astropy.table import Table
 
 
-def photRead():
+def photRead(final_phot, col_IDs):
     """
     Select a file with photometry to read and compare with APASS.
     """
+    # Final calibrated photometry
+    print("Read final photometry")
+    phot = ascii.read(final_phot, fill_values=('INDEF', np.nan))
 
-    # # .als file
-    # N_als = '42'
-    # print("{} .als.1 V file".format(N_als))
-    # phot = ascii.read('2_PSF/stk_fcd00' + N_als + '.als.1', format='daophot')
-    # x_p, y_p, v_p, = phot['XCENTER'], phot['YCENTER'], phot['MAG']
-    # b_p = []
+    # plt.style.use('seaborn-darkgrid')
 
-    # NEW .als file
-    N_als = '42'
-    print("NEW {} .als.1 V file".format(N_als))
-    phot = ascii.read(
-        '2_PSF/test/' + N_als + '/stk_fcd00' + N_als + '.als_NEW2.1',
-        format='daophot')
-    x_p, y_p, v_p = phot['XCENTER'], phot['YCENTER'], phot['MAG']
-    # To zero airmass
-    K, XV = .136, 1.078
-    v_p = v_p - K * XV
-    b_p = []
+    # plt.subplot(131)
+    # plt.xlabel("(B-V)")
+    # plt.ylabel("V")
+    # plt.scatter(phot['col6'], phot['col4'], s=5)
+    # plt.gca().invert_yaxis()
 
-    # # .mag DAOM V file
-    # print("DAOM V .mag file")
-    # phot = ascii.read('3_DAOM/vfilter.mag', fill_values=('INDEF', np.nan))
-    # x_p, y_p, v_p = phot['col2'], phot['col3'], phot['col4']
-    # b_p = []
+    # plt.subplot(132)
+    # plt.xlabel("(V-I)")
+    # plt.ylabel("V")
+    # plt.scatter(phot['col10'], phot['col4'], s=5)
+    # plt.gca().invert_yaxis()
 
-    # # .mag DAOM V file
-    # print("DAOM V .mag file, no I filter")
-    # phot = ascii.read(
-    #     '3_DAOM/no_I_filt/vfilter.mag', fill_values=('INDEF', np.nan))
-    # x_p, y_p, v_p = phot['col2'], phot['col3'], phot['col4']
-    # b_p = []
+    # plt.subplot(133)
+    # plt.xlabel("(B-V)")
+    # plt.ylabel("U-B")
+    # plt.scatter(phot['col6'], phot['col8'], s=5)
+    # plt.gca().invert_yaxis()
 
-    # # .mag DAOM .obs file
-    # print("DAOM .obs file")
-    # phot = ascii.read('3_DAOM/daom.obs', fill_values=('INDEF', np.nan))
-    # x_p, y_p, v_p, b_p = phot['col2'], phot['col3'], phot['col4'], phot['col6']
-    # v1, v2, v3, v4, b1, b2, b3, b4 = 1.606477, 0.136, 0.03963335, 0.03036864,\
-    #     1.686928, 0.232, -0.1767316, 0.06384443
-    # XV, XB = 1.075, 1.072
-    # BV = ((b_p - v_p) - b1 + v1 - b2*XB + v2*XV)/(1.+b3-v3+b4*XB-v4*XV)
-    # v_p = v_p - v1 - v2*XV - v3*BV - v4*BV*XV
+    # plt.show()
+    id_x, id_y, id_v, id_bv = col_IDs
+    x_p, y_p, v_p, bv_p = phot[id_x], phot[id_y], phot[id_v], phot[id_bv]
+    b_p = bv_p + v_p
 
-    # # .mag DAOM B file
-    # print("DAOM B .mag file")
-    # phot = ascii.read('3_DAOM/bfilter.mag', fill_values=('INDEF', np.nan))
-    # x_p, y_p, v_p = phot['col2'], phot['col3'], phot['col4']
-    # b_p = []
-
-    # # Final calibrated photometry
-    # print("Final photometry")
-    # phot = ascii.read(
-    #     'phot_compare/BH73_IRAF_4_2_coeffs.dat', fill_values=('INDEF', np.nan))
-    # x_p, y_p, v_p, bv_p = phot['x'], phot['y'], phot['V'], phot['BV']
-    # b_p = bv_p + v_p
-
-    # # Final calibrated photometry
-    # print("Final photometry using BO14 coeffs")
-    # phot = ascii.read(
-    #     '4_INVERTFIT/bo14_ans/BH73_BO14_coeffs.dat',
-    #     fill_values=('INDEF', np.nan))
-    # x_p, y_p, v_p, bv_p = phot['x'], phot['y'], phot['V'], phot['BV']
-    # b_p = bv_p + v_p
-
-    # # Final calibrated photometry
-    # print("Final photometry using all standard frames")
-    # phot = ascii.read(
-    #     '4_INVERTFIT/all_standards/bh73_final.dat',
-    #     fill_values=('INDEF', np.nan))
-    # x_p, y_p, v_p, bv_p = phot['x'], phot['y'], phot['V'], phot['BV']
-    # b_p = bv_p + v_p
-
-    return x_p, y_p, v_p, b_p
+    return x_p, y_p, v_p, bv_p, b_p
 
 
-def transfABCD(x, y, ABCD):
+def astrometryFeed(f_id, x_p, y_p, v_p, regs_filt):
     """
-    Apply transformation equations to obtain new (xt, yt) coordinates.
+    Create file with the proper format to feed astrometry.net
     """
-    A, B, C, D = ABCD
-    xt = A + x * C + y * D
-    yt = B + y * C + x * D
+    t = Table([x_p, y_p, v_p], names=('x', 'y', 'V'))
+    t.sort('V')
 
-    return xt, yt
+    # Define central region limits.
+    xmin, xmax, ymin, ymax = regs_filt
+    mask = [xmin < t['x'], t['x'] < xmax, ymin < t['y'], t['y'] < ymax]
+    total_mask = reduce(np.logical_and, mask)
+    xm, ym = t['x'][total_mask], t['y'][total_mask]
+
+    ascii.write(
+        [xm, ym], 'output/' + f_id + "_astrometry.dat",
+        delimiter=' ', format='fixed_width_no_header', overwrite=True)
 
 
-def solveABCD(x1, y1, x2, y2):
+def apassAstroRead(astro_cross, apass_reg):
     """
-    Obtain new A, B, C, D parameters, solving the linear equations:
-
-    1*A + 0*B + x2*C + y2*D = x1
-    0*A + 1*B + y2*C + x2*D = y1
+    Read APASS data.
     """
-    N = len(x1)
-    l1 = np.array([np.ones(N), np.zeros(N), x2, y2])
-    l2 = np.array([np.zeros(N), np.ones(N), y2, x2])
-    M1 = np.vstack([l1.T, l2.T])
-    M2 = np.concatenate([x1, y1])
-    A, B, C, D = np.linalg.lstsq(M1, M2)[0]
-    print("New A,B,C,D parameters: "
-          "({:.3f}, {:.3f}, {:.3f}, {:.3f})".format(A, B, C, D))
+    apass = ascii.read(apass_reg, fill_values=('NA', np.nan))
 
-    return A, B, C, D
+    # astrometry.net cross-matched data
+    hdul = fits.open(astro_cross)
+    cr_m_data = hdul[1].data
+
+    return apass, cr_m_data
+
+
+def px2Eq(x_p, y_p, cr_m_data):
+    """
+    Transform pixels to (ra, dec) using the correlated astrometry.net file.
+    """
+    m_ra, h_ra = curve_fit(f, cr_m_data['field_x'], cr_m_data['field_ra'])[0]
+    print("RA transf: ra = {:.5f} * x + {:.5f}".format(m_ra, h_ra))
+    m_de, h_de = curve_fit(f, cr_m_data['field_y'], cr_m_data['field_dec'])[0]
+    print("DEC transf: dec = {:.5f} * y + {:.5f}".format(m_de, h_de))
+    x_p, y_p = m_ra * x_p + h_ra, m_de * y_p + h_de
+    # plt.subplot(121)
+    # plt.scatter(cr_m_data['field_x'], cr_m_data['field_ra'])
+    # plt.plot(
+    #     [min(cr_m_data['field_x']), max(cr_m_data['field_x'])],
+    #     [f(min(cr_m_data['field_x']), m_ra, h_ra),
+    #      f(max(cr_m_data['field_x']), m_ra, h_ra)], c='r')
+    # plt.subplot(122)
+    # plt.scatter(cr_m_data['field_y'], cr_m_data['field_dec'])
+    # plt.plot(
+    #     [min(cr_m_data['field_y']), max(cr_m_data['field_y'])],
+    #     [f(min(cr_m_data['field_y']), m_de, h_de),
+    #      f(max(cr_m_data['field_y']), m_de, h_de)], c='r')
+    # plt.show()
+
+    return x_p, y_p
+
+
+def centerFilter(x_p, y_p, v_p, b_p, bv_p, apass, mag_max, mag_min):
+    """
+    Center APASS frame, filter data according to V range.
+    """
+    # Center frame for APASS data with proper range.
+    xmin, xmax, ymin, ymax = x_p.min(), x_p.max(), y_p.min(), y_p.max()
+    ra_c, de_c = .5 * (xmin + xmax), .5 * (ymin + ymax)
+    ra_l, de_l = .5 * (xmax - xmin), .5 * (ymax - ymin)
+
+    # Filter APASS frame to match the observed frame.
+    mask = [apass['radeg'] < ra_c + ra_l, ra_c - ra_l < apass['radeg'],
+            apass['decdeg'] < de_c + de_l, apass['decdeg'] > de_c - de_l,
+            mag_min < apass['Johnson_V'], apass['Johnson_V'] < mag_max]
+    total_mask = reduce(np.logical_and, mask)
+    ra_apass = apass['radeg'][total_mask]
+    deg_apass = apass['decdeg'][total_mask]
+    V_apass = apass['Johnson_V'][total_mask]
+    B_apass = apass['Johnson_B'][total_mask]
+    BV_apass = B_apass - V_apass
+    x, y = ra_apass, deg_apass
+    print("Max APASS V: {:.1f}".format(max(V_apass)))
+
+    # Filter observed data to the fixed magnitude range.
+    mask = [mag_min < v_p, v_p < mag_max]  # , ev_p < .03
+    mask = reduce(np.logical_and, mask)
+    print("\nMag limit for myphot: {}".format(mag_max))
+    x_i, y_i, v_i = x_p[mask], y_p[mask], v_p[mask]
+    b_i, bv_i = b_p[mask], bv_p[mask]
+
+    print("APASS stars: {}, myphot stars: {}".format(len(x), len(x_i)))
+
+    return x, y, x_i, y_i, V_apass, B_apass, BV_apass, v_i, b_i, bv_i
 
 
 def closestStar(x_fr1, y_fr1, x_fr2, y_fr2):
@@ -157,6 +176,45 @@ def closestStar(x_fr1, y_fr1, x_fr2, y_fr2):
     return min_dist_idx, min_dists
 
 
+def matchStars(
+        x_apass, y_apass, x_iraf, y_iraf, V_apass, B_apass, BV_apass, v_iraf,
+        b_iraf, bv_iraf):
+    """
+    """
+    min_dist_idx, min_dists = closestStar(x_apass, y_apass, x_iraf, y_iraf)
+
+    print("Match tolerance: {} arcsec".format(N_tol))
+    rad = .00028 * N_tol
+    x_a, y_a, x_i, y_i = [], [], [], []
+    V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f = [], [], [], [], [], []
+    for st1_i, st2_i in enumerate(min_dist_idx):
+        d = min_dists[st1_i]
+        if d < rad:  # and abs(V_apass[st1_i] - v_i[st2_i]) < .5:
+            # print("St1, St2: d={:.5f}".format(d))
+            # print(" ({:.2f}, {:.2f}) ; ({:.2f}, {:.2f})".format(
+            #     x[st1_i], y[st1_i], x_i[st2_i], y_i[st2_i]))
+            # print(" V_1={:.2f}, V_2={:.2f}".format(
+            #     V_apass[st1_i], v_i[st2_i]))
+            x_a.append(x_apass[st1_i])
+            y_a.append(y_apass[st1_i])
+            V_a_f.append(V_apass[st1_i])
+            B_a_f.append(B_apass[st1_i])
+            BV_a_f.append(BV_apass[st1_i])
+
+            x_i.append(x_iraf[st2_i])
+            y_i.append(y_iraf[st2_i])
+            V_i_f.append(v_iraf[st2_i])
+            B_i_f.append(b_iraf[st2_i])
+            BV_i_f.append(bv_iraf[st2_i])
+
+    print("Matched stars: {}".format(len(x_apass)))
+
+    V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f =\
+        np.array(V_a_f), np.array(B_a_f), np.array(BV_a_f),\
+        np.array(V_i_f), np.array(B_i_f), np.array(BV_i_f)
+    return x_a, y_a, x_i, y_i, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f
+
+
 def f(x, m, h):
     """'straight line"""
     return m * x + h
@@ -178,182 +236,153 @@ def star_size(mag, N=None, min_m=None):
 
 
 def makePlot(
-    mag_sel, N_tol, x, y, V_apass, x_i, y_i, v_i, x1, y1, mag1, x2, y2,
-    mag2):
+    f_id, V_min, V_max, N_tol, x, y, V_apass, x_i, y_i, v_i,
+    x1, y1, x2, y2, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f):
     """
     """
-    mag1, mag2 = np.array(mag1), np.array(mag2)
-    med = np.nanmedian(mag1 - mag2)
-    print("median({}_APASS-V_DAOM): {:.4f}".format(mag_sel, med))
-    print("mean({}_APASS-V_DAOM): {:.4f}".format(
-        mag_sel, np.nanmean(mag1 - mag2)))
-
     plt.style.use('seaborn-darkgrid')
-    fig = plt.figure(figsize=(10, 10))
-    gs = gridspec.GridSpec(2, 2)
+    fig = plt.figure(figsize=(18, 12))
+    gs = gridspec.GridSpec(12, 18)
 
-    # plt.subplot(221)
-    fig.add_subplot(gs[0])
-    plt.title(r"APASS {} ($N$={}, $rad_{{match}}$={} arcsec)".format(
-        mag_sel, len(x), N_tol))
+    plt.subplot(gs[0:6, 0:6])
+    plt.title(r"APASS ($N$={}, $rad_{{match}}$={} arcsec)".format(
+        len(x), N_tol))
     plt.gca().invert_xaxis()
     plt.xlabel("ra")
     plt.ylabel("dec")
     plt.scatter(x, y, s=star_size(V_apass), c='r')
-    plt.scatter(x1, y1, s=star_size(mag1))
+    plt.scatter(x1, y1, s=star_size(V_a_f))
 
-    # plt.subplot(222)
-    fig.add_subplot(gs[1])
-    plt.title(r"DAOM {} ($N_{{matched}}$={})".format(mag_sel, len(x1)))
+    plt.subplot(gs[0:6, 6:12])
+    plt.title(r"IRAF (N={}, $N_{{matched}}$={})".format(
+        len(x_i), len(x1)))
     plt.gca().invert_xaxis()
     plt.xlabel("ra")
     plt.ylabel("dec")
     plt.scatter(x_i, y_i, s=star_size(v_i), c='r')
-    plt.scatter(x2, y2, s=star_size(mag2))
+    plt.scatter(x2, y2, s=star_size(V_i_f))
 
-    # plt.subplot(223)
-    fig.add_subplot(gs[2])
-    plt.ylim(med - 2. * med, med + 2. * med)
-    # plt.ylim(-.5, .5)
-    plt.title("Median diff: {:.4f}".format(med))
-    plt.xlabel(r"${}_{{APASS}}$".format(mag_sel))
-    plt.ylabel(r"${}_{{APASS}}-V_{{DAOM}}$".format(mag_sel))
-    plt.scatter(mag1, mag1 - mag2, s=4)
-    plt.axhline(y=med, c='r')
+    plt.subplot(gs[0:3, 12:18])
+    plt.title("{:.1f} < V < {:.1f}".format(V_min, V_max))
+    plt.xlabel(r"$V_{{APASS}}$")
+    plt.ylabel(r"$V_{{IRAF}}$")
+    plt.scatter(V_a_f, V_i_f, s=4)
+    plt.plot([min(V_a_f), max(V_a_f)], [min(V_a_f), max(V_a_f)], c='r')
+    plt.xlim(min(V_a_f), max(V_a_f))
+    plt.ylim(min(V_a_f), max(V_a_f))
 
-    # plt.subplot(224)
-    fig.add_subplot(gs[3])
-    plt.xlabel(r"${}_{{APASS}}$".format(mag_sel))
-    plt.ylabel(r"${}_{{DAOM}}$".format(mag_sel))
-    plt.scatter(mag1, mag2, s=4)
-    plt.plot([0., 100.], [0., 100.], c='r')
-    plt.xlim(9., 19.)
-    plt.ylim(9., 19.)
+    plt.subplot(gs[3:6, 12:18])
+    plt.xlabel(r"$B_{{APASS}}$")
+    plt.ylabel(r"$B_{{IRAF}}$")
+    plt.scatter(B_a_f, B_i_f, s=4)
+    plt.plot([min(B_a_f), max(B_a_f)], [min(B_a_f), max(B_a_f)], c='r')
+    plt.xlim(min(B_a_f), max(B_a_f))
+    plt.ylim(min(B_a_f), max(B_a_f))
 
-    # plt.subplot(121)
-    # plt.gca().invert_xaxis()
-    # plt.scatter(x, y, s=star_size(V_apass))
-    # plt.subplot(122)
-    # plt.gca().invert_xaxis()
-    # plt.scatter(x_i, y_i, s=star_size(np.array(v_i)))
-    # plt.show()
+    Vmed, Vmean = np.nanmedian(V_a_f - V_i_f), np.nanmean(V_a_f - V_i_f)
+    print("median(V_APASS-V_IRAF): {:.4f}".format(Vmed))
+    print("mean(V_APASS-V_IRAF): {:.4f}".format(Vmean))
+    plt.subplot(gs[6:12, 0:6])
+    plt.ylim(-.5, .5)
+    plt.title("V median diff: {:.4f}".format(Vmed))
+    plt.xlabel(r"$V_{{APASS}}$")
+    plt.ylabel(r"$V_{{APASS}}-V_{{IRAF}}$")
+    plt.scatter(V_a_f, V_a_f - V_i_f, s=4)
+    plt.axhline(y=Vmed, c='r')
+    plt.axhline(y=Vmean, ls='--', c='g')
+
+    Bmed, Bmean = np.nanmedian(B_a_f - B_i_f), np.nanmean(B_a_f - B_i_f)
+    print("median(B_APASS-B_IRAF): {:.4f}".format(Bmed))
+    print("mean(B_APASS-B_IRAF): {:.4f}".format(Bmean))
+    plt.subplot(gs[6:12, 6:12])
+    plt.ylim(-.5, .5)
+    plt.title("B median diff: {:.4f}".format(Bmed))
+    plt.xlabel(r"$B_{{APASS}}$")
+    plt.ylabel(r"$B_{{APASS}}-B_{{IRAF}}$")
+    plt.scatter(B_a_f, B_a_f - B_i_f, s=4)
+    plt.axhline(y=Bmed, c='r')
+    plt.axhline(y=Bmean, ls='--', c='g')
+
+    plt.subplot(gs[6:12, 12:18])
+    BVmed = np.nanmedian(BV_a_f - BV_i_f)
+    plt.title("BV median diff: {:.4f}".format(BVmed))
+    plt.scatter(BV_a_f, V_a_f, s=7, label="APASS")
+    plt.scatter(BV_i_f, V_i_f, s=7, label="IRAF")
+    plt.xlim(min(BV_a_f) - .3, max(BV_a_f) + .3)
+    plt.ylim(min(V_a_f) - .5, max(V_a_f) + .25)
+    plt.xlabel(r"$(B-V)$")
+    plt.ylabel(r"$V$")
+    plt.gca().invert_yaxis()
+    plt.legend()
 
     fig.tight_layout()
     plt.savefig(
-        'output/apass_compare_' + mag_sel + '.png',
-        dpi=300, bbox_inches='tight')
+        'output/apass_' + f_id + '.png', dpi=300, bbox_inches='tight')
 
 
-def main():
+def main(
+    f_id, astro_cross, apass_reg, final_phot, col_IDs, V_min, V_max, N_tol,
+    astrom_gen, regs_filt):
     """
     """
-    input_apass_f = 'input/APASS/bh73_apass.csv'
-    # Read APASS data.
-    apass = ascii.read(input_apass_f, fill_values=('NA', np.nan))
+    # Read cluster photometry.
+    x_p, y_p, v_p, bv_p, b_p = photRead(final_phot, col_IDs)
 
-    # Manually select values to filter the APASS frame to match the observed
-    # frame.
-    # Center
-    # RA: 142.9833 , DEC: -50.2167
-    mask = [apass['radeg'] < 143.35, 142.59 < apass['radeg'],
-            apass['decdeg'] < -49.98, apass['decdeg'] > -50.47]
-    total_mask = reduce(np.logical_and, mask)
-    ra_apass = apass['radeg'][total_mask]
-    deg_apass = apass['decdeg'][total_mask]
-    V_apass = apass['Johnson_V'][total_mask]
-    B_apass = apass['Johnson_B'][total_mask]
-    # BV_apass = apass['BV'][total_mask]
+    if astrom_gen is True:
+        # astrometry.net file
+        astrometryFeed(f_id, x_p, y_p, v_p, regs_filt)
+        return
 
-    x, y = ra_apass, deg_apass
+    # Read APASS data and astrometry.net correlated coordinates.
+    apass, cr_m_data = apassAstroRead(astro_cross, apass_reg)
 
-    # ra_cent = (max(ra_apass) + min(ra_apass)) / 2.
-    # dec_cent = (max(deg_apass) + min(deg_apass)) / 2.
-    # x = (np.array(ra_apass) - ra_cent) * np.cos(np.deg2rad(dec_cent))
-    # y = (np.array(deg_apass) - dec_cent)
+    # Pixels to RA,DEC
+    x_p, y_p = px2Eq(x_p, y_p, cr_m_data)
 
-    # # Flip
-    # x = -x + 1.
-    # x = ((x - min(x)) / (max(x) - min(x))) * 4096
-    # y = ((y - min(y)) / (max(y) - min(y))) * 4096
+    # Center APASS and filter data
+    x_apass, y_apass, x_iraf, y_iraf, V_apass, B_apass, BV_apass,\
+        v_iraf, b_iraf, bv_iraf =\
+        centerFilter(x_p, y_p, v_p, b_p, bv_p, apass, V_max, V_min)
 
-    x_p, y_p, v_p, b_p = photRead()
-    # Save photometry to feed astrometry.net
-    # from astropy.table import Table
-    # t = Table([x_p, y_p, v_p])
-    # t.sort('V')
-    # x_p, y_p, v_p = t['x'], t['y'], t['V']
-    # mask = [x_p < 2500., 1500. < x_p, y_p < 2500., y_p > 1500.]
-    # total_mask = reduce(np.logical_and, mask)
-    # xm, ym = x_p[total_mask], y_p[total_mask]
-    # ascii.write([xm, ym], "bh73_astrometry.dat")
-
-    # Transform pixels to (ra, dec)
-    # astrometry.net cross-matched data
-    hdul = fits.open('input/APASS/corr.fits')
-    data = hdul[1].data
-    m_ra, h_ra = curve_fit(f, data['field_x'], data['field_ra'])[0]
-    print("RA transf: ra = {:.5f} * x + {:.5f}".format(m_ra, h_ra))
-    m_de, h_de = curve_fit(f, data['field_y'], data['field_dec'])[0]
-    print("DEC transf: dec = {:.5f} * y + {:.5f}".format(m_de, h_de))
-    x_p, y_p = m_ra * x_p + h_ra, m_de * y_p + h_de
-
-    # Select magnitude to analyze
-    mag_sel = 'V'
-    # Magnitude limit for the photometry.
-    mag_l = 20.
-
-    mask = v_p < mag_l
-    print("\nMag limit for myphot: {}".format(mag_l))
-    if mag_sel == 'V':
-        x_i, y_i, v_i = x_p[mask], y_p[mask], v_p[mask]
-    else:
-        x_i, y_i, v_i, b_i = x_p[mask], y_p[mask], v_p[mask], b_p[mask]
-
-    # # Initial translations
-    # ABCD = (0., 0., 1., 0.)
-    # x_i, y_i = transfABCD(x_i, y_i, ABCD)
-
-    print("APASS stars: {}, myphot stars: {}".format(len(x), len(x_i)))
-
-    min_dist_idx, min_dists = closestStar(x, y, x_i, y_i)
-
-    N_tol = 7
-    print("Match tolerance: {} arcsec".format(N_tol))
-    rad = .00028 * N_tol
-    x1, y1, x2, y2, mag1, mag2 = [], [], [], [], [], []
-    for st1_i, st2_i in enumerate(min_dist_idx):
-        d = min_dists[st1_i]
-        if d < rad:  # and abs(V_apass[st1_i] - v_i[st2_i]) < .5:
-            # print("St1, St2: d={:.5f}".format(d))
-            # print(" ({:.2f}, {:.2f}) ; ({:.2f}, {:.2f})".format(
-            #     x[st1_i], y[st1_i], x_i[st2_i], y_i[st2_i]))
-            # print(" V_1={:.2f}, V_2={:.2f}".format(
-            #     V_apass[st1_i], v_i[st2_i]))
-            x1.append(x[st1_i])
-            y1.append(y[st1_i])
-            if mag_sel == 'V':
-                mag1.append(V_apass[st1_i])
-            else:
-                mag1.append(B_apass[st1_i])
-
-            x2.append(x_i[st2_i])
-            y2.append(y_i[st2_i])
-            if mag_sel == 'V':
-                mag2.append(v_i[st2_i])
-            else:
-                mag2.append(b_i[st2_i])
-
-    # solveABCD(x1, y1, x2, y2)
-
-    # x1, y1, x2, y2 = [np.array(_) for _ in [x1, y1, x2, y2]]
-    # print(np.median(x1 - x2), np.median(y1 - y2))
-
-    print("Matched stars: {}".format(len(x1)))
+    # Find stars within match tolerance.
+    x_a, y_a, x_i, y_i, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f =\
+        matchStars(
+            x_apass, y_apass, x_iraf, y_iraf, V_apass, B_apass, BV_apass,
+            v_iraf, b_iraf, bv_iraf)
 
     makePlot(
-        mag_sel, N_tol, x, y, V_apass, x_i, y_i, v_i, x1, y1, mag1, x2, y2,
-        mag2)
+        f_id, V_min, V_max, N_tol, x_apass, y_apass, V_apass,
+        x_iraf, y_iraf, v_iraf, x_a, y_a, x_i, y_i, V_a_f, B_a_f, BV_a_f,
+        V_i_f, B_i_f, BV_i_f)
 
 
 if __name__ == '__main__':
-    main()
+
+    # Identify cluster to process.
+    clusters = ['rup44']
+
+    for f_id in clusters:
+        # Path to astrometry-net cross-matched file.
+        astro_cross = 'input/' + f_id + "_corr.fits"
+
+        # Path to APASS region
+        apass_reg = 'input/' + f_id + "_apass.csv"
+
+        # Path to final photometry file.
+        final_phot = 'input/' + f_id + "_final.dat"
+        # Column IDs in 'final_phot' file: x, y, V, BV
+        col_IDs = ['col2', 'col3', 'col4', 'col6']
+
+        # Magnitude limit for the photometry.
+        V_min, V_max = 7., 16.
+        # Tolerance in arcsec for the cross-match
+        N_tol = 15
+
+        # Create file to feed astrometry.net?
+        astrom_gen = True
+        # xmin, xmax, ymin, ymax
+        regs_filt = [1400., 2800., 1400., 2800.]
+
+        main(
+            f_id, astro_cross, apass_reg, final_phot, col_IDs,
+            V_min, V_max, N_tol, astrom_gen, regs_filt)

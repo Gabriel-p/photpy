@@ -379,6 +379,7 @@ C      CHARACTER(LEN=10) DATUM2(2,MAXFRM)
       INTEGER IWHICH(MAX,*), NOBS(*), INDEX(*), NLINE(*)
       INTEGER LAST1(MINY:MAXY), LAST2(MINY:MAXY), NTERM(MAXFRM)
       INTEGER IBNRY, INT, NINT, ICLOSE, LENGTH, radius_param
+      INTEGER minimum_rad
       BYTE LINE(128,*)
 
 C
@@ -486,13 +487,11 @@ C
      .        18X, '4:  Translations, rotation, and scale'/
      .        18X, '6:  Full, six-constant linear transformation')
       CALL TBLANK
-C      CALL GETDAT ('Your choice:', WT, 1)
-      
+      CALL GETDAT ('Your choice:', WT, 1)
+
 C     Fixed
-      WT = 4
-       
-       WRITE (*,*) 'Desired degrees of freedom: ',WT
-      
+C      WT = 2
+
       IF ((WT .LE. 0.5) .OR. (WT .GT. 20.5)) CALL BYEBYE
       MODE=NINT(WT)
       IF ((MODE .NE. 2) .AND. (MODE .NE. 4) .AND. (MODE .NE. 6) .AND.
@@ -512,11 +511,13 @@ C
       END DO
 C
       WRITE (*,*) ' '
-C      CALL GETDAT ('Critical match-up radius:', RADIUS, 1)
+      CALL GETDAT ('Critical match-up radius:', RADIUS, 1)
+C     Must be smaller than: 
+      CALL GETDAT ('Minimum match radius sigma:', minimum_rad, 1)
 
 c      matchup = 30
-      RADIUS = 30
-      WRITE (*,*) 'INGRESANDO RADIUS = 30'
+C       RADIUS = 30
+C       WRITE (*,*) 'INGRESANDO RADIUS = 30'
 
       IF (RADIUS .LE. 0) GO TO 80
 C
@@ -1416,12 +1417,13 @@ C
       ROLD = RADIUS
 C      CALL GETDAT ('New match-up radius (0 to exit):', RADIUS, 1)
       
-      IF (RADIUS .GE. 3) THEN
+      IF (RADIUS .GE. minimum_rad) THEN
          RADIUS = RADIUS -1
       ELSE IF (radius_param .LE. 10) THEN
-         RADIUS = 2.
+C       Repeat this last smaller radius value 10 times
          radius_param = radius_param +1
       ELSE
+C           This means 'exit'
             RADIUS = 0.
       END IF   
       WRITE (*,*) 'RADIUS,radius_param = ', RADIUS,radius_param
@@ -1492,30 +1494,8 @@ C
       CALL INQUIR ('Now, do you want...', 45)
       CALL TBLANK
 c      CALL GETYN ('A file with mean magnitudes and scatter?', ANSWER)
-
-      IF (LFILE .EQ. 'ufilter.mch') THEN
       ANSWER = 'Y'
-      ELSE
-          IF (LFILE .EQ. 'bfilter.mch') THEN
-          ANSWER = 'Y'
-          ELSE
-              IF (LFILE .EQ. 'vfilter.mch') THEN
-              ANSWER = 'Y'
-              ELSE
-                  IF (LFILE .EQ. 'ifilter.mch') THEN
-                  ANSWER = 'Y'
-                  ELSE
-                      IF (LFILE .EQ. 'daom.mch') THEN
-                      ANSWER = 'N'
-                      ELSE
-                          WRITE (*,*) 'Unknown error. Check code'
-                      END IF
-                  END IF
-              END IF
-          END IF
-       END IF 
-       
-       WRITE (*,*) 'A file with mean magnitudes and scatter?: ',ANSWER
+      WRITE (*,*) 'A file with mean magnitudes and scatter?: ',ANSWER
 
       IF (ANSWER .EQ. 'E') THEN
          CALL BYEBYE
@@ -1675,7 +1655,7 @@ C
 C      CALL GETYN 
 C     .     ('A file with corrected magnitudes and errors?', ANSWER)
 
-      ANSWER = 'Y'
+      ANSWER = 'N'
       WRITE (*,*) 'A file with corrected magnitudes and errors?: ',
      .      ANSWER
 
@@ -1737,43 +1717,20 @@ C
      .               ((DATUM(J,I), J=1,2), I=1,NFRM),
      .               SUMCHI, SUMSHP
  1115          FORMAT (I6, 2F9.3, 12F9.4:/ (24X, 12F9.4))
- 1116          FORMAT (I6, 2F9.3, 8A, 4F9.4:/ (24X, 12F9.4))
+C 1116          FORMAT (I6, 2F9.3, 8A, 4F9.4:/ (24X, 12F9.4))
             END IF
          END DO
          CALL CLFILE (1)
       END IF
 C
 C      CALL GETYN ('A file with raw magnitudes and errors?', ANSWER)
-      
-      IF (LFILE .EQ. 'ufilter.mch') THEN
       ANSWER = 'Y'
-      ELSE
-          IF (LFILE .EQ. 'bfilter.mch') THEN
-          ANSWER = 'N'
-          ELSE
-              IF (LFILE .EQ. 'vfilter.mch') THEN
-              ANSWER = 'Y'
-              ELSE
-                  IF (LFILE .EQ. 'ifilter.mch') THEN
-                  ANSWER = 'N'
-                  ELSE
-                      IF (LFILE .EQ. 'daom.mch') THEN
-                      ANSWER = 'Y'
-                      ELSE
-                          WRITE (*,*) 'Unknown error. Check code'
-                      END IF
-                  END IF
-              END IF
-          END IF
-       END IF 
-       
-       WRITE (*,*) 'A file with raw magnitudes and errors?: ',ANSWER      
+      WRITE (*,*) 'A file with raw magnitudes and errors?: ',ANSWER      
       
       IF (ANSWER .EQ. 'E') THEN
          CALL BYEBYE
       ELSE IF (ANSWER .EQ. 'Y') THEN
          OFILE=SWITCH(LFILE, CASE('.raw'))
-         WRITE (*,*) 'Output file: ', OFILE
          CALL GETFIL ('Output file name:', OFILE, 1, 'NEW')
 
          CALL INFILE (2, FILE(1), ISTAT)
@@ -1800,16 +1757,16 @@ C
                   DATUM(1,IFRM)=M(J)
                   DATUM(2,IFRM)=AMIN1
      .                 (9.9999,SQRT(AMAX1(0., S(J)-SOFT)))
-      WRITE (DATUM2(1,IFRM), *) (DATUM(1,IFRM))
-      WRITE (DATUM2(2,IFRM), *) (DATUM(2,IFRM))  
+C      WRITE (DATUM2(1,IFRM), *) (DATUM(1,IFRM))
+C      WRITE (DATUM2(2,IFRM), *) (DATUM(2,IFRM))  
     
                   SUMCHI=SUMCHI+CHI(J)
                   SUMSHP=SUMSHP+SHARP(J)
                ELSE
                   DATUM(1,IFRM)=99.9999
                   DATUM(2,IFRM)=9.9999
-      WRITE (DATUM2(1,IFRM), *) (DATUM(1,IFRM))
-      WRITE (DATUM2(2,IFRM), *) (DATUM(2,IFRM))                   
+C      WRITE (DATUM2(1,IFRM), *) (DATUM(1,IFRM))
+C      WRITE (DATUM2(2,IFRM), *) (DATUM(2,IFRM))                   
                   DATUM2(1,IFRM)="  INDEF"
                   DATUM2(2,IFRM)="  INDEF"
                END IF
@@ -1823,9 +1780,9 @@ C
      .               XM(IMASTR), YM(IMASTR), 
      .               ((DATUM(J,I), J=1,2), I=1,NFRM), SUMCHI, SUMSHP
             ELSE
-               WRITE (1,1116) IDMAST(IMASTR),
+               WRITE (1,1115) IDMAST(IMASTR),
      .               XM(IMASTR), YM(IMASTR), 
-     .               ((DATUM2(J,I), J=1,2), I=1,NFRM), SUMCHI, SUMSHP
+     .               ((DATUM(J,I), J=1,2), I=1,NFRM), SUMCHI, SUMSHP
             END IF
          END DO
          CALL CLFILE (1)
