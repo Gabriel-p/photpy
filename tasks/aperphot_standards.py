@@ -164,12 +164,12 @@ def main():
 
     for proc_gr, mch_file in enumerate(mch_files):
 
-        stnd_fl = mch_file.split('/')[-1].split('.')[0]
-        print("\nAperture photometry and fit transformation\n"
-              "equations for the standard field: {}".format(stnd_fl))
-
         # Read data for this Landolt field, from '.mch' file.
         landolt_fl = read_standard_coo(mch_file)
+
+        stnd_fl = landolt_fl['ref'][0]
+        print("\nAperture photometry and fit transformation\n"
+              "equations for the standard field: {}".format(stnd_fl))
 
         N_star_fld = {'U': 0, 'B': 0, 'V': 0, 'R': 0, 'I': 0}
         # For each observed .fits standard file.
@@ -177,38 +177,43 @@ def main():
             f_name = fr.split('/')[-1].split('.')[0]
             tfilt = landolt_fl[landolt_fl['frame'] == f_name]
 
-            # Load .fits file.
-            hdulist = fits.open(fr)
-            # Extract header and data.
-            hdr, hdu_data = hdulist[0].header, hdulist[0].data
-            filt, exp_time, airmass = hdr[pars['filter_key']],\
-                hdr[pars['exposure_key']], hdr[pars['airmass_key']]
+            # Only process .fits files present in the .mch files.
+            if tfilt:
+                # Load .fits file.
+                hdulist = fits.open(fr)
+                # Extract header and data.
+                hdr, hdu_data = hdulist[0].header, hdulist[0].data
+                filt, exp_time, airmass = hdr[pars['filter_key']],\
+                    hdr[pars['exposure_key']], hdr[pars['airmass_key']]
 
-            # Obtain instrumental magnitudes for the standard stars in the
-            # defined Landolt field, in this observed frame.
-            photu = instrumMags(
-                f_name, tfilt, hdu_data, exp_time,
-                float(pars['aperture']), float(pars['annulus_in']),
-                float(pars['annulus_out']))
+                # Obtain instrumental magnitudes for the standard stars in the
+                # defined Landolt field, in this observed frame.
+                photu = instrumMags(
+                    f_name, tfilt, hdu_data, exp_time,
+                    float(pars['aperture']), float(pars['annulus_in']),
+                    float(pars['annulus_out']))
 
-            N_star = sum(~np.isnan(photu['cal_mags']))
-            # Increase number of observed stars.
-            num_stars[filt] += N_star
-            N_star_fld[filt] += N_star
-            print(" {} (F: {}, t: {}, A: {}, N_strs: {}"
-                  ")".format(f_name, filt, exp_time, airmass, N_star))
+                N_star = sum(~np.isnan(photu['cal_mags']))
+                # Increase number of observed stars.
+                num_stars[filt] += N_star
+                N_star_fld[filt] += N_star
+                print(" {} (F: {}, t: {}, A: {}, N_strs: {}"
+                      ")".format(f_name, filt, exp_time, airmass, N_star))
 
-            # Extract data for this filter.
-            # TODO HARDCODED: the color terms used in the transformation
-            # equations are decided here.
-            stand_mag, stand_col = standardMagCol(tfilt, filt)
+                # Extract data for this filter.
+                # TODO HARDCODED: the color terms used in the transformation
+                # equations are decided here.
+                stand_mag, stand_col = standardMagCol(tfilt, filt)
 
-            # Group frames by filter.
-            # Filt  Stnd_field ID  file  exp_t  A   mag  Col_L  Mag_L
-            for i, ID in enumerate(tfilt['ID']):
-                filters[filt].append(
-                    [filt, stnd_fl, ID, f_name, str(exp_time), airmass,
-                     photu['cal_mags'][i].value, stand_col[i], stand_mag[i]])
+                # Group frames by filter.
+                # Filt  Stnd_field ID  file  exp_t  A   mag  Col_L  Mag_L
+                for i, ID in enumerate(tfilt['ID']):
+                    filters[filt].append(
+                        [filt, stnd_fl, ID, f_name, str(exp_time), airmass,
+                         photu['cal_mags'][i].value, stand_col[i],
+                         stand_mag[i]])
+            else:
+                print("{} not present in .mch file.".format(f_name))
 
         N_star_sum = sum([_ for _ in N_star_fld.values()])
         print("Stars processed for this field: {}".format(N_star_sum))
