@@ -1,7 +1,7 @@
 
 import numpy as np
 from scipy.spatial import cKDTree
-from scipy.optimize import curve_fit
+from scipy.stats import linregress
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from astropy.io import ascii
@@ -17,27 +17,6 @@ def photRead(final_phot, col_IDs):
     print("Read final photometry")
     phot = ascii.read(final_phot, fill_values=('INDEF', np.nan))
 
-    # plt.style.use('seaborn-darkgrid')
-
-    # plt.subplot(131)
-    # plt.xlabel("(B-V)")
-    # plt.ylabel("V")
-    # plt.scatter(phot['col6'], phot['col4'], s=5)
-    # plt.gca().invert_yaxis()
-
-    # plt.subplot(132)
-    # plt.xlabel("(V-I)")
-    # plt.ylabel("V")
-    # plt.scatter(phot['col10'], phot['col4'], s=5)
-    # plt.gca().invert_yaxis()
-
-    # plt.subplot(133)
-    # plt.xlabel("(B-V)")
-    # plt.ylabel("U-B")
-    # plt.scatter(phot['col6'], phot['col8'], s=5)
-    # plt.gca().invert_yaxis()
-
-    # plt.show()
     id_x, id_y, id_v, id_bv = col_IDs
     x_p, y_p, v_p, bv_p = phot[id_x], phot[id_y], phot[id_v], phot[id_bv]
     b_p = bv_p + v_p
@@ -80,11 +59,12 @@ def px2Eq(x_p, y_p, cr_m_data):
     """
     Transform pixels to (ra, dec) using the correlated astrometry.net file.
     """
-    m_ra, h_ra = curve_fit(f, cr_m_data['field_x'], cr_m_data['field_ra'])[0]
+    m_ra, h_ra = linregress(cr_m_data['field_x'], cr_m_data['field_ra'])[:2]
     print("RA transf: ra = {:.5f} * x + {:.5f}".format(m_ra, h_ra))
-    m_de, h_de = curve_fit(f, cr_m_data['field_y'], cr_m_data['field_dec'])[0]
+    m_de, h_de = linregress(cr_m_data['field_y'], cr_m_data['field_dec'])[:2]
     print("DEC transf: dec = {:.5f} * y + {:.5f}".format(m_de, h_de))
     x_p, y_p = m_ra * x_p + h_ra, m_de * y_p + h_de
+
     # plt.subplot(121)
     # plt.scatter(cr_m_data['field_x'], cr_m_data['field_ra'])
     # plt.plot(
@@ -110,6 +90,8 @@ def centerFilter(x_p, y_p, v_p, b_p, bv_p, apass, mag_max, mag_min):
     xmin, xmax, ymin, ymax = x_p.min(), x_p.max(), y_p.min(), y_p.max()
     ra_c, de_c = .5 * (xmin + xmax), .5 * (ymin + ymax)
     ra_l, de_l = .5 * (xmax - xmin), .5 * (ymax - ymin)
+    print("RA range : {:.1f} arcsec".format(ra_l * 3600))
+    print("DEC range: {:.1f} arcsec".format(de_l * 3600))
 
     # Filter APASS frame to match the observed frame.
     mask = [apass['radeg'] < ra_c + ra_l, ra_c - ra_l < apass['radeg'],
@@ -127,11 +109,11 @@ def centerFilter(x_p, y_p, v_p, b_p, bv_p, apass, mag_max, mag_min):
     # Filter observed data to the fixed magnitude range.
     mask = [mag_min < v_p, v_p < mag_max]  # , ev_p < .03
     mask = reduce(np.logical_and, mask)
-    print("\nMag limit for myphot: {}".format(mag_max))
+    print("\nMag limit for IRAF: {}".format(mag_max))
     x_i, y_i, v_i = x_p[mask], y_p[mask], v_p[mask]
     b_i, bv_i = b_p[mask], bv_p[mask]
 
-    print("APASS stars: {}, myphot stars: {}".format(len(x), len(x_i)))
+    print("APASS stars: {}, IRAF stars: {}".format(len(x), len(x_i)))
 
     return x, y, x_i, y_i, V_apass, B_apass, BV_apass, v_i, b_i, bv_i
 
@@ -184,7 +166,7 @@ def matchStars(
     min_dist_idx, min_dists = closestStar(x_apass, y_apass, x_iraf, y_iraf)
 
     print("Match tolerance: {} arcsec".format(N_tol))
-    rad = .00028 * N_tol
+    rad = (1. / 3600) * N_tol
     x_a, y_a, x_i, y_i = [], [], [], []
     V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f = [], [], [], [], [], []
     for st1_i, st2_i in enumerate(min_dist_idx):
@@ -207,17 +189,12 @@ def matchStars(
             B_i_f.append(b_iraf[st2_i])
             BV_i_f.append(bv_iraf[st2_i])
 
-    print("Matched stars: {}".format(len(x_apass)))
+    print("Matched stars: {}".format(len(x_a)))
 
     V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f =\
         np.array(V_a_f), np.array(B_a_f), np.array(BV_a_f),\
         np.array(V_i_f), np.array(B_i_f), np.array(BV_i_f)
     return x_a, y_a, x_i, y_i, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f
-
-
-def f(x, m, h):
-    """'straight line"""
-    return m * x + h
 
 
 def star_size(mag, N=None, min_m=None):
@@ -236,8 +213,8 @@ def star_size(mag, N=None, min_m=None):
 
 
 def makePlot(
-    f_id, V_min, V_max, N_tol, x, y, V_apass, x_i, y_i, v_i,
-    x1, y1, x2, y2, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f):
+    f_id, V_min, V_max, N_tol, x_apass, y_apass, V_apass, x_iraf, y_iraf,
+    v_iraf, x_a, y_a, x_i, y_i, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f):
     """
     """
     plt.style.use('seaborn-darkgrid')
@@ -246,21 +223,21 @@ def makePlot(
 
     plt.subplot(gs[0:6, 0:6])
     plt.title(r"APASS ($N$={}, $rad_{{match}}$={} arcsec)".format(
-        len(x), N_tol))
+        len(x_apass), N_tol))
     plt.gca().invert_xaxis()
     plt.xlabel("ra")
     plt.ylabel("dec")
-    plt.scatter(x, y, s=star_size(V_apass), c='r')
-    plt.scatter(x1, y1, s=star_size(V_a_f))
+    plt.scatter(x_apass, y_apass, s=star_size(V_apass), c='r')
+    plt.scatter(x_i, y_i, s=star_size(V_i_f) * .5)
 
     plt.subplot(gs[0:6, 6:12])
     plt.title(r"IRAF (N={}, $N_{{matched}}$={})".format(
-        len(x_i), len(x1)))
+        len(x_iraf), len(x_a)))
     plt.gca().invert_xaxis()
     plt.xlabel("ra")
     plt.ylabel("dec")
-    plt.scatter(x_i, y_i, s=star_size(v_i), c='r')
-    plt.scatter(x2, y2, s=star_size(V_i_f))
+    plt.scatter(x_iraf, y_iraf, s=star_size(v_iraf), c='r')
+    plt.scatter(x_a, y_a, s=star_size(V_a_f) * .5)
 
     plt.subplot(gs[0:3, 12:18])
     plt.title("{:.1f} < V < {:.1f}".format(V_min, V_max))
@@ -331,6 +308,7 @@ def main(
     if astrom_gen is True:
         # astrometry.net file
         astrometryFeed(f_id, x_p, y_p, v_p, regs_filt)
+        print("astrometry.net file generated.")
         return
 
     # Read APASS data and astrometry.net correlated coordinates.
@@ -359,7 +337,7 @@ def main(
 if __name__ == '__main__':
 
     # Identify cluster to process.
-    clusters = ['rup44']
+    clusters = ['rup42', 'rup44']
 
     for f_id in clusters:
         # Path to astrometry-net cross-matched file.
@@ -381,7 +359,7 @@ if __name__ == '__main__':
         # Create file to feed astrometry.net?
         astrom_gen = False
         # xmin, xmax, ymin, ymax
-        regs_filt = [1400., 2800., 1400., 2800.]
+        regs_filt = [0., 20000., 0., 20000.]
 
         main(
             f_id, astro_cross, apass_reg, final_phot, col_IDs,
