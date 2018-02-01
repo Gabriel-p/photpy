@@ -308,7 +308,7 @@ def makePlot(
     plt.title("BV median diff: {:.4f}".format(BVmed))
     plt.scatter(BV_a_f, V_a_f, s=7, label="APASS")
     plt.scatter(BV_i_f, V_i_f, s=7, label="IRAF")
-    plt.xlim(min(BV_a_f) - .3, max(BV_a_f) + .3)
+    plt.xlim(max(min(BV_a_f) - .3, -.3), max(BV_a_f) + .3)
     plt.ylim(min(V_a_f) - .5, max(V_a_f) + .25)
     plt.xlabel(r"$(B-V)$")
     plt.ylabel(r"$V$")
@@ -379,7 +379,7 @@ if __name__ == '__main__':
         N_tol = 15
 
         # Create file to feed astrometry.net?
-        astrom_gen = True
+        astrom_gen = False
         # xmin, xmax, ymin, ymax
         regs_filt = [1400., 2800., 1400., 2800.]
 
