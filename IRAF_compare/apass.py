@@ -302,6 +302,7 @@ def main(
     astrom_gen, regs_filt):
     """
     """
+    print("\nProcessing: {}".format(f_id))
     # Read cluster photometry.
     x_p, y_p, v_p, bv_p, b_p = photRead(final_phot, col_IDs)
 
@@ -337,7 +338,7 @@ def main(
 if __name__ == '__main__':
 
     # Identify cluster to process.
-    clusters = ['rup42', 'rup44']
+    clusters = ['tr13']
 
     for f_id in clusters:
         # Path to astrometry-net cross-matched file.

@@ -51,3 +51,8 @@ Creates the `phot_compare.png` file.
 Compares the (aperture corrected) magnitudes in a `als` file (IRAF) with the
 magnitudes obtained with the Python scripts.
 
+
+## phot_clean
+
+Takes the final photometry and removes stars beyond given ranges in all
+colors. Also removes stars with all 'nan' values in their photometry.
