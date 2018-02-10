@@ -1,7 +1,7 @@
 
 import numpy as np
 from scipy.spatial import cKDTree
-from scipy.stats import linregress
+from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from astropy.io import ascii
@@ -55,15 +55,26 @@ def apassAstroRead(astro_cross, apass_reg):
     return apass, cr_m_data
 
 
+def func(X, a, b, c):
+    x, y = X
+    return a * x + b + c * y
+
+
 def px2Eq(x_p, y_p, cr_m_data):
     """
     Transform pixels to (ra, dec) using the correlated astrometry.net file.
     """
-    m_ra, h_ra = linregress(cr_m_data['field_x'], cr_m_data['field_ra'])[:2]
-    print("RA transf: ra = {:.5f} * x + {:.5f}".format(m_ra, h_ra))
-    m_de, h_de = linregress(cr_m_data['field_y'], cr_m_data['field_dec'])[:2]
-    print("DEC transf: dec = {:.5f} * y + {:.5f}".format(m_de, h_de))
-    x_p, y_p = m_ra * x_p + h_ra, m_de * y_p + h_de
+    x0, y0 = cr_m_data['field_ra'], cr_m_data['field_dec']
+    x1, y1 = cr_m_data['field_x'], cr_m_data['field_y']
+    p0 = (0., 100., 0.)
+    x2ra = curve_fit(func, (x1, y1), x0, p0)[0]
+    y2de = curve_fit(func, (y1, x1), y0, p0)[0]
+
+    print("ra  = {:.5f} * x + {:.5f} + {:.7f} * y".format(*x2ra))
+    print("dec = {:.5f} * y + {:.5f} + {:.7f} * x".format(*y2de))
+    x_p0 = x2ra[0] * x_p + x2ra[1] + x2ra[2] * y_p
+    y_p = y2de[0] * y_p + y2de[1] + y2de[2] * x_p
+    x_p = x_p0
 
     # plt.subplot(121)
     # plt.scatter(cr_m_data['field_x'], cr_m_data['field_ra'])
@@ -338,7 +349,7 @@ def main(
 if __name__ == '__main__':
 
     # Identify cluster to process.
-    clusters = ['tr13']
+    clusters = ['haf14']
 
     for f_id in clusters:
         # Path to astrometry-net cross-matched file.
