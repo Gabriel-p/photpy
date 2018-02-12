@@ -8,7 +8,7 @@ filter_key       FILTER
 exposure_key     EXPTIME
 airmass_key      AIRMASS
 dmin             a        <-- TODO
-dmax             65000.0
+dmax             60000.0
 
 ###############################################################################
 
@@ -38,7 +38,7 @@ do_plots_A       y
 # match_mode: auto / manual / xyshift
 #
 #ref_fld_fldr     PG0231, standards/pg0231/
-ref_fld_fldr     stk3103.fits, master
+ref_fld_fldr     stk2121.fits, field/master
 match_mode       xyshift
 # Used by 'auto' mode.
 scale_min        1.

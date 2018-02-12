@@ -102,6 +102,7 @@ tasks/pyraf/*
 IRAF_compare/pyraf/*
 IRAF_compare/input/*/*.mag
 IRAF_compare/input/*/*.raw
+IRAF_compare/input/*.csv
 uparm/*
 login.cl
 loginuser.cl

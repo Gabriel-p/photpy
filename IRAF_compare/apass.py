@@ -349,7 +349,7 @@ def main(
 if __name__ == '__main__':
 
     # Identify cluster to process.
-    clusters = ['haf14']
+    clusters = ['rup42']
 
     for f_id in clusters:
         # Path to astrometry-net cross-matched file.

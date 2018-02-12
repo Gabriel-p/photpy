@@ -77,7 +77,8 @@ def plotRaw(f_id):
     Plot 'daom.raw' photometry diagrams.
     """
     data = ascii.read(
-        'input/' + f_id + '/daom.raw', fill_values=('INDEF', np.nan))
+        'input/' + f_id + '/daom.raw',
+        fill_values=[('INDEF', np.nan), ('99.9999', np.nan)])
     v, b, u, i = data['col4'], data['col6'], data['col8'], data['col10']
     v, b, u, i = np.array(v), np.array(b), np.array(u), np.array(i)
 
@@ -121,11 +122,14 @@ def main():
     """
     """
     # ID for this observation.
-    f_id = 'rup42'
+    f_id = 'haf14'
     magAnalysis(f_id)
 
-    # Airmasses of longest exposures (Rup42)
-    AU, AB, AV, AI = 1.003, 1.002, 1.057, 1.01
+    # Airmasses of longest exposures
+    # Rup42
+    # AU, AB, AV, AI = 1.003, 1.002, 1.057, 1.01
+    # Haffner 14
+    AU, AB, AV, AI = 1.006, 1.001, 1.001, 1.022
 
     createObsfile(f_id, AU, AB, AV, AI)
 

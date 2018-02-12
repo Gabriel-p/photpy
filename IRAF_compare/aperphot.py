@@ -38,34 +38,34 @@ def iraf_phot(image_file, coo_file, dmin, dmax, gain, rdnoise, exp_time,
               aper_rad):
     """
     """
-    try:
-        os.remove('iraf_phot.mag')
-    except OSError:
-        pass
+    # try:
+    #     os.remove('iraf_phot.mag')
+    # except OSError:
+    #     pass
 
-    iraf.daophot()
-    iraf.datapars.datamin = dmin
-    iraf.datapars.datamax = dmax
-    iraf.datapars.epadu = gain
-    iraf.datapars.readnoise = rdnoise
-    iraf.datapars.itime = exp_time
-    iraf.datapars.airmass = "AIRMASS"
-    iraf.datapars.filter = "FILTER"
+    # iraf.daophot()
+    # iraf.datapars.datamin = dmin
+    # iraf.datapars.datamax = dmax
+    # iraf.datapars.epadu = gain
+    # iraf.datapars.readnoise = rdnoise
+    # iraf.datapars.itime = exp_time
+    # iraf.datapars.airmass = "AIRMASS"
+    # iraf.datapars.filter = "FILTER"
 
-    iraf.centerpars.calgorithm = "centroid"
-    iraf.centerpars.cbox = 8.
+    # iraf.centerpars.calgorithm = "centroid"
+    # iraf.centerpars.cbox = 8.
 
-    iraf.fitskypars.annulus = aper_rad + 5.
-    iraf.fitskypars.dannulus = 5.
+    # iraf.fitskypars.annulus = aper_rad + 5.
+    # iraf.fitskypars.dannulus = 5.
 
-    iraf.photpars.apertures = aper_rad
-    iraf.photpars.zmag = 25.
+    # iraf.photpars.apertures = aper_rad
+    # iraf.photpars.zmag = 25.
 
-    iraf.phot(
-        image=image_file, coords=coo_file, output="iraf_phot.mag", verify="no",
-        mode="h")
+    # iraf.phot(
+    #     image=image_file, coords=coo_file, output="iraf_phot.mag", verify="no",
+    #     mode="h")
 
-    # iraf.epar('phot')
+    # # iraf.epar('phot')
 
     data = ascii.read('iraf_phot.mag', format='daophot')
 
@@ -100,8 +100,8 @@ def calc_aperture_mmm(data, mask, sigma_clip):
         return (mean, median, mode, std, actual_area)
 
 
-def aperture_stats_tbl(data, apertures,
-                       method='exact', sigma_clip=True):
+def aperture_stats_tbl(
+    data, apertures, method='exact', sigma_clip=True):
     """Computes mean/median/mode/std in Photutils apertures.
     Compute statistics for custom local background methods.
     This is primarily intended for estimating backgrounds
@@ -150,8 +150,16 @@ def aperture_stats_tbl(data, apertures,
     # Make the table
     stats_tbl = Table(data=stacked, names=names)
 
-
     return stats_tbl
+
+
+def compute_phot_error(flux_variance, bg_phot, ap_area, epadu):
+    """Computes the flux errors using the DAOPHOT style computation"""
+    bg_variance_terms = (ap_area * bg_phot['aperture_std'] ** 2.) *\
+        (1. + ap_area / bg_phot['aperture_area'])
+    variance = flux_variance / epadu + bg_variance_terms
+    flux_error = variance ** .5
+    return flux_error
 
 
 def photutils_phot(coo_file, hdu_data, gain, exp_time, aper_rad):
@@ -166,72 +174,81 @@ def photutils_phot(coo_file, hdu_data, gain, exp_time, aper_rad):
 
     apers = [apertures, annulus_apertures]
 
-    # from photutils import Background2D
     # # from astropy.stats import SigmaClip
     # # from photutils import MedianBackground
     # # sigma_clip = SigmaClip(sigma=3., iters=10)
     # # bkg_estimator = MedianBackground()
 
-    # # Selecting the box size requires some care by the user. The box size
-    # # should generally be larger than the typical size of sources in the
-    # # image, but small enough to encapsulate any background variations. For
-    # # best results, the box size should also be chosen so that the data are
-    # # covered by an integer number of boxes in both dimensions.
-    # bl = 10
-    # box_xy = (bl, bl)
-    # bkg = Background2D(hdu_data, box_xy)
-    # print("background estimated")
-    # error = calc_total_error(hdu_data, bkg.background, gain)
+    # Selecting the box size requires some care by the user. The box size
+    # should generally be larger than the typical size of sources in the
+    # image, but small enough to encapsulate any background variations. For
+    # best results, the box size should also be chosen so that the data are
+    # covered by an integer number of boxes in both dimensions.
+    from photutils import Background2D
+    bl = 10
+    box_xy = (bl, bl)
+    bkg = Background2D(hdu_data, box_xy)
+    print("background estimated")
+    error = calc_total_error(hdu_data, bkg.background, gain)
 
     # # from astropy.stats import biweight_midvariance
     # # sky_std = biweight_midvariance(hdu_data)
-    # # sky_median = np.median(hdu_data)
-    # # error = calc_total_error(hdu_data, sky_median, gain)
+    # sky_median = np.median(hdu_data)
+    # error = calc_total_error(hdu_data, sky_median, gain)
 
-    error = None
+    # error = 0.1 * hdu_data
+    # error = None
     phot_table = aperture_photometry(hdu_data, apers, error=error)
     bkg_mean = phot_table['aperture_sum_1'] / annulus_apertures.area()
     bkg_sum = bkg_mean * apertures.area()
     phot_table['flux_fit'] = phot_table['aperture_sum_0'] - bkg_sum
     phot_table = calibrate_magnitudes(phot_table, itime=exp_time)
 
-    # phot_table['merr'] = 1.0857 *\
-    #     phot_table['aperture_sum_err_0'] / phot_table['flux_fit']
+    # bg_phot = aperture_stats_tbl(
+    #     hdu_data, annulus_apertures, sigma_clip=False)
+    # flux_error = compute_phot_error(
+    #     phot_table['flux_fit'], bg_phot, apertures.area(), gain)
+    # phot_table['merr'] = 1.0857 * flux_error / phot_table['flux_fit']
 
-    #
-    # From https://github.com/astropy/photutils/issues/629#issuecomment-359595642
+    phot_table['merr'] = 1.0857 *\
+        phot_table['aperture_sum_err_0'] / phot_table['flux_fit']
+
+    return phot_table
+
+
+def iraf_style_photometry(coo_file, hdu_data, gain, exp_time, aper_rad):
+    """
+    From https://github.com/astropy/photutils/issues/629#issuecomment-359595642
+    """
+
+    # Coordinates from observed frame.
+    coo_t = Table.read(coo_file, format='ascii')
+    positions = zip(*[coo_t['XCENTER'], coo_t['YCENTER']])
+    phot_apertures = CircularAperture(positions, r=aper_rad)
+    bg_apertures = CircularAnnulus(
+        positions, r_in=aper_rad + 5, r_out=aper_rad + 10.)
+
     error_array = None
-    phot_table2 = aperture_photometry(hdu_data, apertures, error=error_array)
-    bg_phot = aperture_stats_tbl(hdu_data, annulus_apertures, sigma_clip=False)
+    phot = aperture_photometry(
+        hdu_data, phot_apertures, error=error_array)
+    bg_phot = aperture_stats_tbl(hdu_data, bg_apertures, sigma_clip=False)
 
-    ap_area = apertures.area()
+    ap_area = phot_apertures.area()
     bg_method = 'mean'
     bg_method_name = 'aperture_{}'.format(bg_method)
+    flux = phot['aperture_sum'] - bg_phot[bg_method_name] * ap_area
 
-    phot_table2['flux_fit'] = phot_table2['aperture_sum'] -\
-        bg_phot[bg_method_name] * ap_area
+    flux_error = compute_phot_error(flux, bg_phot, ap_area, gain)
 
-    # Shouldn't 'bkg_mean' and 'bg_phot[bg_method_name]' be equivalent?
-    # https://github.com/spacetelescope/wfc3_photometry/issues/2
-    import pdb; pdb.set_trace()  # breakpoint e8e7e7d3 //
+    mag_err = 1.0857 * flux_error / flux
 
+    # Make the final table
+    stacked = np.stack([flux, flux_error, mag_err], axis=1)
+    names = ['flux_fit', 'flux_error', 'merr']
 
-    # def compute_phot_error(
-    #         flux_variance, bg_phot, bg_method, ap_area, epadu=1.0):
-    #     """Computes the flux errors using the DAOPHOT style computation"""
-    #     bg_variance_terms = (ap_area * bg_phot['aperture_std'] ** 2.) *\
-    #         (1. + ap_area / bg_phot['aperture_area'])
-    #     variance = flux_variance / epadu + bg_variance_terms
-    #     flux_error = variance ** .5
-    #     return flux_error
+    phot_table = Table(data=stacked, names=names)
 
-    # flux_error = compute_phot_error(
-    #     phot_table['flux_fit'], bg_phot, 'median', ap_area, gain)
-
-    # mag_err = 1.0857 * flux_error / phot_table['flux_fit']
-    # mag_err[mag_err < 0] = np.nan
-    # phot_table['merr'] = mag_err
-    # phot_table = calibrate_magnitudes(phot_table, itime=exp_time)
+    phot_table = calibrate_magnitudes(phot_table, itime=exp_time)
 
     return phot_table
 
@@ -269,7 +286,7 @@ def main():
     Compare results from aperture photometry using IRAF's 'phot' and photutil's
     'CircularAperture'.
     """
-    imname = 'stk1111'
+    imname = 'stk_fcd0048'
     image_file, coo_file, hdu_data, exp_time, gain, rdnoise = load_data(imname)
 
     aper_rad, dmax = 15., 60000.
@@ -277,10 +294,13 @@ def main():
     dmin = -3. * (rdnoise / gain)
     print("dmin = {:.2f}".format(dmin))
 
+    photu_data = photutils_phot(coo_file, hdu_data, gain, exp_time, aper_rad)
+
+    photu_data2 = iraf_style_photometry(
+        coo_file, hdu_data, gain, exp_time, aper_rad)
+
     iraf_data = iraf_phot(image_file, coo_file, dmin, dmax, gain, rdnoise,
                           exp_time, aper_rad)
-
-    photu_data = photutils_phot(coo_file, hdu_data, gain, exp_time, aper_rad)
 
     # write_data(iraf_data, photu_data)
 
@@ -293,9 +313,21 @@ def main():
     plt.subplot(212)
     plt.grid()
     plt.scatter(
-        iraf_data['MERR'], (iraf_data['MERR'] - photu_data['merr']))
+        iraf_data['MERR'], (iraf_data['MERR'] - photu_data['merr']),
+        label='photu')
+    print("Phot1 median diff: {:.5f}".format(
+        np.median(iraf_data['MERR'] - photu_data['merr'])))
+    plt.scatter(
+        iraf_data['MERR'], (iraf_data['MERR'] - photu_data2['merr']),
+        label='photu2')
+    print("Phot2 median diff: {:.5f}".format(
+        np.median(iraf_data['MERR'] - photu_data2['merr'])))
     plt.xlabel("IRAF merr")
     plt.ylabel("(IRAF - photutil) merr")
+    plt.legend()
+
+    # plt.hist(iraf_data['MERR'] - photu_data['merr'], bins=1000)
+    # plt.xlim(-5., 5.)
     plt.show()
 
 

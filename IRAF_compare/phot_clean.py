@@ -101,7 +101,7 @@ def main():
     Filter photometry for color ranges given. Also remove stars with all
     'nan' values in their photometry.
     """
-    f_id = 'rup42_final.dat'
+    f_id = 'haf14_final.dat'
 
     # Define acceptable color ranges for this data.
     BV_min, BV_max = 0.2, 2.5
