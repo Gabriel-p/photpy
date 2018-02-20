@@ -52,34 +52,6 @@ C
       A=1
       DO A=1,5
 C THIS DO RUNS THROUGH ALL THE .mch FILES
-      
-      IF (A .EQ. 1) THEN
-      WRITE (*,*) ' '
-      WRITE (*,*) '                 NOW WORKING ON FILTER U'
-      ELSE
-          IF (A .EQ. 2) THEN
-          WRITE (*,*) ' '
-          WRITE (*,*) '                 NOW WORKING ON FILTER B'
-          ELSE
-              IF (A .EQ. 3) THEN
-              WRITE (*,*) ' '
-              WRITE (*,*) '                 NOW WORKING ON FILTER V'
-              ELSE
-                  IF (A .EQ. 4) THEN
-                  WRITE (*,*) ' '
-                  WRITE (*,*) '                 NOW WORKING ON FILTER I'
-                  ELSE
-                      IF (A .EQ. 5) THEN
-                      WRITE (*,*) ' '
-             WRITE (*,*) '                 NOW WORKING ON FILE daom.mch'
-                      ELSE
-                          WRITE (*,*) ' '
-                          WRITE (*,*) '       Unknown error. Check code'
-                      END IF
-                  END IF
-              END IF
-          END IF
-       END IF               
 
       CALL TBLANK
 C  890 CALL GETNAM ('File with list of input files:', LFILE)
@@ -403,36 +375,31 @@ C
 C      CALL GETDAT ('Minimum number, minimum fraction, enough frames:', 
 C     .     RMIN, 3)
      
-     
+      radius_param = 0
       IF (LFILE .EQ. 'ufilter.mch') THEN
 	      RMIN(1) = 1
 	      RMIN(2) = 0
 	      RMIN(3) = 1
-	      radius_param = 0
       ELSE
           IF (LFILE .EQ. 'bfilter.mch') THEN
 		       RMIN(1) = 1
 		       RMIN(2) = 0
 		       RMIN(3) = 1
-		       radius_param = 0
           ELSE
               IF (LFILE .EQ. 'vfilter.mch') THEN
 				     RMIN(1) = 1
 				     RMIN(2) = 0
 				     RMIN(3) = 1
-				     radius_param = 0      
               ELSE
                   IF (LFILE .EQ. 'ifilter.mch') THEN
 					      RMIN(1) = 1
 					      RMIN(2) = 0
 					      RMIN(3) = 1
-					      radius_param = 0      
                   ELSE
                       IF (LFILE .EQ. 'daom.mch') THEN
 						       RMIN(1) = 2
 						       RMIN(2) = 0
 						       RMIN(3) = 2
-						       radius_param = 0      
                       ELSE
                           WRITE (*,*) 'Unknown error. Check code'
                       END IF
@@ -453,29 +420,8 @@ C     .     RMIN, 3)
 C
 C      CALL GETDAT ('Maximum sigma:', SIGMAX, 1)
 
-      IF (LFILE .EQ. 'ufilter.mch') THEN
       SIGMAX = 99.
-      ELSE
-          IF (LFILE .EQ. 'bfilter.mch') THEN
-          SIGMAX = 99.
-          ELSE
-              IF (LFILE .EQ. 'vfilter.mch') THEN
-              SIGMAX = 99.
-              ELSE
-                  IF (LFILE .EQ. 'ifilter.mch') THEN
-                  SIGMAX = 99.
-                  ELSE
-                      IF (LFILE .EQ. 'daom.mch') THEN
-                      SIGMAX = 99.
-                      ELSE
-                          WRITE (*,*) 'Unknown error. Check code'
-                      END IF
-                  END IF
-              END IF
-          END IF
-       END IF 
-       
-       WRITE (*,*) 'Maximum sigma: ',SIGMAX
+      WRITE (*,*) 'Maximum sigma: ',SIGMAX
 
       IF (SIGMAX .LE. 0) CALL BYEBYE
       SIGMAX=SIGMAX**2
