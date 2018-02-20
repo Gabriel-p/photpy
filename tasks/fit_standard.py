@@ -47,17 +47,18 @@ def zeroAirmass(phot_table, extin_coeffs):
     Correct for airmass, i.e. instrumental magnitude at zero airmass.
     """
     # Identify correct index for this filter's extinction coefficient.
-    ext = []
+    ext, K_filts = [], {}
     for filt in phot_table['Filt']:
         f_idx = extin_coeffs.index(filt) + 1
         # Extinction coefficient.
         ext.append(float(extin_coeffs[f_idx]))
+        K_filts[filt] = float(extin_coeffs[f_idx])
 
     # Obtain zero airmass instrumental magnitude for this filter.
     phot_table['ZA_mag'] = (
         phot_table['mag'] - (ext * phot_table['A'])) * u.mag
 
-    return phot_table
+    return phot_table, K_filts
 
 
 def rmse(targets, predictions):
@@ -311,33 +312,36 @@ def fitTransfEquations(filters, mode, R2_min, RMSE_max):
     return filt_col_data
 
 
-def writeTransfCoeffs(file_out, filt_col_data):
+def writeTransfCoeffs(file_out, filt_col_data, K_filts):
     """
     """
     with open(file_out, 'w') as f:
         hdr = """#\n# Instrumental zero airmass magnitude.\n# m_I^(0A) =""" +\
             """ m_I  - K * X  ; X: airmass, K: extinction coefficient\n""" +\
             """#\n# Standard magnitude.\n""" +\
-            """# m_L = m_I^(0A) + c_1  + c_2 * col_L\n#\n"""
+            """# m_L = m_I  - K * X + c_1  + c_2 * col_L\n#\n"""
         f.write(hdr)
 
     with open(file_out, mode='a') as f:
         t_data = []
         for data in filt_col_data:
             filt, accpt, rjct, c, m, r2, RMSE = data
-            t_data.append([filt, len(accpt[0]), len(rjct[0]), c, m, r2, RMSE])
+            K = K_filts[filt]
+            t_data.append([
+                filt, len(accpt[0]), len(rjct[0]), K, c, m, r2, RMSE])
 
-        tt = Table(zip(*t_data),
-                   names=('ID', 'N_a', 'N_r', 'c_1', 'c_2', 'R^2', 'RMSE'))
+        tt = Table(
+            zip(*t_data), names=(
+                'ID', 'N_a', 'N_r', 'K', 'c_1', 'c_2', 'R^2', 'RMSE'))
         f.seek(0, os.SEEK_END)
         ascii.write(
             tt, f, format='fixed_width', delimiter='',
             formats={
-                'c_1': '%8.3f', 'c_2': '%8.3f', 'R^2': '%8.3f',
+                'K': '%8.3f', 'c_1': '%8.3f', 'c_2': '%8.3f', 'R^2': '%8.3f',
                 'RMSE': '%8.3f'})
 
 
-def make_plot(img_out, filt_col_data):
+def make_plot(img_out, filt_col_data, K_filts):
     """
     """
     print("\nPlotting.")
@@ -348,28 +352,29 @@ def make_plot(img_out, filt_col_data):
 
     i = 0
     for data in filt_col_data:
-        if data[0] == "V":
-            xlbl, ylbl = r'$(B-V)_L$', r'$(V_L-V^{0A}_{I})$'
-        elif data[0] == "B":
-            xlbl, ylbl = r'$(B-V)_L$', r'$(B_L-B^{0A}_{I})$'
-        elif data[0] == "U":
-            xlbl, ylbl = r'$(U-B)_L$', r'$(U_L-U^{0A}_{I})$'
-        elif data[0] == "I":
-            xlbl, ylbl = r'$(V-I)_L$', r'$(I_L-I^{0A}_{I})$'
-        elif data[0] == "R":
-            xlbl, ylbl = r'$(V-R)_L$', r'$(R_L-R^{0A}_{I})$'
 
-        X_accpt, X_rjct, c, m, r2, RMSE = data[1:]
+        filt, X_accpt, X_rjct, c, m, r2, RMSE = data
         x_accpt, y_accpt = X_accpt
         x_rjct, y_rjct = X_rjct
+
+        if filt == "V":
+            xlbl, ylbl, K = r'$(B-V)_L$', r'$(V_L-V^{0A}_{I})$', K_filts[filt]
+        elif filt == "B":
+            xlbl, ylbl, K = r'$(B-V)_L$', r'$(B_L-B^{0A}_{I})$', K_filts[filt]
+        elif filt == "U":
+            xlbl, ylbl, K = r'$(U-B)_L$', r'$(U_L-U^{0A}_{I})$', K_filts[filt]
+        elif filt == "I":
+            xlbl, ylbl, K = r'$(V-I)_L$', r'$(I_L-I^{0A}_{I})$', K_filts[filt]
+        elif filt == "R":
+            xlbl, ylbl, K = r'$(V-R)_L$', r'$(R_L-R^{0A}_{I})$', K_filts[filt]
 
         x_r = np.arange(min(x_accpt), max(x_accpt) * 1.1, .01)
         predictions = m * x_r + c
 
         ax = fig.add_subplot(gs[0 + i * 2])
         sign = '+' if m >= 0. else '-'
-        ax.set_title("{} = {:.3f} {} {:.3f} {}".format(
-            ylbl, c, sign, abs(m), xlbl), fontsize=9)
+        ax.set_title("{} = {:.3f} {} {:.3f} {} ; K={:.3f}".format(
+            ylbl, c, sign, abs(m), xlbl, K), fontsize=9)
         plt.xlabel(xlbl)
         plt.ylabel(ylbl)
         ax.plot(x_r, predictions, 'b-', zorder=1)
@@ -416,7 +421,7 @@ def main():
     filters = readData(apert_file)
 
     print("Correct instrumental magnitudes for zero airmass.")
-    filters = zeroAirmass(filters, pars['extin_coeffs'][0])
+    filters, K_filts = zeroAirmass(filters, pars['extin_coeffs'][0])
 
     mode = pars['fit_mode']
     print("Obtain transformation coefficients ({}).".format(mode))
@@ -424,10 +429,10 @@ def main():
     filt_col_data = fitTransfEquations(filters, mode, R2_min, RMSE_max)
 
     print("\nWrite output file.")
-    writeTransfCoeffs(file_out, filt_col_data)
+    writeTransfCoeffs(file_out, filt_col_data, K_filts)
 
     if pars['do_plots_E'] == 'y':
-        make_plot(img_out, filt_col_data)
+        make_plot(img_out, filt_col_data, K_filts)
 
     print("\nFinished.")
 
