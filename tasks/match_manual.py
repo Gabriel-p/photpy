@@ -4,6 +4,18 @@ from match_funcs import reCenter, getTriangles, findRotAngle, standard2observed
 from plot_events import refDisplay, refStrSlct
 
 
+def accptCoords(i):
+    """
+    """
+    while True:
+        answ = raw_input(
+            "Use coordinates ({})? (y/n): ".format(i)).strip()
+        if answ in ['y', 'n']:
+            return answ
+        else:
+            print("Wrong answer. Try again.")
+
+
 def srcSelect(
     f_name, hdu_data, ref_field_img, id_ref, xy_ref, id_selec, xy_selec):
     """
@@ -20,18 +32,11 @@ def srcSelect(
                 ref_field_img, f_name, hdu_data, id_ref, xy_ref, id_selec[i],
                 xy)
 
-            while True:
-                answ = raw_input(
-                    "Use coordinates ({})? (y/n): ".format(i)).strip()
-                if answ == 'y':
-                    idx_c = i
-                    # Re-write with re-centered coordinates.
-                    xy_selec[idx_c] = xy
-                    break
-                elif answ == 'n':
-                    break
-                else:
-                    print("Wrong answer. Try again.")
+            answ = accptCoords(i)
+            if answ == 'y':
+                # Re-write with re-centered coordinates.
+                xy_selec[i] = xy
+                break
 
     # Select new coordinates
     if answ != 'y':
