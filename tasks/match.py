@@ -155,6 +155,7 @@ def outFileFrame(f_name, scale, rot_angle, xy_shift, out_data_file):
         ascii.write(
             tt, f, format='fixed_width_no_header', delimiter='',
             formats={
+                'frame': '%-15s',
                 'A': '%8.2f', 'B': '%8.2f', 'C': '%8.2f',
                 'D': '%8.2f', 'E': '%8.2f', 'F': '%8.2f'})
 
