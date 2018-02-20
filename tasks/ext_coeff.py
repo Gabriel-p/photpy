@@ -156,6 +156,9 @@ def main():
                             print("  Single detection for star: {}".format(
                                 st[2]))
 
+                    print("  star {}: K={:.3f}, m_err={:.3f}".format(
+                        st[2], m, m_err))
+
                     # # Plot
                     # plt.title("{}: K={:.3f}, m_err={:.3f}".format(
                     #     st[2], m, m_err))
