@@ -122,14 +122,22 @@ def main():
     """
     """
     # ID for this observation.
-    f_id = 'haf14'
+    f_id = 'bh73'
     magAnalysis(f_id)
 
     # Airmasses of longest exposures
     # Rup42
     # AU, AB, AV, AI = 1.003, 1.002, 1.057, 1.01
     # Haffner 14
-    AU, AB, AV, AI = 1.006, 1.001, 1.001, 1.022
+    # AU, AB, AV, AI = 1.006, 1.001, 1.001, 1.022
+    # Ruprecht 152
+    # AU, AB, AV, AI = 1.019, 1.03, 1.013, 1.015
+    # Ruprecht 41
+    # AU, AB, AV, AI = 1.001, 1.008, 1.002, 1.008
+    # vdB-Hagen 73 (longexp)
+    # AU, AB, AV, AI = 1.092, 1.072, 1.075, 1.164
+    # vdB-Hagen 73 (large FWHM)
+    AU, AB, AV, AI = 1.201, 1.213, 1.192, 1.164
 
     createObsfile(f_id, AU, AB, AV, AI)
 

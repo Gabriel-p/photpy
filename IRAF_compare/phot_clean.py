@@ -6,6 +6,38 @@ from astropy.io import ascii
 from astropy.table import Table
 
 
+def main():
+    """
+    Filter photometry for color ranges given. Also remove stars with all
+    'nan' values in their photometry.
+    """
+    f_id = 'bh73_final.dat'
+
+    # Define acceptable color ranges for this data.
+    BV_min, BV_max = 0.2, 3.
+    VI_min, VI_max = -0.2, 3.
+    UB_min, UB_max = -.7, 1.5
+
+    # Load final photometry file.
+    phot = photLoad(f_id)
+    print("Stars in file: {}".format(len(phot)))
+
+    plotCMDs(f_id, phot, 'all', BV_min, BV_max, UB_min, UB_max, VI_min, VI_max)
+
+    phot, phot_rjct = filterPhot(
+        phot, BV_min, BV_max, VI_min, VI_max, UB_min, UB_max)
+    print("Stars in cleaned file: {}".format(len(phot)))
+
+    plotCMDs(
+        f_id, phot_rjct, 'rjct', BV_min, BV_max, UB_min, UB_max, VI_min,
+        VI_max)
+    plotCMDs(
+        f_id, phot, 'accpt', BV_min, BV_max, UB_min, UB_max, VI_min, VI_max)
+    print("Plots created")
+
+    fileClean(f_id, phot)
+
+
 def photLoad(f_id):
     """
     """
@@ -94,38 +126,6 @@ def fileClean(f_id, phot):
     ascii.write(
         phot, 'output/' + f_id, format='fixed_width_no_header',
         delimiter=' ', fill_values=[(ascii.masked, '99.999')], overwrite=True)
-
-
-def main():
-    """
-    Filter photometry for color ranges given. Also remove stars with all
-    'nan' values in their photometry.
-    """
-    f_id = 'haf14_final.dat'
-
-    # Define acceptable color ranges for this data.
-    BV_min, BV_max = 0.2, 2.5
-    VI_min, VI_max = .0, 4.
-    UB_min, UB_max = -1., 2.
-
-    # Load final photometry file.
-    phot = photLoad(f_id)
-    print("Stars in file: {}".format(len(phot)))
-
-    plotCMDs(f_id, phot, 'all', BV_min, BV_max, UB_min, UB_max, VI_min, VI_max)
-
-    phot, phot_rjct = filterPhot(
-        phot, BV_min, BV_max, VI_min, VI_max, UB_min, UB_max)
-    print("Stars in cleaned file: {}".format(len(phot)))
-
-    plotCMDs(
-        f_id, phot_rjct, 'rjct', BV_min, BV_max, UB_min, UB_max, VI_min,
-        VI_max)
-    plotCMDs(
-        f_id, phot, 'accpt', BV_min, BV_max, UB_min, UB_max, VI_min, VI_max)
-    print("Plots created")
-
-    fileClean(f_id, phot)
 
 
 if __name__ == '__main__':
