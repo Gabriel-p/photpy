@@ -35,7 +35,8 @@ begin
       bool inter
       bool filelist_check, check, dopsf, psf_done, no_neighbours, right_sustraction
       bool first_psf, first_nstarsubstar, use_psf, star_search, auxi, newstars, doapert
-      bool sigma_warning, apert_warning, nopsfstar, pstselect, thresh_change, tvmark, pstauto
+      bool sigma_warning, apert_warning, nopsfstar, pstselect_while
+      bool thresh_change, tvmark, pstauto, pst_man_selec
       bool core_psf, rem_psf, better_psf, better_psf2, do_pstselect, apert_null, dao_perf
       real dmax, fitrad, psfrad, nstarpsfrad, sigma, gain, rdnoise, sstd, value
       real fannulus, sannulu, fdannulu, datamin, sigma_old
@@ -179,7 +180,6 @@ begin
 # ------------------------------------------------------------------------------------   
 # End of 'Check image name'
 # ------------------------------------------------------------------------------------ 
-   
 
 # ------------------------------------------------------------------------------------ 
 # Input 'GAIN', 'RDNOISE' and 'apert_standard' values
@@ -198,7 +198,7 @@ begin
       if (n == 0) {
           print ('\n No "gain_rdnoise" file.')
           
-          hselect.mode = "hl"
+          hselect.mode = "h"
           hselect.images = imname//'.fits'
           hselect.fields = "EGAIN"
           hselect.expr = yes
@@ -207,7 +207,7 @@ begin
           while (fscan (file_var,gain) != EOF)
           del ("tempget")
 
-          hselect.mode = "hl"
+          hselect.mode = "h"
           hselect.images = imname//'.fits'
           hselect.fields = "ENOISE"
           hselect.expr = yes
@@ -221,7 +221,7 @@ begin
           print ('\n Accept GAIN and RDNOISE values read from header? (y/n)')
           print (' default = yes')
           check=yes
-          scan (check)
+          # scan (check)
           if (check) { # Do nothing
           }
           else {
@@ -279,9 +279,9 @@ begin
 
     print ('\n Read values from file obtained with \'getdata\' script')
     print (' (else input values manually)? (y/n)')
-    print (' default = yes')
-    check = yes
-    scan (check)
+    print (' default = no')
+    check = no
+    # scan (check)
     if (check) {
       # -----------------------------------------------------------------------
       # Search for 'imname//'_data'' file
@@ -395,7 +395,7 @@ begin
         print (' (else input another \'psfrad\' value)? (y/n)')
         print (' default = yes')
         check = yes
-        scan (check)
+        # scan (check)
         if (check) { # Do nothing
         }
         else {
@@ -407,7 +407,7 @@ begin
         print (' (else input another \'aperture\' value)? (y/n)')
         print (' default = yes')
         check = yes     
-        scan (check)
+        # scan (check)
         if (check) { # Do nothing
         }
         else {
@@ -496,7 +496,7 @@ begin
     print ('\n Accept k_sigma_thresh value ('//k_sigma_thresh//')? (y/n)')
     print (' default = yes')
     check = yes
-    scan (check)
+    # scan (check)
     if (check) { # Do nothing
     }
     else {
@@ -517,7 +517,7 @@ begin
     print (' threshold = k_sigma_thresh*STDDEV = '//k_sigma_thresh*sstd)
     print ('\n Input y/n (yes = sigma ; no = STDDEV)')
     check=yes
-    scan (check)
+    # scan (check)
     if (check) { # Do nothing
     }
     else {
@@ -578,7 +578,7 @@ begin
     #print (' datapars.filter = "FILTERS"')
     print (' datapars.filter = "FILTER"')
     check = yes
-    scan (check)
+    # scan (check)
     if (check) {
       datapars.noise = "poisson"
       datapars.ccdread = "ENOISE" # "RDNOISE"
@@ -608,16 +608,15 @@ begin
   }
 
   psf_done=no
-  while (psf_done == no) { # THIS WHILE CLOSES AFTER THE CHECKING OF THE
-                           # .coo.1, .als.1 and .als.2 (if it exists) FILES
+
+  # THIS WHILE CLOSES AFTER THE CHECKING OF THE
+  # .coo.1, .als.1 and .als.2 (if it exists) FILES
+  while (psf_done == no) {
     star_search = no
-    thresh = k_sigma_thresh*sigma
     thresh_change = no
     while (star_search == no) {
-
       dao_perf=yes
       while (dao_perf) {
-          
         if (thresh_change == no) {
           print ('\n Perform NEW Daofind (else use EXISTING '//imname//'.coo.1 file)? (y/n)')
           print (' (if answer = yes, this will DELETE any \'.coo.1\' file)')
@@ -631,14 +630,14 @@ begin
         if (check) {
           o=0
           # Search for "imname.coo.1"
-          # ------------------------------------------------------------------------------------
+          # ------------------------------------------------------------------
           files ('*'//imname//'.coo.1', > 'tempfile')
           flist = 'tempfile'
           while (fscan (flist,line) != EOF) {
             o = o + 1
           }
           del ("tempfile")
-          # ------------------------------------------------------------------------------------
+          # ------------------------------------------------------------------
 
           if (o!=1) {
             dao_perf=no # File doesn't exist. Move on.
@@ -663,21 +662,21 @@ begin
         }
         else {
           dao_perf=no
-          # ------------------------------------------------------------------------------------
+          # ----------------------------------------------------------------
           # Search for 'imname.coo.1' file
-          # ------------------------------------------------------------------------------------
+          # ----------------------------------------------------------------
           auxi=no
           while (auxi==no) { 
             o=0
             # Search for "imname.coo.1"
-            # ------------------------------------------------------------------------------------
+            # ---------------------------------------------------------------
             files ('*'//imname//'.coo.1', > 'tempfile')
             flist = 'tempfile'
             while (fscan (flist,line) != EOF) {
               o = o + 1
             }
             del ("tempfile")
-            # ------------------------------------------------------------------------------------
+            # ---------------------------------------------------------------
 
             if (o!=1) {
               print ('\n ***********************************')
@@ -713,38 +712,36 @@ begin
           # -----------------------------------------------------------------
         }
       } # This bracket closes the 'dao_perf' 'while'
-
-    if (check) { 
-      print ('------------', >> (imname//'.parameters')) 
-      print ('Daofind task', >> (imname//'.parameters'))
-      print ('------------', >> (imname//'.parameters'))
-      print ('\n ----------------------------------------------------- ')
-      print (' Daofind task:                                         ')
-      print (' Search for stars                                      ')
-      print (' Threshold value: ' // thresh)
-      print (' ----------------------------------------------------- ')
-      daofind.verif = no
-      daofind.verb = yes
-      daofind.interactive = no
-      daofind ((imname), (imname//'.coo.1'))        
-    }                  
-
-    file_var = (imname//'.coo.1')
-    m=0
-    while (fscan (file_var,line) != EOF) {
-      m = m + 1
-    }
-    print ('\n Number of stars found = '//(m-41))
-    print ('Number of stars found = ', (m-41), >> (imname//'.parameters'))          
-    print (' Threshold = '//thresh)
-          
-    print ('\n Star search done.')
-    print ('\n Press \'y\' key to display stars found.')
-    print ('\n Else press \'n\' key to DELETE the '//imname//'.coo.1 file,')
-    print (' select a new \'threshold\' value and perform a new \'Daofind\' run.')
-    print (' default = yes')
-    check = yes
-    scan (check)
+      if (check) { 
+        print ('------------', >> (imname//'.parameters')) 
+        print ('Daofind task', >> (imname//'.parameters'))
+        print ('------------', >> (imname//'.parameters'))
+        print ('\n ----------------------------------------------------- ')
+        print (' Daofind task:                                         ')
+        print (' Search for stars                                      ')
+        print (' Threshold value: ' // k_sigma_thresh)
+        print (' ----------------------------------------------------- ')
+        daofind.verif = no
+        daofind.verb = yes
+        daofind.interactive = no
+        daofind ((imname), (imname//'.coo.1'))        
+      }                  
+      file_var = (imname//'.coo.1')
+      m=0
+      while (fscan (file_var,line) != EOF) {
+        m = m + 1
+      }
+      print ('\n Number of stars found = '//(m-41))
+      print ('Number of stars found = ', (m-41), >> (imname//'.parameters'))          
+      print (' Threshold = '//k_sigma_thresh)
+            
+      print ('\n Star search done.')
+      # print ('\n Press \'y\' key to display stars found.')
+      # print ('\n Else press \'n\' key to DELETE the '//imname//'.coo.1 file,')
+      # print (' select a new \'threshold\' value and perform a new \'Daofind\' run.')
+      # print (' default = yes')
+      check = yes
+      # scan (check)
       if (check) {
         tvmark=yes
         while (tvmark==yes) {
@@ -840,7 +837,7 @@ begin
                   pselect.infiles = imname//'_original'
                   pselect.outfiles = imname//'.coo.1'
                   pselect.expr = expression
-                  pselect.mode = "hl"
+                  pselect.mode = "h"
                   pselect
                   delete (imname//'_original')
 
@@ -853,17 +850,17 @@ begin
                     print ('\n DELETE '//imname//'.coo.1 file, change \'threshold\' value')
                     print (' and repeat \'Daofind\'? (y/n)')
                     print (' default = yes')
-                    scan (check)
+                    # scan (check)
                     if (check) {
                       auxi=yes
                       tvmark=no
                       thresh_change = yes
-                      print ('\n Actual threshold = ' //thresh)
+                      print ('\n Actual threshold = ' //k_sigma_thresh)
                       print (' Input new threshold value')
                       print ('\n (A higher threshold means less stars)')
-                      scan (thresh)
-                      findpars.threshold = thresh
-                      print ('New Findpars.threshold = ', thresh, >> (imname//'.parameters'))
+                      scan (k_sigma_thresh)
+                      findpars.threshold = k_sigma_thresh
+                      print ('New Findpars.threshold = ', k_sigma_thresh, >> (imname//'.parameters'))
                       del (imname// '.coo.1')
                     }
                     else {
@@ -894,13 +891,13 @@ begin
         check=yes
         scan (check)
         if (check) {
-            print ('\n Actual threshold = ' //thresh)
+            print ('\n Actual threshold = ' //k_sigma_thresh)
             print (' Input new threshold value')
             print ('\n (A higher threshold means less stars)')
             thresh_change = yes
-            scan (thresh)
-            findpars.threshold = thresh
-            print ('New Findpars.threshold = ', thresh, >> (imname//'.parameters'))
+            scan (k_sigma_thresh)
+            findpars.threshold = k_sigma_thresh
+            print ('New Findpars.threshold = ', k_sigma_thresh, >> (imname//'.parameters'))
             del (imname// '.coo.1')                      
         }
         else {
@@ -909,7 +906,6 @@ begin
           bye()
         }
       }
-
     } # This bracket closes the 'star_search' 'while'
       
     print ('\n ----------------------------------------------------- ')
@@ -917,39 +913,39 @@ begin
     print (' Aperture = '//aperture                                 )
     print (' ----------------------------------------------------- ')
 
-#      print ('\n Recenter stars marked by tvmark?')
-#      print (' (Useful when using .coo. files from other frames)')
-#      print (' default = no')
-#      check = no
-#      scan (check)
-#      if (check) {
-#      
-#          apphot
-#          
-#              unlearn centerpars
-#              unlearn fitskypars
-#              unlearn photpars
-#              unlearn psf
-#              fitskypars.salgorithm = "mode" # From Massey-Davis guide to stellar CCD photometry
-#              centerpars.calgorithm = "centroid"
-#              centerpars.cbox = 2.5*fitrad
-#              fannulus = 4*fitrad
-#              fdannulu = 3.25*fitrad      
-#              fitskypars.annulus = fannulus
-#              fitskypars.dannulus = fdannulu      
-#              
-#              phot.interactive = no
-#              phot.radplots = no
-#              phot.update = yes
-#              phot.verbose = yes
-#              phot.verify = no
-#              photpars.apertures = aperture
-#              phot ((imname), "default", "default")
-#              
-#              daophot
-#      
-#      }
-#      else {
+    #      print ('\n Recenter stars marked by tvmark?')
+    #      print (' (Useful when using .coo. files from other frames)')
+    #      print (' default = no')
+    #      check = no
+    #      scan (check)
+    #      if (check) {
+    #      
+    #          apphot
+    #          
+    #              unlearn centerpars
+    #              unlearn fitskypars
+    #              unlearn photpars
+    #              unlearn psf
+    #              fitskypars.salgorithm = "mode" # From Massey-Davis guide to stellar CCD photometry
+    #              centerpars.calgorithm = "centroid"
+    #              centerpars.cbox = 2.5*fitrad
+    #              fannulus = 4*fitrad
+    #              fdannulu = 3.25*fitrad      
+    #              fitskypars.annulus = fannulus
+    #              fitskypars.dannulus = fdannulu      
+    #              
+    #              phot.interactive = no
+    #              phot.radplots = no
+    #              phot.update = yes
+    #              phot.verbose = yes
+    #              phot.verify = no
+    #              photpars.apertures = aperture
+    #              phot ((imname), "default", "default")
+    #              
+    #              daophot
+    #      
+    #      }
+    #      else {
 
       unlearn centerpars
       unlearn fitskypars
@@ -982,7 +978,7 @@ begin
         print (' input new values)? (y/n)')
         print (' default = yes')
         check = yes
-        scan (check)
+        # scan (check)
         if (check) {
           print ('Fitskypars.annulus = ', fannulus, >> (imname//'.parameters')) 
           print ('Fitskypars.dannulu = ', fdannulu, >> (imname//'.parameters'))                   
@@ -1010,9 +1006,9 @@ begin
       photpars.apertures = aperture
       phot ((imname), "default", "default")
       
-#      }
+    #      }
       
-      txdump.mode = 'hl' 
+      txdump.mode = 'h'
       txdump.textfile = (imname//'.mag.1')
       txdump.headers = no
       txdump.fields = 'MSKY,STDEV'
@@ -1027,43 +1023,48 @@ begin
       
       delete ('auxiliar')      
 
+      # The 'maxnpsf' number is the number of stars the 'pstselect'
+      # task will look for. We set this number to 2% of the stars
+      # found with MAG!=INDEF, always in the range [20, 100].
       print ('')
       print (' Number of stars found (with MAG != INDEF) = '//m)
-      maxnpsf = int(m*0.02) # The 'maxnpsf' number is the number of stars the 'pstselect'
-      if (maxnpsf < 20) {    # task will look for. We set this number to 2% of the stars
-          maxnpsf = 20       # found with MAG!=INDEF (but not less than 20).
+      maxnpsf = int(m*0.02)
+      if (maxnpsf < 20) {
+          maxnpsf = 20
       }
-                    
-# ------------------------------------------------------------------------------
-# End of 'Parameters input, Daofind and Phot tasks
-# ------------------------------------------------------------------------------
+      if (maxnpsf > 100) {
+          maxnpsf = 100
+      }
+
+    # ----------------------------------------------------------
+    # End of 'Parameters input, Daofind and Phot tasks
+    # ----------------------------------------------------------
 
 
-# ------------------------------------------------------------------------------
-# Perform PSF?
-# ------------------------------------------------------------------------------
+    # ----------------------------------------------------------
+    # Perform PSF?
+    # ----------------------------------------------------------
 
-if (inter) {
-  print ('\n Perform PSF photometry (else keep Aperture photometry)? (y/n)')
-  print (' default = yes')
-  check = yes
-  scan (check)
-  if (check) {
-    dopsf = yes
-  }
-  else {
-    dopsf = no
-    l = 3 # This parameter will be used when the 'list' file is created. The number 3 indicates
-  }       # that there is no '.als' file but rather a '.mag' file.
-}
-else {
-  dopsf = yes
-}
-      
-# ------------------------------------------------------------------------------
-# End of 'Perform PSF?'
-# ------------------------------------------------------------------------------
-
+    if (inter) {
+      print ('\n Perform PSF photometry (else keep Aperture photometry)? (y/n)')
+      print (' default = yes')
+      check = yes
+      # scan (check)
+      if (check) {
+        dopsf = yes
+      }
+      else {
+        dopsf = no
+        l = 3 # This parameter will be used when the 'list' file is created. The number 3 indicates
+      }       # that there is no '.als' file but rather a '.mag' file.
+    }
+    else {
+      dopsf = yes
+    }
+          
+    # ----------------------------------------------------------
+    # End of 'Perform PSF?'
+    # ----------------------------------------------------------
 
 right_sustraction = no
 # This 'while' encloses the whole 'Core PSF photometry' (or 'Aperture photometry') structure
@@ -1104,7 +1105,7 @@ while (right_sustraction == no) {
       print ('\n Perform \'pstselect\' (else use existing '//imname//'.pstselect file)? (y/n)')
       print (' default = yes')
       do_pstselect = yes
-      scan (do_pstselect)
+      # scan (do_pstselect)
     }
     else {
       do_pstselect=yes
@@ -1212,7 +1213,7 @@ while (right_sustraction == no) {
       print ('\n Change one or more of this values before running \'pstselect\' task? (y/n)')
       print (' default = no')
       check = no
-      scan (check)
+      # scan (check)
       if (check) {
         print ('\n Input new \'psfrad\'')
         scan (psfrad)
@@ -1233,24 +1234,28 @@ while (right_sustraction == no) {
         print ('Datamax = ', dmax, >> (imname//'.parameters'))
       }
 
-      pstselect = yes
-      while (pstselect) {
-        delete ((imname//'.pstselect'),verify=no,>>&"/dev/null")    
+      pstselect_while = yes
+      while (pstselect_while) {
+        delete ((imname//'.pstselect'),verify=no,>>&"/dev/null")
         print ('\n ----------------------------------------------------- ')
         print (' Pstselect task. Number of stars to find is set to 2% of ')
         print (' the number of stars found with MAG!=INDEF; but not less')
         print (' than 20. For this frame, maxnpsf = '//maxnpsf)
         print (' Image: '// imname // '.fit')
-        print ('\n ----------------------------------------------------- ')      
-        
-        print ('\n Let \'pstselect\' select '//maxnpsf//' stars automatically and then')
-        print (' go through this stars to see which one to keep? (y/n)')
-        print (' Else: select the PSF stars interactively (ie: manually, one by one)')
-        print ('\n Note: you can change the number of PSF stars to be ')
-        print (' automatically selected on the next step')
-        print ('\n default = yes')
+        print ('\n Change maxnpsf value? (y/n) ')
+        print (' default = no')
+        check = no
+        scan (check)
+        if (check) {
+          print ('\n Input new \'maxnpsf\'')
+          scan (maxnpsf)
+        }
+
+        print ('\n Let \'pstselect\' select '//maxnpsf//' stars automatically? (y/n)')
+        print (' Else: select PSF stars manually')
+        print (' default = yes')
         pstauto=yes
-        scan (pstauto)
+        # scan (pstauto)
         if (pstauto==no) {
           pstselect.interactive = yes
           print ('\n         Keystroke Commands')
@@ -1271,13 +1276,16 @@ while (right_sustraction == no) {
           print (' ----------------------------------------------------- ')
         }
         else {
-          print(pstauto)
           pstselect.interactive = no      
         }
         
-        pstselect.mode = "ql"      
+        pstselect.mode = "h"
+        pstselect.image = imname
+        pstselect.photfile = imname//'.mag.1'
+        pstselect.pstfile = imname//'.pstselect'
         pstselect.maxnpsf = maxnpsf
         pstselect.mkstars = yes
+        pstselect.plotfile = ""
         pstselect.datapars = ""
         pstselect.daopars = ""
         pstselect.plottype = "mesh"
@@ -1286,7 +1294,8 @@ while (right_sustraction == no) {
         pstselect.verify = no
         pstselect.verbose = yes
         # Output file is 'imname.pstselect'
-        pstselect ((imname), (imname//'.mag.1'), (imname//'.pstselect'))
+        # pstselect ((imname), (imname//'.mag.1'), (imname//'.pstselect'))
+        pstselect
         
         print ('\n ----------------------------------------------------- ')
         print (' Display task                                          ')
@@ -1298,7 +1307,7 @@ while (right_sustraction == no) {
         print (' Tvmark                                                ')
         print ('   - red point = selected PSF star                   ')
         print (' ----------------------------------------------------- ')
-        txdump.mode = 'hl' 
+        txdump.mode = 'h'
         txdump.textfile = (imname // '.pstselect')
         txdump.headers = no
         txdump.fields = 'xcenter, ycenter, id'
@@ -1314,10 +1323,11 @@ while (right_sustraction == no) {
         tvmark (1, 'auxiliar')
         del ('auxiliar')
 
-        print(pstauto)
-        if (pstauto==yes) { # Do nothing
-        }
-        else {
+        print ('\n Select manually from list of PSF candidates (else accept all)? (y/n)')
+        print (' default = no')
+        pst_man_selec=no
+        scan (pst_man_selec)
+        if (pst_man_selec==yes) {
           print ('\n You will be presented with the stars \'pstselect\' selected.')
           print (' You can only remove stars from this list. When you are finished,')
           print (' you can decide if you want to change some parameters and repeat')
@@ -1330,6 +1340,9 @@ while (right_sustraction == no) {
           print (' p       Print photometry for current star')
           print (' a       Accept star and proceed')
           print (' d       Reject star and proceed')
+          print (' r       radial plot')
+          print (' c       contour plot')
+          print (' m       histogram plot')
           print ('\n When the selection is over:')              
           print (' On the image:                                         ')
           print (' - key "w" to write the selected PSF stars, and        ')
@@ -1349,9 +1362,9 @@ while (right_sustraction == no) {
           psf.verif = no
           
           # Re-order 'imname.pstselect' file by 'YCENTER'
-          txsort.mode = 'hl'
-          txsort.ascend = yes              # Sorts stars in ascending YCENTER order
-          txsort ((imname//'.pstselect'), 'YCENTER')              
+          # txsort.mode = 'h'
+          # txsort.ascend = yes              # Sorts stars in ascending YCENTER order
+          # txsort ((imname//'.pstselect'), 'YCENTER')              
           
           psf ((imname), "default", (imname//'.pstselect'), "default", "default", "default")
           delete (imname//'.psg.1')
@@ -1375,9 +1388,9 @@ while (right_sustraction == no) {
         print (' Else: repeat \'pstselect\' with different \'psfrad\', \'fitrad\' and \'datamax\' ')
         print (' default = yes')
         check = yes
-        scan (check)
+        # scan (check)
         if (check) {
-            pstselect = no # This exits the 'pstselect' 'while'
+            pstselect_while = no # This exits the 'pstselect' 'while'
         }
         else {
           delete (imname//'.pstselect')                              
@@ -1397,7 +1410,7 @@ while (right_sustraction == no) {
         delete (imname//'.pst.1',verify=no,>>&"/dev/null")
         delete (imname//'.psg.1',verify=no,>>&"/dev/null")
         delete (imname//'.psf.1.fits',verify=no,>>&"/dev/null")     
-      }  # This bracket closes the 'pstselect' 'while'
+      }  # This bracket closes the 'pstselect_while' 'while'
 
       print ('\n End of Pstselect task')
       print (' ---------------------')
@@ -1445,7 +1458,7 @@ while (right_sustraction == no) {
         print (' Tvmark                                                ')
         print ('   - blue circle = selected PSF star                   ')
         print (' ----------------------------------------------------- ')
-        txdump.mode = 'hl' 
+        txdump.mode = 'h'
         txdump.textfile = (imname // '.pstselect')
         txdump.headers = no
         txdump.fields = 'xcenter, ycenter, id'
@@ -1736,7 +1749,7 @@ while (right_sustraction == no) {
                   pselect.infiles = imname//'_pstoriginal'
                   pselect.outfiles = imname//'.pstselect'
                   pselect.expr = expression
-                  pselect.mode = "hl"
+                  pselect.mode = "h"
                   pselect
                   delete (imname//'_pstoriginal')
                   # Remotion process ----------------------                                      
@@ -1989,7 +2002,7 @@ while (right_sustraction == no) {
       print (' more time and THEN move on)? (y/n)')
       print (' default = yes')
       check = yes
-      scan (check)
+      # scan (check)
     }
     else {
       check = yes
@@ -2004,7 +2017,7 @@ while (right_sustraction == no) {
         print ('\n Keep CURRENT PSF model (else keep PREVIOUS one)? (y/n)')
         print (' default = yes')
         auxi=yes
-        scan (auxi)
+        # scan (auxi)
       }
       else {
         auxi = yes
@@ -2214,159 +2227,158 @@ if (dopsf==yes) {
   # else {
   #     newstars = no
   # }
+  # if (newstars) {
+  #   o=1 # This variable indicates that the file 'imname.sub.3.fits.coo.1' DOES exists
+  #       # (it doesn't exist YET, but it'll be created in the next step)
+  #   star_search = no
+  #   thresh = 3.5*sigma + 2*sigma
+  #   print ('Second star search, threshold = ', thresh, >> (imname//'.parameters'))
+  #   while (star_search == no) {
+  #     print ('\n Perform daofind search (else mark the stars manually)? (y/n)')
+  #     print (' default = yes')
+  #     check = yes
+  #     scan (check)
+  #     if (check) {
+  #       print ('\n Actual threshold = ' // thresh)
+  #       print ('\n Input new threshold value? (y/n)')
+  #       print (' default = yes')
+  #       check = yes
+  #       scan (check)
+  #       if (check) {
+  #         print ('\n (A higher threshold means less stars)')
+  #         scan (thresh)
+  #         findpars.threshold = thresh
+  #       }
+  #       print ('\n ----------------------------------------------------- ')
+  #       print (' Daofind task                                          ')
+  #       print (' Second search (add previously hidden stars if any)    ')
+  #       print (' ----------------------------------------------------- ')
+  #       datapars.datamin = datamin -2*sigma
+  #       print ('Second star search, datapars.datamin = ', (datamin -2*sigma), >> (imname//'.parameters'))
+  #       daofind ((imname // '.sub.3.fits'), "default")
+  #       #
+  #       # At this point the file 'imname.sub.3.fits.coo.1' should be created
 
-  if (newstars) {
-    o=1 # This variable indicates that the file 'imname.sub.3.fits.coo.1' DOES exists
-        # (it doesn't exist YET, but it'll be created in the next step)
-    star_search = no
-    thresh = 3.5*sigma + 2*sigma
-    print ('Second star search, threshold = ', thresh, >> (imname//'.parameters'))
-    while (star_search == no) {
-      print ('\n Perform daofind search (else mark the stars manually)? (y/n)')
-      print (' default = yes')
-      check = yes
-      scan (check)
-      if (check) {
-        print ('\n Actual threshold = ' // thresh)
-        print ('\n Input new threshold value? (y/n)')
-        print (' default = yes')
-        check = yes
-        scan (check)
-        if (check) {
-          print ('\n (A higher threshold means less stars)')
-          scan (thresh)
-          findpars.threshold = thresh
-        }
-        print ('\n ----------------------------------------------------- ')
-        print (' Daofind task                                          ')
-        print (' Second search (add previously hidden stars if any)    ')
-        print (' ----------------------------------------------------- ')
-        datapars.datamin = datamin -2*sigma
-        print ('Second star search, datapars.datamin = ', (datamin -2*sigma), >> (imname//'.parameters'))
-        daofind ((imname // '.sub.3.fits'), "default")
-        #
-        # At this point the file 'imname.sub.3.fits.coo.1' should be created
+  #       print ('\n ----------------------------------------------------- ')
+  #       print (' Display task                                          ')
+  #       print (' Daofind results after the first "allstar" run')
+  #       print (' ----------------------------------------------------- ')
+  #       display ((imname // '.sub.3.fits'), 2)
 
-        print ('\n ----------------------------------------------------- ')
-        print (' Display task                                          ')
-        print (' Daofind results after the first "allstar" run')
-        print (' ----------------------------------------------------- ')
-        display ((imname // '.sub.3.fits'), 2)
+  #       print ('\n ----------------------------------------------------- ')
+  #       print (' Tvmark                                                ')
+  #       print ('   - red point = detected star previously hidden       ')
+  #       print (' Add or remove stars if necessary                      ')
+  #       print (' ----------------------------------------------------- ')
+  #       txdump.textfile = (imname // '.sub.3.fits.coo.1')
+  #       txdump.headers = no
+  #       txdump.fields = 'xcenter, ycenter, id'
+  #       txdump.expr = 'yes'
+  #       txdump > auxiliar1 
 
-        print ('\n ----------------------------------------------------- ')
-        print (' Tvmark                                                ')
-        print ('   - red point = detected star previously hidden       ')
-        print (' Add or remove stars if necessary                      ')
-        print (' ----------------------------------------------------- ')
-        txdump.textfile = (imname // '.sub.3.fits.coo.1')
-        txdump.headers = no
-        txdump.fields = 'xcenter, ycenter, id'
-        txdump.expr = 'yes'
-        txdump > auxiliar1 
+  #       tvmark.interactive = no
+  #       tvmark.mark = 'point'
+  #       tvmark.font = "raster"
+  #       tvmark.color = 204
+  #       tvmark.number = no
+  #       tvmark.label = yes
+  #       tvmark.toleran = 3.5
+  #       tvmark (2, 'auxiliar1')
 
-        tvmark.interactive = no
-        tvmark.mark = 'point'
-        tvmark.font = "raster"
-        tvmark.color = 204
-        tvmark.number = no
-        tvmark.label = yes
-        tvmark.toleran = 3.5
-        tvmark (2, 'auxiliar1')
+  #       tvmark.interac = yes 
+  #       tvmark.mark = 'point'
+  #       tvmark.font = "raster"
+  #       tvmark.color = 204
+  #       tvmark.number = no      
+  #       tvmark.label = yes
+  #       tvmark.toleran = 3.5
+  #       tvmark (2, imname // '.sub.3.fits.coo.1')
+  #       del ('auxiliar1')
+  #     }
+  #     else {
+  #       print ('\n ----------------------------------------------------- ')
+  #       print (' Display task                                          ')
+  #       print (' Daofind results after the first "allstar" run')
+  #       print (' ----------------------------------------------------- ')
+  #       display ((imname // '.sub.3.fits'), 2)
 
-        tvmark.interac = yes 
-        tvmark.mark = 'point'
-        tvmark.font = "raster"
-        tvmark.color = 204
-        tvmark.number = no      
-        tvmark.label = yes
-        tvmark.toleran = 3.5
-        tvmark (2, imname // '.sub.3.fits.coo.1')
-        del ('auxiliar1')
-      }
-      else {
-        print ('\n ----------------------------------------------------- ')
-        print (' Display task                                          ')
-        print (' Daofind results after the first "allstar" run')
-        print (' ----------------------------------------------------- ')
-        display ((imname // '.sub.3.fits'), 2)
+  #       print ('\n ----------------------------------------------------- ')
+  #       print (' Add stars manually                                    ')
+  #       print (' ----------------------------------------------------- ')
+  #       findpars.threshold = 5000. # A high enough threshold so that no star will be marked
+  #       daofind ((imname // '.sub.3.fits'), "default")
+  #       #
+  #       # At this point the file 'imname.sub.3.fits.coo.1' should be created
 
-        print ('\n ----------------------------------------------------- ')
-        print (' Add stars manually                                    ')
-        print (' ----------------------------------------------------- ')
-        findpars.threshold = 5000. # A high enough threshold so that no star will be marked
-        daofind ((imname // '.sub.3.fits'), "default")
-        #
-        # At this point the file 'imname.sub.3.fits.coo.1' should be created
+  #       tvmark.interac = yes 
+  #       tvmark.mark = 'point'
+  #       tvmark.font = "raster"
+  #       tvmark.color = 204
+  #       tvmark.number = no      
+  #       tvmark.label = yes
+  #       tvmark.toleran = 3.5
+  #       tvmark (2, imname // '.sub.3.fits.coo.1')
+  #       findpars.threshold = thresh
+  #     }
 
-        tvmark.interac = yes 
-        tvmark.mark = 'point'
-        tvmark.font = "raster"
-        tvmark.color = 204
-        tvmark.number = no      
-        tvmark.label = yes
-        tvmark.toleran = 3.5
-        tvmark (2, imname // '.sub.3.fits.coo.1')
-        findpars.threshold = thresh
-      }
+  #     # At this point the file 'imname.sub.3.fits.coo.1' exists,
+  #     # created either by Daofind or manually
+  #     #
+  #     print ('\n Perform new search (ie: delete created \'.coo\' file')
+  #     print (' and repeat the second search for stars# else continue) ? (y/n)')
+  #     print (' default = yes')
+  #     check = yes
+  #     scan (check)
+  #     if (check) {
+  #       star_search = no
+  #       del (imname// '.sub.3.fits.coo.1')
+  #     }
+  #     else {
+  #       star_search = yes
+  #     }
+  #   } # This bracket closes the 'star_search' while
 
-      # At this point the file 'imname.sub.3.fits.coo.1' exists,
-      # created either by Daofind or manually
-      #
-      print ('\n Perform new search (ie: delete created \'.coo\' file')
-      print (' and repeat the second search for stars; else continue) ? (y/n)')
-      print (' default = yes')
-      check = yes
-      scan (check)
-      if (check) {
-        star_search = no
-        del (imname// '.sub.3.fits.coo.1')
-      }
-      else {
-        star_search = yes
-      }
-    } # This bracket closes the 'star_search' while
+  #   # ------------------------------------------------------------------------------
+  #   # Add new stars, previously hidden (if any) and perform Phot and Allstar again
+  #   # ------------------------------------------------------------------------------
+  #   print ('\n Add new (previously hidden) stars found and marked')
+  #   print (' in this second search (else disregard new found stars)? (y/n)')
+  #   print (' default = yes')
+  #   check = yes
+  #   scan (check)
+  #   if (check) {
+  #     print ('\n ----------------------------------------------------- ')
+  #     print (' Phot task (second run)                                ')
+  #     print (' ----------------------------------------------------- ')
+  #     phot.interactive = no
+  #     phot.radplots = no
+  #     phot.update = yes
+  #     phot.verbose = yes
+  #     phot.verify = no
+  #     photpars.apertures = aperture
+  #     phot ((imname), (imname // '.sub.3.fits.coo.1'), "default")
+  #     #          tmerge ((imname//'.mag.1')//","//(imname//'.mag.2'),(imname//'.mag.3'),"append")
+  #     #          pconcat (infiles=imname//'.mag.1,'//imname//'.mag.2', outfile=imname//'.mag.3')
+  #     txconcat ((imname // '.mag.1' // ',' // imname // '.mag.2'), (imname // '.mag.3'))          
+  #     # This line replaces the obsolete 'pappend' command
 
-    # ------------------------------------------------------------------------------
-    # Add new stars, previously hidden (if any) and perform Phot and Allstar again
-    # ------------------------------------------------------------------------------
-    print ('\n Add new (previously hidden) stars found and marked')
-    print (' in this second search (else disregard new found stars)? (y/n)')
-    print (' default = yes')
-    check = yes
-    scan (check)
-    if (check) {
-      print ('\n ----------------------------------------------------- ')
-      print (' Phot task (second run)                                ')
-      print (' ----------------------------------------------------- ')
-      phot.interactive = no
-      phot.radplots = no
-      phot.update = yes
-      phot.verbose = yes
-      phot.verify = no
-      photpars.apertures = aperture
-      phot ((imname), (imname // '.sub.3.fits.coo.1'), "default")
-      #          tmerge ((imname//'.mag.1')//","//(imname//'.mag.2'),(imname//'.mag.3'),"append")
-      #          pconcat (infiles=imname//'.mag.1,'//imname//'.mag.2', outfile=imname//'.mag.3')
-      txconcat ((imname // '.mag.1' // ',' // imname // '.mag.2'), (imname // '.mag.3'))          
-      # This line replaces the obsolete 'pappend' command
+  #     print ('                                                       ')      
+  #     print (' ----------------------------------------------------- ')
+  #     print (' Allstar task                                          ')
+  #     print (' PSF photometry (second run)                           ')
+  #     print (' ----------------------------------------------------- ')
+  #     allstar.verif = no
+  #     allstar ((imname), (imname // '.mag.3'), (imname // '.sub.2.fits.psf.1.fits'), "default", "default", "default")
+  #     l = 2 # This number is used to know whether only one or two 'allstar' runs were performed
+  #    }
+  #    else { # Do nothing
+  #    }
 
-      print ('                                                       ')      
-      print (' ----------------------------------------------------- ')
-      print (' Allstar task                                          ')
-      print (' PSF photometry (second run)                           ')
-      print (' ----------------------------------------------------- ')
-      allstar.verif = no
-      allstar ((imname), (imname // '.mag.3'), (imname // '.sub.2.fits.psf.1.fits'), "default", "default", "default")
-      l = 2 # This number is used to know whether only one or two 'allstar' runs were performed
-     }
-     else { # Do nothing
-     }
+  #   # ---------------------------------------------------------------------------------------------------
+  #   # End of 'Add new stars, previously hidden (if any) and perform Phot and Allstar again'
+  #   # ---------------------------------------------------------------------------------------------------
 
-    # ---------------------------------------------------------------------------------------------------
-    # End of 'Add new stars, previously hidden (if any) and perform Phot and Allstar again'
-    # ---------------------------------------------------------------------------------------------------
-
-  } # This bracket closes the 'newstars' if
+  # } # This bracket closes the 'newstars' if
 }
 
 # ------------------------------------------------------------------------------
@@ -2809,15 +2821,15 @@ print ('End of aperture correction', >> (imname//'_aperture'))
 if (doapert == yes) {
   print ('\n Performing correction...')
   if (l == 1) {
-    print ('Aperture correction on als.1 file.')
-    pcalc.mode = "hl"
+    print ('Aperture correction on als.1 file:' //avg)
+    pcalc.mode = "h"
     pcalc.infile = imname//'.als.1'
     pcalc.field = "MAG"
     pcalc.value = 'MAG+'//avg
     pcalc
   }                            # This task corrects the 'MAG' value in the imname.als.*
   else {                       # file by adding the previously calculated aperture (avg)
-    pcalc.mode = "hl"
+    pcalc.mode = "h"
     pcalc.infile = imname//'.als.2'
     pcalc.field = "MAG"
     pcalc.value = 'MAG+'//avg
@@ -2831,7 +2843,7 @@ if (doapert == yes) {
 }
 else {
   print ('\n Performing correction...')
-  pcalc.mode = "hl"
+  pcalc.mode = "h"
   pcalc.infile = imname//'.mag.1'
   pcalc.field = "MAG"
   pcalc.value = 'MAG+'//avg                                # This task corrects the 'MAG' value in the 'imname.mag.1'
