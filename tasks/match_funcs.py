@@ -363,6 +363,15 @@ def xyTrans(max_shift, xy_ref, mags_ref, xy_dtct, mags_dtct, mtoler):
                 if d < d_in:
                     x0_in, y0_in, d_in = sx + x0, sy + y0, d
 
+        # import matplotlib.pyplot as plt
+        # print("d_in={:.2f}, d_px={:.2f}".format(d_in, d_px))
+        # plt.scatter(
+        #     np.array(xy_ref).T[0][:100] + x0_in,
+        #     np.array(xy_ref).T[1][:100] + y0_in, c='r', s=5)
+        # plt.scatter(*zip(*xy_dtct[:100]), c='g', s=5)
+        # plt.grid()
+        # plt.show()
+
         # Decrease shift limits by tol%
         xmin, xmax = xmin * tol, xmax * tol
         ymin, ymax = ymin * tol, ymax * tol
@@ -370,7 +379,7 @@ def xyTrans(max_shift, xy_ref, mags_ref, xy_dtct, mags_dtct, mtoler):
         # Update final values
         x0, y0 = x0_in, y0_in
         print("  Best x,y shift found: ({:.2f}, {:.2f})".format(x0, y0))
-        if abs(x0 - x0_old) < mtoler and abs(y0 - y0_old):
+        if abs(x0 - x0_old) < mtoler and abs(y0 - y0_old) < mtoler:
             print("  Tolerance achieved.")
             break
         else:
