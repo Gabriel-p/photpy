@@ -35,10 +35,11 @@ do_plots_A       y
 # nothing), reference frame's name, and the folder where the fits files for
 # this group are located.
 #
-# match_mode: auto / manual / xyshift
+# match_mode: a
+uto / manual / xyshift
 #
-#ref_fld_fldr     PG0231, standards/pg0231/
-ref_fld_fldr     stk2121.fits, field/master
+#ref_fld_fldr     PG1323, standards/
+ref_fld_fldr     stk_2062.fits, field/master
 match_mode       xyshift
 # Used by 'auto' mode.
 scale_min        1.
@@ -51,9 +52,9 @@ max_stars_match  5000
 min_x-max_x      min, max
 min_y-max_y      min, max
 # xy shifts limits.
-xtr_min-xtr_max  none, none
-ytr_min-ytr_max  none, none
-match_toler      1.
+xtr_min-xtr_max  -100, 100
+ytr_min-ytr_max  -100, 100
+match_toler      .5
 do_plots_C       y
 
 ###############################################################################
@@ -70,13 +71,8 @@ do_plots_C       y
 # folder_fits/ : fits files folder in 'input/'
 # folder_mch/  : mch files folder in 'output/'
 #
-stnd_obs_fields  standards/sa98/, night1_mch/SA98_1.mch
-stnd_obs_fields  standards/sa95/, night1_mch/SA95_1.mch
-stnd_obs_fields  standards/tphe/, night1_mch/TPHE_1.mch
-#stnd_obs_fields  sa96/, stands_mch/SA96.mch
-#stnd_obs_fields  sa97/, stands_mch/SA97.mch
-#stnd_obs_fields  pg0231/, stands_mch/PG0231.mch
-aper_file_out    night1.apert
+stnd_obs_fields  standards/, standards/PG1323.mch
+aper_file_out    bh73.apert
 aperture         15
 annulus_in       20
 annulus_out      25
@@ -85,8 +81,8 @@ do_plots_D       y
 
 # 'ext_coeffs'
 #
-apert_file_ext   4nights.apert
-outlier_reject   yes
+apert_file_ext   bh73.apert
+outlier_reject   no
 outliers_lims    1., 5., .5
 
 
@@ -94,9 +90,10 @@ outliers_lims    1., 5., .5
 #
 # mode: linregress / RANSAC / theilsen
 #
-apert_file_in    night1.apert
-fit_file_out     night1.fit
-extin_coeffs     U .326, B .170, V .108, I .052
+apert_file_in    bh73.apert
+fit_file_out     bh73.fit
+extin_coeffs     U .44, B .285, V .165, I .075
+# U .443, B .236, V .134, I 0.045
 fit_mode         linregress
 R^2_min          0.9
 RMSE_max         0.05

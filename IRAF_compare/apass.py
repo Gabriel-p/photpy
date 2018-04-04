@@ -364,7 +364,7 @@ if __name__ == '__main__':
         col_IDs = ['col2', 'col3', 'col4', 'col6']
 
         # Magnitude limit for the photometry.
-        V_min, V_max = 7., 16.
+        V_min, V_max = 7., 15
         # Tolerance in arcsec for the cross-match
         N_tol = 15
 

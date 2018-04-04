@@ -11,12 +11,12 @@ def main():
     Filter photometry for color ranges given. Also remove stars with all
     'nan' values in their photometry.
     """
-    f_id = 'bh73_final.dat'
+    f_id = 'rup152_final.dat'
 
     # Define acceptable color ranges for this data.
-    BV_min, BV_max = 0.2, 3.
-    VI_min, VI_max = -0.2, 3.
-    UB_min, UB_max = -.7, 1.5
+    BV_min, BV_max = 0., 2.
+    VI_min, VI_max = 0.5, 2.
+    UB_min, UB_max = -.5, 1.5
 
     # Load final photometry file.
     phot = photLoad(f_id)
@@ -45,6 +45,11 @@ def photLoad(f_id):
     phot = Table(
         phot, names=('id', 'x', 'y', 'V', 'eV', 'BV', 'eBV', 'UB', 'eUB', 'VI',
                      'eVI'))
+    # To bring closer to APASS
+    phot['V'] = phot['V'] + 0.019
+    phot['BV'] = phot['BV'] + 0.049
+    phot['UB'] = phot['UB'] - 0.068
+    phot['VI'] = phot['VI'] + 0.019
 
     return phot
 
