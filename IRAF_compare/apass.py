@@ -1,5 +1,6 @@
 
 import numpy as np
+from functools import reduce
 from scipy.spatial import cKDTree
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
@@ -162,8 +163,8 @@ def closestStar(x_fr1, y_fr1, x_fr2, y_fr2):
     len(fr1) = len(dist) = len(min_dist_idx)
 
     """
-    fr1 = np.array(zip(*[x_fr1, y_fr1]))
-    fr2 = np.array(zip(*[x_fr2, y_fr2]))
+    fr1 = np.array(list(zip(*[x_fr1, y_fr1])))
+    fr2 = np.array(list(zip(*[x_fr2, y_fr2])))
     min_dists, min_dist_idx = cKDTree(fr2).query(fr1, 1)
 
     return min_dist_idx, min_dists
@@ -171,12 +172,13 @@ def closestStar(x_fr1, y_fr1, x_fr2, y_fr2):
 
 def matchStars(
         x_apass, y_apass, x_iraf, y_iraf, V_apass, B_apass, BV_apass, v_iraf,
-        b_iraf, bv_iraf):
+        b_iraf, bv_iraf, N_tol, outl_tol):
     """
     """
     min_dist_idx, min_dists = closestStar(x_apass, y_apass, x_iraf, y_iraf)
 
-    print("Match tolerance: {} arcsec".format(N_tol))
+    print("\nMatch tolerance: {} arcsec".format(N_tol))
+    print("Outlier tolerance: {} mag".format(outl_tol))
     rad = (1. / 3600) * N_tol
     x_a, y_a, x_i, y_i = [], [], [], []
     V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f = [], [], [], [], [], []
@@ -188,19 +190,22 @@ def matchStars(
             #     x[st1_i], y[st1_i], x_i[st2_i], y_i[st2_i]))
             # print(" V_1={:.2f}, V_2={:.2f}".format(
             #     V_apass[st1_i], v_i[st2_i]))
-            x_a.append(x_apass[st1_i])
-            y_a.append(y_apass[st1_i])
-            V_a_f.append(V_apass[st1_i])
-            B_a_f.append(B_apass[st1_i])
-            BV_a_f.append(BV_apass[st1_i])
+            if abs(V_apass[st1_i] - v_iraf[st2_i]) > outl_tol:
+                print('  Outlier:', V_apass[st1_i], v_iraf[st2_i])
+            else:
+                x_a.append(x_apass[st1_i])
+                y_a.append(y_apass[st1_i])
+                V_a_f.append(V_apass[st1_i])
+                B_a_f.append(B_apass[st1_i])
+                BV_a_f.append(BV_apass[st1_i])
 
-            x_i.append(x_iraf[st2_i])
-            y_i.append(y_iraf[st2_i])
-            V_i_f.append(v_iraf[st2_i])
-            B_i_f.append(b_iraf[st2_i])
-            BV_i_f.append(bv_iraf[st2_i])
+                x_i.append(x_iraf[st2_i])
+                y_i.append(y_iraf[st2_i])
+                V_i_f.append(v_iraf[st2_i])
+                B_i_f.append(b_iraf[st2_i])
+                BV_i_f.append(bv_iraf[st2_i])
 
-    print("Matched stars: {}".format(len(x_a)))
+    print("\nMatched stars: {}".format(len(x_a)))
 
     V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f =\
         np.array(V_a_f), np.array(B_a_f), np.array(BV_a_f),\
@@ -225,7 +230,8 @@ def star_size(mag, N=None, min_m=None):
 
 def makePlot(
     f_id, V_min, V_max, N_tol, x_apass, y_apass, V_apass, x_iraf, y_iraf,
-    v_iraf, x_a, y_a, x_i, y_i, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f):
+        v_iraf, x_a, y_a, x_i, y_i, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f,
+        BV_i_f):
     """
     """
     plt.style.use('seaborn-darkgrid')
@@ -267,24 +273,30 @@ def makePlot(
     plt.xlim(min(B_a_f), max(B_a_f))
     plt.ylim(min(B_a_f), max(B_a_f))
 
-    Vmed, Vmean = np.nanmedian(V_a_f - V_i_f), np.nanmean(V_a_f - V_i_f)
+    Vmed, Vmean, Vstd = np.nanmedian(V_a_f - V_i_f),\
+        np.nanmean(V_a_f - V_i_f), np.nanstd(V_a_f - V_i_f)
     print("median(V_APASS-V_IRAF): {:.4f}".format(Vmed))
     print("mean(V_APASS-V_IRAF): {:.4f}".format(Vmean))
     plt.subplot(gs[6:12, 0:6])
     plt.ylim(-.5, .5)
-    plt.title("V median diff: {:.4f}".format(Vmed))
+    plt.title(
+        r"$\Delta V_{{mean}}=${:.4f}$\pm${:.4f}, ".format(Vmean, Vstd) +
+        r"$\Delta V_{{median}}=${:.4f}".format(Vmed), fontsize=12)
     plt.xlabel(r"$V_{{APASS}}$")
     plt.ylabel(r"$V_{{APASS}}-V_{{IRAF}}$")
     plt.scatter(V_a_f, V_a_f - V_i_f, s=4)
     plt.axhline(y=Vmed, c='r')
     plt.axhline(y=Vmean, ls='--', c='g')
 
-    Bmed, Bmean = np.nanmedian(B_a_f - B_i_f), np.nanmean(B_a_f - B_i_f)
+    Bmed, Bmean, Bstd = np.nanmedian(B_a_f - B_i_f),\
+        np.nanmean(B_a_f - B_i_f), np.nanstd(B_a_f - B_i_f)
     print("median(B_APASS-B_IRAF): {:.4f}".format(Bmed))
     print("mean(B_APASS-B_IRAF): {:.4f}".format(Bmean))
     plt.subplot(gs[6:12, 6:12])
     plt.ylim(-.5, .5)
-    plt.title("B median diff: {:.4f}".format(Bmed))
+    plt.title(
+        r"$\Delta B_{{mean}}=${:.4f}$\pm${:.4f}, ".format(Bmean, Bstd) +
+        r"$\Delta B_{{median}}=${:.4f}".format(Bmed), fontsize=12)
     plt.xlabel(r"$B_{{APASS}}$")
     plt.ylabel(r"$B_{{APASS}}-B_{{IRAF}}$")
     plt.scatter(B_a_f, B_a_f - B_i_f, s=4)
@@ -292,8 +304,11 @@ def makePlot(
     plt.axhline(y=Bmean, ls='--', c='g')
 
     plt.subplot(gs[6:12, 12:18])
-    BVmed = np.nanmedian(BV_a_f - BV_i_f)
-    plt.title("BV median diff: {:.4f}".format(BVmed))
+    BVmea, BVmed, BVstd = np.nanmean(BV_a_f - BV_i_f),\
+        np.nanmedian(BV_a_f - BV_i_f), np.nanstd(BV_a_f - BV_i_f)
+    plt.title(
+        r"$\Delta BV_{{mean}}=${:.4f}$\pm${:.4f}, ".format(BVmea, BVstd) +
+        r"$\Delta BV_{{median}}=${:.4f}".format(BVmed), fontsize=12)
     plt.scatter(BV_a_f, V_a_f, s=7, label="APASS")
     plt.scatter(BV_i_f, V_i_f, s=7, label="IRAF")
     plt.xlim(max(min(BV_a_f) - .3, -.3), max(BV_a_f) + .3)
@@ -310,7 +325,7 @@ def makePlot(
 
 def main(
     f_id, astro_cross, apass_reg, final_phot, col_IDs, V_min, V_max, N_tol,
-    astrom_gen, regs_filt):
+        outl_tol, astrom_gen, regs_filt):
     """
     """
     print("\nProcessing: {}".format(f_id))
@@ -338,7 +353,7 @@ def main(
     x_a, y_a, x_i, y_i, V_a_f, B_a_f, BV_a_f, V_i_f, B_i_f, BV_i_f =\
         matchStars(
             x_apass, y_apass, x_iraf, y_iraf, V_apass, B_apass, BV_apass,
-            v_iraf, b_iraf, bv_iraf)
+            v_iraf, b_iraf, bv_iraf, N_tol, outl_tol)
 
     makePlot(
         f_id, V_min, V_max, N_tol, x_apass, y_apass, V_apass,
@@ -366,7 +381,9 @@ if __name__ == '__main__':
         # Magnitude limit for the photometry.
         V_min, V_max = 7., 15
         # Tolerance in arcsec for the cross-match
-        N_tol = 15
+        N_tol = 3
+        # Outlier max tolerance  (in V mags)
+        outl_tol = .5
 
         # Create file to feed astrometry.net?
         astrom_gen = False
@@ -375,4 +392,4 @@ if __name__ == '__main__':
 
         main(
             f_id, astro_cross, apass_reg, final_phot, col_IDs,
-            V_min, V_max, N_tol, astrom_gen, regs_filt)
+            V_min, V_max, N_tol, outl_tol, astrom_gen, regs_filt)
