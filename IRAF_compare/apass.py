@@ -1,4 +1,25 @@
 
+
+
+
+
+
+
+
+
+
+
+"""
+This script has been superseded by the 'astrometry' and 'apass_match' scripts
+"""
+
+
+
+
+
+
+
+
 import numpy as np
 from functools import reduce
 from scipy.spatial import cKDTree
